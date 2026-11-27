@@ -644,21 +644,38 @@ app.whenReady().then(() => {
   {
     const { DevCtl } = require('../../shared/devctl.js');
     const { DevLocal } = require('../../shared/devlocal.js');
-    devctl = new DevCtl({
-    watching: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
-   
-      link: {
-        on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
-        send: (m) => peer.sendToClient(m),
-        get current() { return peer.current; },
-      },
-      local: new DevLocal(),
-      version: app.getVersion(),
-      adb: () => {
-        const br = svc && svc.phone && svc.phone.bridge;
-        return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+    // A DevCtl per device (shared/devctl-mesh.js), each on its own peer: each device's Overview can reach
+    // this Mac whichever device is selected here; Overview shows the selected device's.
+    const { ScopedPhonePeer } = require('./phones');
+    const watching = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()); // Overview may show the other side's controls (shared/devctl.js Looking)
+    const devLocal = new DevLocal();
+    devctl = require('../../shared/devctl-mesh.js').devCtlSet({
+      selectedId: () => hub.selectedId, local: devLocal,
+      make: (pid) => {
+        const p = new ScopedPhonePeer(hub, server, null);
+        const d = new DevCtl({
+          watching: () => watching() && hub.selectedId === pid, // asks only for the device Overview shows
+          link: {
+            on: (ev, fn) => (ev === 'welcome' ? p.on('client', fn) : ev === 'closed' ? p.on('closed', fn) : p.on('t:' + ev, fn)),
+            send: (m) => p.sendToClient(m),
+            get current() { return p.current; },
+          },
+          local: devLocal,
+          sharedLocal: true,
+          version: app.getVersion(),
+          adb: () => { // the phone's wireless debugging, for that phone only
+            if (hub.selectedId !== pid) return null;
+            const br = svc && svc.phone && svc.phone.bridge;
+            return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+          },
+        });
+        p.bind(pid); // after it listens: its 'client' now
+        return d;
       },
     });
+    hub.bus.onPeer('welcome', (pid) => devctl.ensure(pid));
+    for (const x of hub.sessions.list()) if (x.connected) devctl.ensure(x.id);
+    hub.on('selected', () => devctl.look()); // Overview shows another device: its fresh state
     devctl.on('change', pushState);
     app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
     // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
@@ -686,9 +703,10 @@ app.whenReady().then(() => {
   });
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName, consent });
-  consent.on('change', () => { // a device's pair: its policies again
+  consent.on('change', () => { // a device's pair: its policies (and its Terminal key) again
     svc.clipboard.applySettings();
     svc.notifs.applySettings();
+    svc.terminal.applySettings();
     pushState();
   });
   const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)

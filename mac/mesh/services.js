@@ -64,7 +64,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
-  const terminal = new Terminal(server, s);
+  const terminal = new Terminal(server, s, { bus: meshHub.bus, consent }); // every device's key, by its own pair
   const smb = new SmbSet({ Smb, hub: meshHub, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) }); // a folder per device, this Mac's to all (smbset.js)
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
@@ -122,7 +122,8 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s });
   appSendRef = appSend;
   appSend.on('change', () => appsRoute.refresh()); // windows back: it follows the selection again
-  const wake = new Wake({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
+  const wake = new Wake({ server, getSettings: s, saveSettings: () => store.saveSettings(s()), bus: meshHub.bus, // every device, not only the selected one
+    peer: (pid) => { const x = meshHub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs, address: x.ctx ? x.ctx.address : '' } : null; } });
   kvm.blockEdge = () => pcView.focused || pcApps.focused; // moving inside the PC window never crosses to the PC
 
   for (const x of [stream, clipboard, kvm, terminal, drop, fileSend, smb, apps, sshClient, audio, pcView, pcApps, notifs, fileClip, wake, appSend]) x.on('change', pushState);

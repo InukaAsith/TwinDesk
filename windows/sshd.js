@@ -16,18 +16,29 @@ const SSH_DATA = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ssh');
 const ADMIN_KEYS = path.join(SSH_DATA, 'administrators_authorized_keys');
 const OPTIONS = 'no-agent-forwarding,no-X11-forwarding';
 const OURS = / macshare:[A-Za-z0-9._-]*$/; // the marker at the end of each line we add
+const clean = (id) => String(id || '').replace(/[^A-Za-z0-9._-]/g, '');
 
 class Sshd {
   // opts: link, settings (shared), save(), onChange()
+  //   bus, consent (shared/consent.js): Multi-device. Every device's key is heard and kept by its own id,
+  //   and each device's own pair decides it ("Let {name} open a terminal"): on the facade a key from a
+  //   device that wasn't selected was dropped, a key left from one device could go in under the next
+  //   one's marker, and a crossing to a pair with it off removed every device's key (#313).
   constructor(opts) {
     Object.assign(this, opts);
     this.service = 'unknown'; // 'running' | 'stopped' | 'missing' | 'unknown'
     this.isAdmin = null;
-    this.pendingKey = null;   // the Mac's last ssh.key line
+    this.pending = new Map(); // device id -> its last ssh.key line
+    this.infos = new Map(); // device id -> the last ssh.info we sent it ({enabled, why})
     this.busy = false;
     this.message = '';
-    this.link.on(T.SSH_KEY, (m) => this._onKey(m));
-    this.link.on(T.SSH_FORGET, () => this._forget());
+    if (this.bus) {
+      this.bus.on(T.SSH_KEY, (m, from) => this._onKey(m, from));
+      this.bus.on(T.SSH_FORGET, (m, from) => this._forget(from));
+    } else {
+      this.link.on(T.SSH_KEY, (m) => this._onKey(m, this.macId()));
+      this.link.on(T.SSH_FORGET, () => this._forget(this.macId()));
+    }
     this.refresh();
   }
 
@@ -44,63 +55,88 @@ class Sshd {
     this.onChange();
   }
 
-  // The other computer's id: the session's, whichever side opened it (we may be the host).
+  // The other computer's id (one-to-one): the session's, whichever side opened it (we may be the host).
   macId() {
     const snap = this.link.snapshot();
     if (snap.session && snap.session.id) return String(snap.session.id).replace(/[^A-Za-z0-9._-]/g, '');
     return snap.paired ? snap.paired.macId : 'mac';
   }
 
-  async _onKey(m) {
-    const pub = typeof m.pub === 'string' ? m.pub.trim().split(/\s+/).slice(0, 2).join(' ') : '';
-    if (!/^(ssh-ed25519|ecdsa-sha2-\S+|ssh-rsa) [A-Za-z0-9+/=]+$/.test(pub)) return;
-    this.pendingKey = pub;
-    await this.apply();
+  // The device the Terminal page shows.
+  _shown() {
+    return this.bus ? this.bus.selectedId() : this.macId();
   }
 
-  // Called on a key from the Mac and when the switch changes.
+  _allowed(id) {
+    return this.consent ? this.consent.get(id, 'terminal', 'out') : !!this.cfg.allowMac;
+  }
+
+  _send(id, msg) {
+    return this.bus ? this.bus.send(id, msg) : this.link.send(msg);
+  }
+
+  async _onKey(m, id) {
+    const pub = typeof m.pub === 'string' ? m.pub.trim().split(/\s+/).slice(0, 2).join(' ') : '';
+    if (!id || !/^(ssh-ed25519|ecdsa-sha2-\S+|ssh-rsa) [A-Za-z0-9+/=]+$/.test(pub)) return;
+    this.pending.set(id, pub);
+    await this._applyOne(id);
+  }
+
+  // The switch changed (or Set up): every device by its own pair.
   async apply() {
-    if (!this.cfg.allowMac) { // off: no key of ours stays authorized, even one added before a restart
+    if (!this.bus && !this.cfg.allowMac) { // one-to-one, off: no key of ours stays authorized, even one added before a restart
       await this._removeAll();
-      return this.pendingKey ? this._info(false, 'not_allowed') : this.onChange();
+      const id = this.macId();
+      return this.pending.has(id) ? this._info(id, false, 'not_allowed') : this.onChange();
     }
-    if (!this.pendingKey) return this.onChange();
+    const ids = this.bus ? new Set([...this.pending.keys(), ...Object.keys(this.cfg.installedKeys || {})]) : [this.macId()];
+    for (const id of ids) await this._applyOne(id);
+    this.onChange();
+  }
+
+  async _applyOne(id) {
+    if (!this._allowed(id)) { // off for this pair: its key comes out, the others stay
+      if (this._installed(id)) await this._forgetLine(id);
+      return this.pending.has(id) ? this._info(id, false, 'not_allowed') : this.onChange();
+    }
+    const pub = this.pending.get(id);
+    if (!pub) return this.onChange();
     await this.refresh();
-    if (this.service !== 'running') return this._info(false, 'remote_login_off');
-    const line = OPTIONS + ' ' + this.pendingKey + ' macshare:' + this.macId();
+    if (this.service !== 'running') return this._info(id, false, 'remote_login_off');
+    const line = OPTIONS + ' ' + pub + ' macshare:' + clean(id);
     const digest = crypto.createHash('sha256').update(line).digest('hex');
-    if (this._installed() !== digest) {
+    if (this._installed(id) !== digest) {
       try {
-        await this._install(line);
-        this._mark(digest);
+        await this._install(line, id);
+        this._mark(digest, id);
         this.save();
         this.message = '';
       } catch (e) {
         this.message = /cancel/i.test(e.message) ? 'The administrator prompt was declined' : 'Couldn’t add {name}’s key: ' + e.message;
-        return this._info(false, 'not_allowed');
+        return this._info(id, false, 'not_allowed');
       }
     }
-    this._info(true);
+    this._info(id, true);
   }
 
-  // What we installed for the device of this session (each device's line by its id; a key installed
-  // before that list existed counts for whichever device it was).
-  _installed() {
+  // What we installed for this device (each device's line by its id; a key installed before that list
+  // existed counts for whichever device it was).
+  _installed(id) {
     const map = this.cfg.installedKeys || {};
-    return map[this.macId()] || (Object.keys(map).length ? '' : this.cfg.installedKey);
+    return map[clean(id)] || (Object.keys(map).length ? '' : this.cfg.installedKey);
   }
 
-  _mark(digest) {
+  _mark(digest, id) {
     this.cfg.installedKeys = { ...(this.cfg.installedKeys || {}) };
-    if (digest) this.cfg.installedKeys[this.macId()] = digest;
-    else delete this.cfg.installedKeys[this.macId()];
+    if (digest) this.cfg.installedKeys[clean(id)] = digest;
+    else delete this.cfg.installedKeys[clean(id)];
     const left = Object.values(this.cfg.installedKeys);
     this.cfg.installedKey = digest || left[left.length - 1] || '';
   }
 
-  // Replace our marked line in the right authorized_keys file.
-  async _install(line) {
-    const marker = ' macshare:' + this.macId();
+  // Replace this device's marked line in the right authorized_keys file.
+  async _install(line, id) {
+    const marker = ' macshare:' + clean(id);
     if (this.isAdmin) {
       const keyFile = path.join(os.tmpdir(), 'macshare-key-' + process.pid + '.txt');
       fs.writeFileSync(keyFile, line);
@@ -116,11 +152,10 @@ class Sshd {
     }
   }
 
-  // Terminal switched off: every line we added comes out (any computer's marker, so it doesn't
-  // matter which session is open now). The other side's key stays in memory: switching on again adds it.
-  // Unpaired: the key is dropped from memory too.
+  // Unpaired (one-to-one), or the Terminal off there: every line we added comes out (any computer's
+  // marker). The keys stay in memory: switching on again adds them. Unpaired: dropped from memory too.
   async revokeAll() {
-    this.pendingKey = null;
+    this.pending.clear();
     await this._removeAll();
     this.onChange();
   }
@@ -143,10 +178,16 @@ class Sshd {
     }
   }
 
-  async _forget() {
-    this.pendingKey = null;
-    if (!this.cfg.installedKey) return this.onChange();
-    const marker = ' macshare:' + this.macId();
+  // The device said its Terminal forgot this computer (ssh.forget): its key comes out.
+  async _forget(id) {
+    this.pending.delete(id);
+    await this._forgetLine(id);
+    this.onChange();
+  }
+
+  async _forgetLine(id) {
+    if (!this.cfg.installedKey) return;
+    const marker = ' macshare:' + clean(id);
     try {
       if (this.isAdmin) {
         await scriptElevated('sshd-key', { Path: ADMIN_KEYS, Marker: marker });
@@ -154,12 +195,11 @@ class Sshd {
         const f = path.join(os.homedir(), '.ssh', 'authorized_keys');
         if (fs.existsSync(f)) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => l && !l.endsWith(marker)).join('\n') + '\n');
       }
-      this._mark('');
+      this._mark('', id);
       this.save();
     } catch (e) {
       this.message = '{Name}’s key is still installed: ' + e.message;
     }
-    this.onChange();
   }
 
   // One elevated step: OpenSSH Server installed, automatic, running (its installer adds the rule).
@@ -178,20 +218,22 @@ class Sshd {
     await this.apply();
   }
 
-  async _info(enabled, why) {
+  async _info(id, enabled, why) {
     const msg = { t: T.SSH_INFO, enabled };
     if (enabled) {
       msg.user = os.userInfo().username;
       msg.port = 22;
       msg.hostKeys = await hostKeys();
     } else msg.why = why;
-    this.link.send(msg);
-    this.lastInfo = { enabled, why: why || '' };
+    this._send(id, msg);
+    this.infos.set(id, { enabled, why: why || '' });
     this.onChange();
   }
 
+  // The Terminal page: the device it shows.
   view() {
-    return { service: this.service, busy: this.busy, message: this.message, macAsked: !!this.pendingKey, info: this.lastInfo || null, admin: this.isAdmin };
+    const id = this._shown();
+    return { service: this.service, busy: this.busy, message: this.message, macAsked: !!(id && this.pending.has(id)), info: (id && this.infos.get(id)) || null, admin: this.isAdmin };
   }
 }
 

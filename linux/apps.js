@@ -47,8 +47,10 @@ class Apps {
       this._toMonitor();
       this.onWatch();
     });
-    this.link.on('closed', () => {
+    this.link.on('closed', () => { // its device went, or Monitor 2 moved to another: that one's list isn't this one's
       this.windows = [];
+      this.list = [];
+      this.loading = false;
       this._toMonitor();
       for (const id of [...this.opening.keys()]) this._opened(id);
     });
