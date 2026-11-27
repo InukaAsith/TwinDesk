@@ -39,6 +39,29 @@ if [ ! -x "$VENV/bin/dmgbuild" ]; then
   "$VENV/bin/pip" install --quiet --disable-pip-version-check dmgbuild
 fi
 
+# Notarize and staple the app itself before it goes into the disk image (#75). A ticket stapled to the
+# DMG alone leaves the app, once dragged out of it, to Gatekeeper's online check, which fails offline.
+# Only with the same credentials the DMG's own notarization below uses.
+if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ] || [ -n "$APPLE_KEYCHAIN_PROFILE" ]; then
+  APPZIP="$(mktemp -d)/TwinDesk.zip"
+  ditto -c -k --keepParent "$APP" "$APPZIP"
+  echo "Submitting $APP to Apple Notary Service..."
+  if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+    xcrun notarytool submit "$APPZIP" \
+      --apple-id "$APPLE_ID" \
+      --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+      --team-id "$APPLE_TEAM_ID" \
+      --wait
+  else
+    xcrun notarytool submit "$APPZIP" \
+      --keychain-profile "$APPLE_KEYCHAIN_PROFILE" \
+      --wait
+  fi
+  rm -f "$APPZIP"
+  echo "Stapling notarization ticket to $APP..."
+  xcrun stapler staple "$APP"
+fi
+
 echo "Creating disk image $DMG..."
 rm -f "$DMG"
 "$VENV/bin/dmgbuild" -s dmg/settings.py \
