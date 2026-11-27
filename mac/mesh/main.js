@@ -670,11 +670,10 @@ app.whenReady().then(() => {
       try { new Notification({ title, body }).show(); } catch {}
     });
     const { Chats } = require('../../shared/chats.js');
-    chats = new Chats({ link: {
-        on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
-        send: (m) => peer.sendToClient(m),
-        get current() { return peer.current; },
-      }, dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
+    chats = new Chats({ // every phone's conversations, each under its own id; the Messages page's phone answered (#313)
+      mesh: { bus: hub.bus, isPhone: (id) => { const s = hub.sessions.get(id); return !!s && P.isPhoneOs(s.peerOs); } },
+      who: () => (phonesLink.current && phonesLink.current.deviceId) || '',
+      dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
   }
   hub.start();
 
@@ -729,6 +728,8 @@ app.whenReady().then(() => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;
     if (!settings.apps.moveWindows) return;
+    const at = svc.appSend.server.route && svc.appSend.server.route.targetId;
+    if (svc.appSend.moved.size && to && at && to !== at) return console.log('[apps] window not moved: windows are on another device now (bring them back first)'); // one device at a time
     if (!meshMoves.ready(to, (v) => { svc.appSend.accepts = v; })) return;
     svc.appSend.moveOut(wid, Number(m.movingPid));
   };

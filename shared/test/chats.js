@@ -53,5 +53,53 @@ assert.strictEqual(c.view()[0].reply, false, 'no Reply without a session');
 c.stop();
 const again = new Chats({ link, dir, want: () => false });
 assert.strictEqual(again.view().length, 2, 'kept after a restart');
+again.stop();
+
+// Multi-device (#313): every phone's conversations, whichever device is selected; each connected phone is
+// told chat.want; answers go to the phone the Messages page shows (who()); a computer isn't a phone.
+{
+  const mdir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-chats-mesh-'));
+  const handlers = {};
+  const peerFns = { welcome: [], closed: [] };
+  const out = [];
+  const connected = new Set(['phoneA']);
+  const bus = {
+    on: (t, fn) => (handlers[t] = fn),
+    onPeer: (ev, fn) => peerFns[ev].push(fn),
+    send: (id, m) => connected.has(id) && out.push([id, m]) > 0,
+    connectedIds: () => [...connected],
+  };
+  const phones = new Set(['phoneA', 'phoneB']);
+  let shown = 'phoneA';
+  let on = true;
+  const m = new Chats({ mesh: { bus, isPhone: (id) => phones.has(id) }, who: () => shown, dir: mdir, want: () => on });
+  assert.deepStrictEqual(out, [['phoneA', { t: 'chat.want', on: true }]], 'the phone already connected is told');
+  connected.add('phoneB');
+  connected.add('pc');
+  for (const fn of peerFns.welcome) { fn('phoneB'); fn('pc'); }
+  assert.deepStrictEqual(out.map((x) => x[0]), ['phoneA', 'phoneB'], 'each phone once, not the computer');
+  // B isn't shown (nor selected): its conversation is kept under its id.
+  handlers['chat.conv'](conv([{ at: 1000, from: 'Ana', text: 'Hola' }], { key: 'b1' }), 'phoneB');
+  handlers['chat.conv'](conv([{ at: 1000, from: 'x', text: 'from a pc' }], { key: 'pc1' }), 'pc');
+  assert.deepStrictEqual(m.view(), [], 'A shows nothing of B');
+  shown = 'phoneB';
+  let mv = m.view();
+  assert.deepStrictEqual(mv.map((x) => x.items[0].text), ['Hola'], 'B shows its own, nothing from the computer');
+  assert.strictEqual(m.reply(mv[0].key, 'Hey'), true);
+  assert.deepStrictEqual(out.at(-1), ['phoneB', { t: 'notif.reply', id: 'k1', text: 'Hey' }], 'the answer goes to B');
+  // The switch off: every phone is told once.
+  on = false;
+  m.sync();
+  assert.deepStrictEqual(out.slice(-2), [['phoneA', { t: 'chat.want', on: false }], ['phoneB', { t: 'chat.want', on: false }]]);
+  // B goes: no Reply for it; back, it's told again.
+  connected.delete('phoneB');
+  for (const fn of peerFns.closed) fn('phoneB');
+  assert.strictEqual(m.view()[0].reply, false);
+  connected.add('phoneB');
+  for (const fn of peerFns.welcome) fn('phoneB');
+  assert.deepStrictEqual(out.at(-1), ['phoneB', { t: 'chat.want', on: false }]);
+  m.stop();
+  fs.rmSync(mdir, { recursive: true, force: true });
+}
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('chats ok');

@@ -642,6 +642,55 @@ test('(h) the facade gets what a device said while another was selected; the dev
   }
 });
 
+// hub.sticky (#313, Move windows): a link that follows the selection unless it's held; held, a visit to a
+// third device leaves it with its device; let go, it moves, as a 'closed' and a 'welcome' with what was said.
+test('(h3) the sticky link stays with its device while held, then follows the selection', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    let held = false;
+    const link = A.hub.sticky(() => held);
+    const got = [];
+    link.on('welcome', (m) => got.push(['welcome', m.macId]));
+    link.on('closed', () => got.push(['closed']));
+    link.on('papp.policy', (m) => got.push(['papp.policy', m.accept]));
+    assert.strictEqual(A.hub.select(B.id), true);
+    assert.strictEqual(link.id, B.id, 'follows the selection');
+    await new Promise((r) => setImmediate(r));
+    assert.deepStrictEqual(got, [['welcome', B.id]], 'one welcome for B, made before or after B was selected');
+    assert.strictEqual(link.current.deviceId, B.id);
+    const atB = [];
+    B.hub.bus.on('papp.windows', (m, from) => from === A.id && atB.push(m));
+    const policyAtB = [];
+    B.hub.bus.on('screen.policy', (m, from) => from === A.id && policyAtB.push(m.accept));
+    assert.strictEqual(link.send({ t: 'screen.policy', accept: true }), true); // Monitor 2 watches B
+
+    held = true; // a window moved to B
+    C.hub.bus.send(A.id, { t: 'papp.policy', accept: true }); // C takes windows (said while B has ours)
+    await waitFor(() => !!(A.hub.heard.by.get(C.id) || new Map()).get('papp.policy'), 'A keeps what C said');
+    got.length = 0;
+    assert.strictEqual(A.hub.select(C.id), true); // the pointer visits C
+    assert.strictEqual(link.id, B.id, 'held: still B');
+    assert.deepStrictEqual(got, [], 'no closed: the windows stay on B');
+    assert.strictEqual(link.send({ t: 'papp.windows', windows: [] }), true);
+    await waitFor(() => atB.length === 1, 'what it sends still goes to B');
+    assert.ok(!got.some((x) => x[0] === 'papp.policy'), 'C\'s messages don\'t reach it while it is on B');
+
+    held = false; // the windows came back
+    link.follow();
+    assert.strictEqual(link.id, C.id, 'then it follows the selection');
+    assert.deepStrictEqual(got, [['closed'], ['welcome', C.id], ['papp.policy', true]], 'closed for B, welcome for C, then what C said');
+    await waitFor(() => policyAtB.length === 2, 'B hears we stopped watching');
+    assert.deepStrictEqual(policyAtB, [true, false]);
+    assert.strictEqual(link.snapshot().link.macName, 'C');
+    link.moveTo(B.id); // Monitor 2 follows a device that starts sharing
+    assert.strictEqual(link.id, B.id);
+    assert.deepStrictEqual(got.slice(-2), [['closed'], ['welcome', B.id]]);
+  } finally {
+    close3(N);
+  }
+});
+
 test('(h2) the audio route gets the audio.policy a device sent before the route moved to it, and the device it leaves hears accept: false', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);
   const { A, B, C } = N;
