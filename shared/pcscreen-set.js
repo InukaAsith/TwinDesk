@@ -1,9 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith, Erdoğan Yeşil. GPL-3.0, see LICENSE.
-// Share screen to several devices at once (docs/screen-mesh.md). Every connected device gets a PcScreen
-// of its own, made by `make(scopedLink)` on a link scoped to that device (hub.scoped), so each target has
-// its own WebRTC session, mode, monitor and policy. The stream table (shared/screen-mesh.js) holds what
-// each target gets and checks it against this computer's displays; there is one virtual display adapter,
-// so at most one target can be on Extend.
+// Share screen to several devices at once (docs/screen-mesh.md), Windows and Linux. Every connected
+// device gets a PcScreen of its own, made by `make(scopedLink)` on a link scoped to that device
+// (hub.scoped), so each target has its own WebRTC session, mode, monitor and policy. The stream table
+// (shared/screen-mesh.js) holds what each target gets and checks it against this computer's displays;
+// there is one virtual display adapter, so at most one target can be on Extend.
 //
 // This object is also the single-peer API the rest of the app grew up with (`pcScreen`): setMode(),
 // view(), the tray's Share Screen, Extend and Mirror and the Share screen page's Mode act on the ACTIVE
@@ -15,7 +15,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const S = require('../../shared/screen-mesh.js');
+const S = require('./screen-mesh.js');
 
 const UI_MODE = { off: 'none', mirror: 'mirror', extend: 'virtual' };
 

@@ -164,9 +164,9 @@ class Terminal {
 
   view() {
     if (this.status === 'ready' && this.onBle) {
-      return { status: 'unavailable', message: 'The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join {name}’s network.', user: this.info && this.info.user, command: 'ssh ' + this.alias };
+      return { status: 'unavailable', message: 'The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join {name}’s network.', user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
     }
-    return { status: this.status, message: this.message, user: this.info && this.info.user, command: 'ssh ' + this.alias };
+    return { status: this.status, message: this.message, user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
   }
 }
 

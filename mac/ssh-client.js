@@ -114,7 +114,7 @@ class SshClient extends EventEmitter {
   }
 
   get view() {
-    return { ...this.status, alias: this.alias };
+    return { ...this.status, alias: SshConfig.ALIAS }; // the page shows `ssh twindesk` (the selected device's); twindesk-<name> is there too
   }
 }
 

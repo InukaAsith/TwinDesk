@@ -484,7 +484,18 @@ function start() {
   wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   vdd = new Vdd({ onChange: pushState });
-  pcScreen = new PcScreen({ link, helper, sender, vdd, settings, popup: (kind, text) => hud.show(kind, text), inputAllowed: () => kvm.mode === 'home', onChange: pushState , needDriver: () => goTab('pc-mac') });
+  // Share screen to several devices at once (shared/pcscreen-set.js), as on Windows: a PcScreen per device,
+  // each on its own link and sender. The facade's one stopped sharing to a device on every crossing (#313).
+  let senders = 0;
+  const MeshSender = require('./sender');
+  pcScreen = new (require('../../shared/pcscreen-set.js').PcScreenSet)({
+    hub, model: PcScreen.displayModel, onChange: pushState,
+    make: (scoped, extendFree) => {
+      const pc = new PcScreen({ link: scoped, helper, sender: new MeshSender(scoped, 1000000 * ++senders), vdd, settings, popup: (kind, text) => hud.show(kind, text), inputAllowed: () => kvm.mode === 'home', onChange: pushState, needDriver: () => goTab('pc-mac') });
+      pc.extendFree = extendFree;
+      return pc;
+    },
+  });
   vdd.check(); // Extend: can this desktop add a virtual monitor? (and one left on by a crash goes)
   // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
   // or windows from the selected device while Monitor 2 showed another were the wrong device's.

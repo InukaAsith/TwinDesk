@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Files received in Multi-device (Windows and Linux): one FileRecv and one DragRecv (windows|linux/
 // filerecv.js, dragrecv.js) per connected device, on a link scoped to it (hub.scoped(id)), as the
-// screen and sound sets have (windows/mesh/pcscreenset.js, shared/sound-mesh.js).
+// screen and sound sets have (shared/pcscreen-set.js, shared/sound-mesh.js).
 //
 // On the facade they heard only the selected device: a drag, a Send files batch or a paste from the
 // computer driving this one was dropped unless it was the selected one too, which on the driven side
