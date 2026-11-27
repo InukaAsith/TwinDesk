@@ -9,7 +9,7 @@ const assert = require('assert');
 const { EventEmitter } = require('events');
 const { SoundSet } = require('../sound-mesh.js');
 const { MeshShadow } = require('../mesh-shadow.js');
-const { pairFor } = require('../pairfor.js');
+const { consent } = require('../consent.js');
 
 // A hub as SoundSet sees it: sessions, the selection, scoped(id) as hub.js has it, peerAdded/change.
 function fakeHub(devices) {
@@ -70,7 +70,8 @@ class FakeSound {
 
   _on(key) {
     const c = this.link.current;
-    return !!pairFor(this.settings, this.meshHub.selectedId, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', !!this.settings.audio[key]);
+    const pair = this.meshHub.consent; // each device's own pair, as sound.js reads it
+    return pair && c ? !!pair.get(c.deviceId, 'audio', key === 'send' ? 'out' : 'in') : !!this.settings.audio[key];
   }
 
   apply() {
@@ -110,6 +111,7 @@ const settingsWith = (audio, pairSync = {}) => ({ audio: { send: true, receive: 
   const hub = fakeHub([{ id: 'ryzen' }, { id: 'amx' }, { id: 'mac', os: 'mac' }]);
   hub.selectedId = 'mac';
   const settings = settingsWith({ send: false }, { ryzen: { audio: { out: true, in: true } }, amx: { audio: { out: true, in: true } } });
+  hub.consent = consent({ features: { audio: { out: ['audio', 'send'], in: ['audio', 'receive'] } }, settings: () => settings, selectedId: () => hub.selectedId }); // as mesh/main.js
   const set = new SoundSet({ Sound: FakeSound, hub, settings, onChange: () => {} });
   for (const id of ['ryzen', 'amx', 'mac']) hub.from(id, { t: 'audio.policy', accept: true });
   assert.strictEqual(set.byId.get('ryzen').sending, true);

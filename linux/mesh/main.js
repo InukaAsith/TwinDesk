@@ -71,7 +71,7 @@ const PeerApps = require('../peerapps');
 const desktopApps = require('../desktopapps');
 const loopback = require('../loopback');
 const autostart = require('../autostart');
-const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
+const { FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { PhoneDrive } = require('../phonedrive');
@@ -278,6 +278,7 @@ function start() {
     features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
     send: (to, m) => hub.bus.send(to, m), save: saveSettings,
   });
+  hub.consent = consent; // sound and the pointer read each device's own pair from the hub (shared/sound-mesh.js, kvm.js)
   clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard(), session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) }); // wl-clipboard where Wayland needs it (#97)
   wlClipboardMissing = require('../wlclip').missing(); // other apps' copies unseen here (#97)
   if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
@@ -569,10 +570,21 @@ function start() {
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, onPair: (pid) => consent.changed(pid), only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
-    bus: hub.bus,
-    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
-    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)
+  // Two-way switches per pair (shared/pairsync-mesh.js): every device's pair on its own session; the
+  // settings hold the pair of the device the pages show (no ReZume or Remote here).
+  {
+    const { VALUES } = require('../pairsync');
+    const only = ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'];
+    const features = Object.fromEntries(Object.entries(PAIR_FEATURES).filter(([f]) => only.includes(f)));
+    pairSync = require('../../shared/pairsync-mesh.js').pairSyncMesh({
+      bus: hub.bus, hub, features, values: VALUES, settings: () => settings, save: saveSettings,
+      setFeature: (f, dir, on) => { const [sec, key] = features[f][dir]; ipc.set(sec, { [key]: on }); },
+      setValue: (k, v) => { const [sec, key] = VALUES[k].path; ipc.set(sec, { [key]: v }); },
+      peerRole: (id) => { const x = hub.sessions.get(id); return x ? x.role : null; },
+      peerOs: (id) => { const x = hub.sessions.get(id); return x ? x.peerOs : null; },
+      onPair: (pid) => consent.changed(pid),
+    });
+  }
   nativeTheme.on('updated', pushState);
   link.start();
   link.on('welcome', () => { // a Mac app's launcher was used while the Mac wasn't connected

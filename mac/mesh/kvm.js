@@ -22,7 +22,6 @@ const { KvmMoves } = require('../../shared/kvm-moves.js');
 const { LaneMesh, LANE_TYPES, meshNative } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
-const { pairFor } = require('../../shared/pairfor.js');
 const store = require('./store');
 // Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
 // and the emergency return (#178).
@@ -268,14 +267,14 @@ class Kvm extends EventEmitter {
   }
 
   // Drive other devices / Let other devices drive this Mac, for one device. The settings hold the selected
-  // device's pair (pair.sync); every other device goes by its own (shared/pairfor.js), so selecting a
+  // device's pair (pair.sync); every other device goes by its own (hub.consent, shared/consent.js), so selecting a
   // device whose side doesn't share its mouse and keyboard doesn't stop the others (#245).
   _driveOtherFor(id) {
-    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'out', !!this.cfg.driveOther);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'out') : !!this.cfg.driveOther;
   }
 
   _beDrivenFor(id) {
-    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'in', !!this.cfg.beDriven);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'in') : !!this.cfg.beDriven;
   }
 
   _connectedTo(id) {

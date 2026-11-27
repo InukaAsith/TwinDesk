@@ -11,7 +11,6 @@ const path = require('path');
 const { BrowserWindow, ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
-const { pairFor } = require('../shared/pairfor.js');
 
 const DROP_MS = 30000;
 
@@ -74,7 +73,8 @@ class Audio extends EventEmitter {
     const cur = !!this.cfg[key];
     if (!this.meshHub) return cur;
     const c = this.server.current;
-    return !!pairFor(this.getSettings(), this.meshHub.selectedId, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', cur);
+    const consent = this.meshHub.consent; // this device's own pair (shared/consent.js)
+    return consent && c ? !!consent.get(c.deviceId, 'audio', key === 'send' ? 'out' : 'in') : cur;
   }
 
   _syncAudioSticky() {

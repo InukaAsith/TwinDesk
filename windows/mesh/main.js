@@ -64,7 +64,7 @@ const FileClip = require('../fclip');
 const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip);
 const Wake = require('../wake');
 const SendTo = require('../sendto');
-const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
+const { FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { Phone } = require('./phone');
@@ -297,6 +297,7 @@ function start() {
     features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
     send: (to, m) => hub.bus.send(to, m), save: saveSettings,
   });
+  hub.consent = consent; // sound and the pointer read each device's own pair from the hub (shared/sound-mesh.js, kvm.js)
   clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
   // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
   // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
@@ -596,10 +597,21 @@ function start() {
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, onPair: (pid) => consent.changed(pid), only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
-    bus: hub.bus,
-    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
-    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)
+  // Two-way switches per pair (shared/pairsync-mesh.js): every device's pair on its own session; the
+  // settings hold the pair of the device the pages show (no ReZume or Remote here).
+  {
+    const { VALUES } = require('../pairsync');
+    const only = ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'];
+    const features = Object.fromEntries(Object.entries(PAIR_FEATURES).filter(([f]) => only.includes(f)));
+    pairSync = require('../../shared/pairsync-mesh.js').pairSyncMesh({
+      bus: hub.bus, hub, features, values: VALUES, settings: () => settings, save: saveSettings,
+      setFeature: (f, dir, on) => { const [sec, key] = features[f][dir]; ipc.set(sec, { [key]: on }); },
+      setValue: (k, v) => { const [sec, key] = VALUES[k].path; ipc.set(sec, { [key]: v }); },
+      peerRole: (id) => { const x = hub.sessions.get(id); return x ? x.role : null; },
+      peerOs: (id) => { const x = hub.sessions.get(id); return x ? x.peerOs : null; },
+      onPair: (pid) => consent.changed(pid),
+    });
+  }
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
   link.start();
 

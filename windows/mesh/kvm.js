@@ -23,7 +23,6 @@ const { KvmMoves } = require('../../shared/kvm-moves.js');
 const { LaneMesh, LANE_TYPES, meshNative } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
-const { pairFor } = require('../../shared/pairfor.js');
 
 const T = P.T;
 const K_TYPES = new Set([T.K_MOVE, T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP]);
@@ -227,14 +226,14 @@ class Kvm {
   }
 
   // Drive other devices / Let other devices drive this one, for one device. The settings hold the selected
-  // device's pair (pair.sync); every other device goes by its own (shared/pairfor.js), so selecting a
+  // device's pair (pair.sync); every other device goes by its own (hub.consent, shared/consent.js), so selecting a
   // device whose side doesn't share its mouse and keyboard doesn't stop the others (#245).
   _driveOtherFor(id) {
-    return !!pairFor(this.settings, this.hub.selectedId, id, 'cursor', 'out', !!this.cfg.driveOther);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'out') : !!this.cfg.driveOther;
   }
 
   _beDrivenFor(id) {
-    return !!pairFor(this.settings, this.hub.selectedId, id, 'cursor', 'in', !!this.cfg.beDriven);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'in') : !!this.cfg.beDriven;
   }
 
   // The side that leads to this device, or null.

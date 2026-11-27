@@ -11,7 +11,7 @@ const { EventEmitter } = require('events');
 const { Route } = require('../../../shared/hub-route.js');
 const { Peer } = require('../peer.js');
 const { AudioSet } = require('../audioset.js');
-const { pairFor } = require('../../../shared/pairfor.js');
+const { consent } = require('../../../shared/consent.js');
 
 class FakeAudio extends EventEmitter {
   constructor({ server, hub, getSettings, meshHub, capName }) {
@@ -28,7 +28,8 @@ class FakeAudio extends EventEmitter {
   }
   _on(key) {
     const c = this.server.current;
-    return !!pairFor(this.getSettings(), this.meshHub.selectedId, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', !!this.getSettings().audio[key]);
+    const pair = this.meshHub.consent; // each device's own pair, as audio.js reads it
+    return pair && c ? !!pair.get(c.deviceId, 'audio', key === 'send' ? 'out' : 'in') : !!this.getSettings().audio[key];
   }
   evaluate() {
     const want = !!(this._on('send') && this.peerAccepts && this.server.current);
@@ -83,6 +84,7 @@ const stream = { audio: { on: false } };
   hub.selectedId = 'nitro';
   const settings = { audio: { send: false, receive: true }, pairSync: { ryzen: { audio: { out: true } }, amx: { audio: { out: true } } } };
   const cap = capture();
+  hub.consent = consent({ features: { audio: { out: ['audio', 'send'], in: ['audio', 'receive'] } }, settings: () => settings, selectedId: () => hub.selectedId }); // as mesh/main.js
   const set = new AudioSet({ Audio: FakeAudio, Peer, hub, audioHub: cap, stream, getSettings: () => settings });
   for (const id of ['ryzen', 'amx', 'nitro']) hub.from(id, { t: 'audio.policy', accept: true });
   assert.deepStrictEqual([...cap.users].sort(), ['audio:amx', 'audio:ryzen']);

@@ -2,8 +2,8 @@
 // Per-pair consent, step 5 of docs/mesh-graph.md: one answer to "does this device take <feature> from
 // us, do we take it from it" for every device of the mesh, not just the selected one.
 //
-// The two-way switches (pairsync.js FEATURES) are one setting per pair, kept by PairSync: the settings
-// hold the SELECTED device's pair (the pages show it), every other device's is settings.pairSync[id]
+// The two-way switches (pairsync.js FEATURES) are one setting per pair, kept by shared/pairsync-mesh.js: the
+// settings hold the SELECTED device's pair (the pages show it), every other device's is settings.pairSync[id]
 // (told from this side: out = our things there, in = theirs here). Features that serve every device at
 // once (the clipboard and notification pools, files from each device) read the flat switch for all of
 // them, so every device got the selected pair's switches: clipboard off for one device was off for

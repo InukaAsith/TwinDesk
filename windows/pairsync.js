@@ -69,7 +69,7 @@ class PairSync {
       if (this.link.hosting) this.link.send({ t: T.PAIR_SYNC, all: this.last }); // we are the host: ours win
     });
     // Before the selection moves on (or the device goes): what changed here goes out and that pair is kept as
-    // it is now, so a device that isn't selected goes by its own up-to-date pair (shared/pairfor.js, #245).
+    // it is now, so a device that isn't selected goes by its own up-to-date pair (shared/consent.js, #245).
     this.link.on('closed', () => {
       if (this.last) {
         this.check();
