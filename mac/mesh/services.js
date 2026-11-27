@@ -34,6 +34,7 @@ const { AppSend } = require('../appsend');
 const { Peer } = require('./peer');
 const { AudioSet } = require('./audioset');
 const store = require('./store');
+const P = require('../../shared/protocol.js');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
 // this Mac's name, sent with its notifications.
@@ -71,7 +72,30 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
   // Sound: an Audio per device, both ways at once (audioset.js); the audio route stays the microphone's.
   const audio = new AudioSet({ Audio, Peer, hub: meshHub, audioHub: hub, stream, getSettings: s });
-  const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
+  // Monitor 2 (another computer's screen here): its own route, as on Windows and Linux (hub.sticky). While
+  // its window is open it stays with the device it shows, so a crossing that changes the selection doesn't
+  // end the picture; open and showing nothing, it follows a device that starts sharing (#256); closed, it
+  // follows the selection again.
+  let pcViewRef = null;
+  let viewTo = null;
+  const viewRoute = meshHub.route((h) => {
+    const at = viewTo ? h.sessions.get(viewTo) : null;
+    const keep = !!(pcViewRef && pcViewRef.isOpen && at && at.connected);
+    viewTo = keep ? viewTo : h.selectedId;
+    return viewTo;
+  });
+  const pcView = new PcView({ server: new Peer(viewRoute, meshHub.server), getSettings: s, saveSettings: () => store.saveSettings(s()) });
+  pcViewRef = pcView;
+  pcView.on('change', () => setImmediate(() => viewRoute.refresh())); // closed: it follows the selection again (later: never inside a move)
+  meshHub.bus.on(P.T.SCREEN_STATE, (m, from) => {
+    if (m.on !== true || from === viewRoute.targetId || !pcView.isOpen || pcView.session) return;
+    const x = meshHub.sessions.get(from);
+    if (!x || !x.connected || P.isPhoneOs(x.peerOs)) return;
+    console.log(`[screen] Monitor 2 follows ${x.displayName()}: it shares its screen`);
+    meshHub.select(from);
+    viewTo = from; // open, it doesn't follow the selection by itself
+    viewRoute.refresh();
+  });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });
   // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).

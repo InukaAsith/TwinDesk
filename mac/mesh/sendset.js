@@ -11,7 +11,8 @@
 // The set is also the single fileSend the rest of the app grew up with: Send files and a batch go to the
 // selected device; a drag to the device the pointer crosses to (kvm.js partner, set before startDrag);
 // pause, cancelDrag and cancelSending to the device sending; sendPolicy (our drag switch) to all; view
-// merges them, peerDrag is the selected device's. Events: 'change', 'policy', 'dragEnd', 'batchDone'
+// merges them, peerDrag is the selected device's (the Files tab), peerDragOf(id) any device's (a drag
+// across the edge goes only to a device that takes drags, as on Windows and Linux). Events: 'change', 'policy', 'dragEnd', 'batchDone'
 // (with `to`: the device it went to).
 'use strict';
 
@@ -41,10 +42,21 @@ class SendSet extends EventEmitter {
     const peer = new ScopedPeer(this.hub, this.server, null);
     const f = new this.FileSend(peer, this.getSettings, { outbox: this.box.viewFor(id) });
     f.recent = this.recent;
-    for (const e of ['change', 'policy', 'dragEnd']) f.on(e, (...a) => this.emit(e, ...a));
+    for (const e of ['change', 'dragEnd']) f.on(e, (...a) => this.emit(e, ...a));
+    let was = f.peerDrag;
+    f.on('policy', () => {
+      if (f.peerDrag !== was) console.log('[drag] ' + this._name(id) + (f.peerDrag ? ' takes' : ' doesn’t take') + ' file drags');
+      was = f.peerDrag;
+      this.emit('policy', id);
+    });
     f.on('batchDone', (b) => this.emit('batchDone', { ...b, to: id }));
     this.byId.set(id, f);
     peer.bind(id);
+  }
+
+  _name(id) {
+    const s = this.hub.sessions.get(id);
+    return s ? s.displayName() : String(id).slice(0, 8);
   }
 
   get units() {
@@ -65,6 +77,9 @@ class SendSet extends EventEmitter {
 
   get dragOn() { return this.getSettings().files.dragEdge !== false; }
   get peerDrag() { const f = this.selected; return f ? f.peerDrag : true; }
+  peerDragOf(id) { const f = id && this.byId.get(id); return f ? f.peerDrag : true; } // its drag.policy (true until told)
+  // Some connected device takes drags: the helper picks up a drag at the edge (each crossing checks its own).
+  get anyPeerDrag() { return this.hub.bus.connectedIds().some((id) => this.peerDragOf(id)); }
   sendPolicy() { for (const f of this.units) f.sendPolicy(); }
   planDrag(paths) { return this.FileSend.prototype.planDrag(paths); }
 
