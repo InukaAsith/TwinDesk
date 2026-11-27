@@ -252,14 +252,25 @@ function start() {
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
   const { DevLocal } = require('../../shared/devlocal.js');
-  devctl = new DevCtl({
-    watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
-    link, local: new DevLocal(), version: app.getVersion(), adb: () => {
-    const br = phone && phone.bridge;
-    return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
-  } });
+  // A DevCtl per device (shared/devctl-mesh.js): each device's Overview can reach this computer, whichever
+  // device is selected here; Overview shows the selected device's.
+  const watching = () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()); // Overview may show the other side's controls (shared/devctl.js Looking)
+  const devLocal = new DevLocal();
+  devctl = require('../../shared/devctl-mesh.js').onHub(hub, {
+    local: devLocal,
+    make: (dl, pid) => new DevCtl({
+      link: dl, local: devLocal, sharedLocal: true, version: app.getVersion(),
+      watching: () => watching() && hub.selectedId === pid, // asks only for the device Overview shows
+      adb: () => { // the phone's wireless debugging, for that phone only
+        if (hub.selectedId !== pid) return null;
+        const br = phone && phone.bridge;
+        return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+      },
+    }),
+  });
   devctl.on('change', pushState);
   app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
+  hub.on('selected', () => devctl.look()); // Overview shows another device: its fresh state
   // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
   devctl.on('outdated', (o) => {
     const { FEATURES } = require('../../shared/appinfo.js');
@@ -300,7 +311,7 @@ function start() {
     isQuitting: () => quitting,
   });
   terminal = new Terminal({ link, settings, onChange: pushState });
-  sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
+  sshd = new Sshd({ link, bus: hub.bus, consent, settings, save: saveSettings, onChange: pushState }); // every device's key, by its own pair
   // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
   fileDrop = new FileDropSet({
     hub, FileDrop, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'),
@@ -317,7 +328,9 @@ function start() {
     hub.select(from);
     screenLink.moveTo(from); // open, it doesn't follow the selection by itself
   });
-  apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
+  // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
+  // or windows from the selected device while Monitor 2 showed another were the wrong device's.
+  apps = new Apps({ link: screenLink, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
@@ -413,7 +426,7 @@ function start() {
     bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); pushState(); }); // a device's pair: its policies again
+  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); pushState(); }); // a device's pair: its policies (and its key) again
   // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
   // device asks for goes to it through a sender of its own.
   fileClip = new MeshFileClip({
@@ -423,7 +436,7 @@ function start() {
   dragRecv.onPasted = (b) => fileClip.pasted(b);
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
-  sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
+  sendTo = new SendTo({ link, bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : ''; }, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
   // Copy/paste and Send files show progress in the popup, like a drag. Receiving: every
   // batch that takes longer than a moment; sending: batches over 5 MB.
   const pct = (n, total) => Math.min(99, Math.floor((n / total) * 100));
@@ -485,7 +498,7 @@ function start() {
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: fromName(b) } });
   };
-  wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
+  wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
   // with the device they went to until they're back (hub.sticky; #313).
   const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size));
@@ -1082,7 +1095,7 @@ function pushState() {
       }
       if (fileClip) fileClip.syncConnected(kvm.hub.bus.connectedIds().length > 0); // the file shortcuts too
       if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
-      if (sendTo) sendTo.sync(s.peer && s.peer.name);
+      if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
       if (pairSync) pairSync.check(); // Tell the other computer what changed here // the Send to entry follows the peer's name
       // A pairing code to compare: bring the window to the front.
       const phase = s.pairing ? s.pairing.phase : null;

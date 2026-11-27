@@ -60,24 +60,39 @@ function writeKey(mark, line) {
 }
 
 class Terminal extends EventEmitter {
-  constructor(server, getSettings) {
+  // mesh { bus, consent } (Multi-device): every device's key is heard, and each device's own pair decides
+  // it (shared/consent.js); on the facade only the selected device was answered (#313).
+  constructor(server, getSettings, mesh = null) {
     super();
     this.server = server;
     this.getSettings = getSettings;
+    this.bus = mesh && mesh.bus;
+    this.consent = mesh && mesh.consent;
     this.remoteLogin = null; // sshd reachable on 127.0.0.1:22
     this.keys = new Map(); // pcId -> pub line offered on this run (to reinstall after "on" again)
 
-    server.on(`t:${P.T.SSH_KEY}`, (m, ctx) => this._onKey(m, ctx));
-    server.on(`t:${P.T.SSH_FORGET}`, (_m, ctx) => {
-      this.keys.delete(ctx.deviceId);
-      this._remove(ctx.deviceId);
-    });
+    const forget = (id) => {
+      this.keys.delete(id);
+      this._remove(id);
+    };
+    if (this.bus) {
+      this.bus.on(P.T.SSH_KEY, (m, from) => this._onKey(m, { deviceId: from }));
+      this.bus.on(P.T.SSH_FORGET, (_m, from) => forget(from));
+    } else {
+      server.on(`t:${P.T.SSH_KEY}`, (m, ctx) => this._onKey(m, ctx));
+      server.on(`t:${P.T.SSH_FORGET}`, (_m, ctx) => forget(ctx.deviceId));
+    }
     this.refresh();
     setInterval(() => this.refresh(), 15000);
   }
 
   get allow() {
     return !!this.getSettings().terminal.allowPc;
+  }
+
+  // "Allow {name} to open a shell" for that device: its own pair in Multi-device.
+  _allowed(id) {
+    return this.consent ? this.consent.get(id, 'terminal', 'out') : this.allow;
   }
 
   async refresh() {
@@ -100,8 +115,9 @@ class Terminal extends EventEmitter {
   async _answer(ctx) {
     const key = this.keys.get(ctx.deviceId);
     if (!key) return;
-    const send = (fields) => this.server.send(ctx, { t: P.T.SSH_INFO, user: os.userInfo().username, port: 22, hostKeys: hostKeys(), ...fields });
-    if (!this.allow) {
+    const msg = (fields) => ({ t: P.T.SSH_INFO, user: os.userInfo().username, port: 22, hostKeys: hostKeys(), ...fields });
+    const send = (fields) => (this.bus ? this.bus.send(ctx.deviceId, msg(fields)) : this.server.send(ctx, msg(fields)));
+    if (!this._allowed(ctx.deviceId)) {
       this._remove(ctx.deviceId);
       return send({ enabled: false, why: 'not_allowed' });
     }
@@ -116,7 +132,13 @@ class Terminal extends EventEmitter {
     send(this.remoteLogin ? { enabled: true } : { enabled: false, why: 'remote_login_off' });
   }
 
+  // Every device that offered a key (Multi-device), else the one connected.
   _answerCurrent() {
+    if (this.bus) {
+      const up = new Set(this.bus.connectedIds());
+      for (const id of this.keys.keys()) if (up.has(id)) this._answer({ deviceId: id });
+      return;
+    }
     const c = this.server.current;
     if (c) this._answer(c);
   }
@@ -132,11 +154,9 @@ class Terminal extends EventEmitter {
 
   // After the "Allow the PC to open a shell" switch changed.
   applySettings() {
-    if (!this.allow) {
-      for (const l of readKeys()) {
-        const m = / macshare:([A-Za-z0-9._-]+)$/.exec(l);
-        if (m) this._remove(m[1]);
-      }
+    for (const l of readKeys()) { // off for a device: its key comes out, the others stay
+      const m = / macshare:([A-Za-z0-9._-]+)$/.exec(l);
+      if (m && !this._allowed(m[1])) this._remove(m[1]);
     }
     this._answerCurrent();
     this.emit('change');

@@ -65,9 +65,12 @@ class DevCtl extends EventEmitter {
   // version: this app's (sent as dev.state's app, checked against the other side's: 'outdated').
   // peerName(): the other side's name for that message (else link.current.name).
   // watching(): this side's window is on screen (so it asks the other side); null: never asks.
-  constructor({ link, local, adb, version = '', peerName = null, watching = null }) {
+  // sharedLocal: one DevLocal for every device's DevCtl (devctl-mesh.js): a device going stops only a
+  // ring it started, and DevCtlSet hears the ring stopping by itself.
+  constructor({ link, local, adb, version = '', peerName = null, watching = null, sharedLocal = false }) {
     super();
-    Object.assign(this, { link, local, adb: adb || (() => null), version, peerName, watching });
+    Object.assign(this, { link, local, adb: adb || (() => null), version, peerName, watching, sharedLocal });
+    this.rang = false; // this device started a ring here
     this.askedAt = 0; // the other side's last ask
     this.told = new Set(); // device|version already told about this run
     this.remote = null; // the other side's dev.state (null: nothing said yet)
@@ -82,7 +85,8 @@ class DevCtl extends EventEmitter {
     link.on('closed', () => {
       this.sessionUp = false;
       this.remote = null;
-      this.local.stop();
+      if (!this.sharedLocal || this.rang) this.local.stop();
+      this.rang = false;
       this.emit('change');
     });
     link.on(T.STATE, (m) => {
@@ -96,7 +100,7 @@ class DevCtl extends EventEmitter {
       if (first) this._checkApp();
     });
     link.on(T.DO, (m) => this._asked(m || {}));
-    if (local) local.onStop = () => this._sendState(true); // ringing stopped by itself
+    if (local && !sharedLocal) local.onStop = () => this._sendState(true); // ringing stopped by itself
     this.timer = setInterval(() => {
       if (!this.sessionUp) return;
       if (this.polls) this._sendState(false);
@@ -163,6 +167,7 @@ class DevCtl extends EventEmitter {
   async _asked(m) {
     if (!this.local || !DOS.includes(m.do)) return;
     if (m.do === 'ring') this.local.ringFrom = this._name(m);
+    if (m.do === 'ring' || m.do === 'ringStop') this.rang = m.do === 'ring';
     try {
       await this.local.do(m);
     } catch (e) {

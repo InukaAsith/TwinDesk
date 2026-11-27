@@ -70,7 +70,7 @@ const lines = () => fs.readFileSync(KEYS, 'utf8').split('\n').filter(Boolean);
   assert.strictEqual(lines().length, 2);
   f.s.revokeAll();
   assert.deepStrictEqual(lines(), [OWN]);
-  assert.strictEqual(f.s.pendingKey, null);
+  assert.strictEqual(f.s.pending.size, 0, 'no key kept in memory');
 
   fs.rmSync(home, { recursive: true, force: true });
   console.log('sshd-revoke: ok');

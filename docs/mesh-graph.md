@@ -267,3 +267,23 @@ every device got the selected device's pair:
   (`FileDrop`: `sends`).
 
 Nothing new on the wire: `pair.sync` already was the pair's consent, agreed by both ends.
+
+### Step 5, phase 2 as built: the small features per device
+
+What still ran on the facade and only served (or heard) the selected device:
+
+- **Wake** (`*/wake.js`, `bus`): every device is told how to wake this computer when it connects, and a
+  device's `wol.info` is kept whichever device is selected. A device never selected here couldn't wake it.
+- **Terminal, this computer's side** (`windows/sshd.js`, `linux/sshd.js`, `mac/terminal.js`: `bus`,
+  `consent`): every device's `ssh.key` is heard and installed under its own marker, by its own pair's
+  "Let {name} open a terminal". A key from a device that wasn't selected was dropped, a key left from one
+  device could go in under the next one's marker (Windows), and a crossing to a pair with it off removed
+  every device's key.
+- **Apps** (another computer's apps here): on Monitor 2's link (`screenLink`), the device whose windows it
+  draws, not the facade; its list goes when that link moves.
+- **Send to** (`*/sendto.js`): one entry per paired computer (`--send-to=<id>`), written only when the
+  computers change; the files go to that device. One entry for the selected device was rewritten on every
+  crossing and sent to whichever device was selected when it ran.
+- **Overview's controls** (`shared/devctl-mesh.js`): a DevCtl per device, one DevLocal. Another device's
+  Overview can ring, lock or read this computer whichever device is selected here; a ring stops when the
+  device that rang goes, not on a crossing. Overview shows the selected device's.

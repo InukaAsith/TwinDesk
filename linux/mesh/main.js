@@ -233,14 +233,25 @@ function start() {
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
   const { DevLocal } = require('../../shared/devlocal.js');
-  devctl = new DevCtl({
-    watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
-    link, local: new DevLocal(), version: app.getVersion(), adb: () => {
-    const br = phone && phone.bridge;
-    return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
-  } });
+  // A DevCtl per device (shared/devctl-mesh.js): each device's Overview can reach this computer, whichever
+  // device is selected here; Overview shows the selected device's.
+  const watching = () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()); // Overview may show the other side's controls (shared/devctl.js Looking)
+  const devLocal = new DevLocal();
+  devctl = require('../../shared/devctl-mesh.js').onHub(hub, {
+    local: devLocal,
+    make: (dl, pid) => new DevCtl({
+      link: dl, local: devLocal, sharedLocal: true, version: app.getVersion(),
+      watching: () => watching() && hub.selectedId === pid, // asks only for the device Overview shows
+      adb: () => { // the phone's wireless debugging, for that phone only
+        if (hub.selectedId !== pid) return null;
+        const br = phone && phone.bridge;
+        return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+      },
+    }),
+  });
   devctl.on('change', pushState);
   app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
+  hub.on('selected', () => devctl.look()); // Overview shows another device: its fresh state
   // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
   devctl.on('outdated', (o) => {
     const { FEATURES } = require('../../shared/appinfo.js');
@@ -302,7 +313,7 @@ function start() {
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   terminal = new Terminal({ link, settings, onChange: pushState });
-  sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
+  sshd = new Sshd({ link, bus: hub.bus, consent, settings, save: saveSettings, onChange: pushState }); // every device's key, by its own pair
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
   helper = new Helper(() => system.inputBlocker(session));
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
@@ -443,19 +454,21 @@ function start() {
   });
   kvm.fileClip = fileClip; // our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
-  sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
+  sendTo = new SendTo({ link, bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : ''; }, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
   notifs = new Notifs({
     consent,
     bus: hub.bus, mesh, settings, save: saveSettings,
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); pushState(); }); // a device's pair: its policies again
-  wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
+  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); pushState(); }); // a device's pair: its policies (and its key) again
+  wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   vdd = new Vdd({ onChange: pushState });
   pcScreen = new PcScreen({ link, helper, sender, vdd, settings, popup: (kind, text) => hud.show(kind, text), inputAllowed: () => kvm.mode === 'home', onChange: pushState , needDriver: () => goTab('pc-mac') });
   vdd.check(); // Extend: can this desktop add a virtual monitor? (and one left on by a crash goes)
-  apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
+  // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
+  // or windows from the selected device while Monitor 2 showed another were the wrong device's.
+  apps = new Apps({ link: screenLink, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
   // with the device they went to until they're back (hub.sticky; #313). Their own sender, numbered apart.
@@ -1082,7 +1095,7 @@ function pushState() {
       const s = buildState();
       s.inviting = phoneInviteView(s);
       if (pcScreen) pcScreen.sendState(); // the viewer learns what we share
-      if (sendTo) sendTo.sync(s.peer && s.peer.name); // the Send to entries follow the peer's name
+      if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
       if (pairSync) pairSync.check(); // tell the other computer what changed here
       const phase = s.pairing ? s.pairing.phase : null;
       if (phase === 'code' && lastPairPhase !== 'code') showMain(); // a code to compare: to the front
