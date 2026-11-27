@@ -227,6 +227,7 @@ function normalize(s) {
       enterSends: bool(ph.enterSends, true),
       uhid: bool(ph.uhid, false), // Type as a hardware keyboard (shared/uhidkbd.js)
       arrowSwipe: bool(ph.arrowSwipe, false),
+      hover: bool(ph.hover, true), // the mouse hovers over the phone (#330); off: only presses and drags reach it
       // Mirroring over wireless debugging: past adbd straight over the Wi-Fi (scrcpy.js), and the
       // encoder's low-latency profile.
       direct: bool(ph.direct, false),

@@ -30,7 +30,7 @@ UI.tab({
       { value: 'all', label: tr('All') }, { value: 'photos', label: tr('Photos') }, { value: 'videos', label: tr('Videos') }, { value: 'screenshots', label: tr('Screenshots') },
     ], (v) => { kind = v; filter.set(v); reset(); });
     filter.set(kind);
-    const selectBtn = UI.button(tr('Select'), () => { selecting = !selecting; if (!selecting) chosen.clear(); paint(); }, 'small');
+    const selectBtn = UI.button(tr('Select'), () => { selecting = !selecting; anchor = ''; if (!selecting) chosen.clear(); paint(); }, 'small');
     const saveBtn = UI.button(tr('Save'), () => save([...chosen]), 'primary small');
     // Remove asks once more (its label turns into the question), as Files' Delete does.
     let confirmRemove = false;
@@ -114,6 +114,7 @@ UI.tab({
     let asking = false;
     let selecting = false;
     const chosen = new Set();
+    let anchor = ''; // the id last chosen or let go: Shift-click does the same to every tile from it (#319)
     const thumbs = new Map(); // id -> data: URL ('' asked)
     const tiles = new Map(); // id -> tile element
     let viewing = null;
@@ -125,9 +126,13 @@ UI.tab({
         it.video ? el('span', { class: 'hub-dur', text: it.dur ? UI.duration(it.dur / 1000) : tr('Video') }) : null,
         el('span', { class: 'hub-check' })]);
       t.dataset.id = it.id;
-      t.onclick = () => {
+      t.onclick = (e) => {
         if (!selecting) return view(it);
-        if (chosen.has(it.id)) chosen.delete(it.id); else chosen.add(it.id);
+        const on = !chosen.has(it.id);
+        const a = e.shiftKey && anchor ? items.findIndex((x) => x.id === anchor) : -1;
+        const b = items.indexOf(it);
+        for (const x of a >= 0 && b >= 0 ? items.slice(Math.min(a, b), Math.max(a, b) + 1) : [it]) if (on) chosen.add(x.id); else chosen.delete(x.id);
+        anchor = it.id;
         confirmRemove = false;
         paint();
       };

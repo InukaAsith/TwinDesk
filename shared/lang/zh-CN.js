@@ -2366,4 +2366,8 @@
   "It stopped.": "已停止。",
   "Starting on the phone…": "正在手机上启动…",
   "Which phone Show Phone Screen opens, and this page shows": "“显示手机屏幕”打开哪部手机，以及本页显示哪部",
+  "Mouse hover": "鼠标悬停",
+  "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "手机上的应用会看到指针从上方经过，就像插着鼠标一样。关闭后，只有点击和拖动会传到手机。",
+  "Scrolling speed here": "此处滚动速度",
+  "Another computer’s mouse wheel on this Mac": "另一台电脑的鼠标滚轮在这台 Mac 上的滚动速度",
 });

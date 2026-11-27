@@ -205,7 +205,10 @@
   // open (the open one when it exists for it, else its first); a phone nearby connects.
   let goAfter = null; // { id, kind, timer }: open the sections once the new selection reached this window
   function pick(t) {
-    if (t.action === 'connect') return api.connectPhone(t.id);
+    if (t.action === 'connect') {
+      connectWant = { id: t.id, until: Date.now() + 60000 };
+      return api.connectPhone(t.id);
+    }
     if (t.action !== 'select') return;
     const go = () => {
       if (goAfter) clearTimeout(goAfter.timer);
@@ -221,6 +224,9 @@
   // Every known device above the sections: paired phones (wallpaper, name, link) and computers (OS icon,
   // name, ping/transport), devices only another one reaches with a "via" line (not clickable).
   let phonesKey = '';
+  // A phone clicked to connect becomes the selected device once it's connected (#317), as a second
+  // click did: { id, until }, given up after a minute.
+  let connectWant = null;
   let assetsSeen = -1;
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
@@ -255,6 +261,14 @@
             : peer.state === 'identity_changed' ? tr('Identity changed') : tr('Not connected');
       return { ...tile, sub };
     });
+    if (connectWant) {
+      const want = tiles.find((x) => x.id === connectWant.id && x.kind === 'phone');
+      if (Date.now() > connectWant.until) connectWant = null;
+      else if (want && want.action === 'select') {
+        connectWant = null;
+        setTimeout(() => pick(want), 0); // after this render: pick selects it and opens its sections
+      }
+    }
     const key = JSON.stringify([tiles.map((t) => [t.id, t.kind, t.name, t.os, t.state, t.selected, t.action, t.via, t.forget]), ph.held, ph.activeId, (ph.phones || []).map((x) => [x.id, x.colors]), colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) {
       const subs = new Map(tiles.map((t) => [t.id, t.sub]));

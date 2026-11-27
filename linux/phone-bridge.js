@@ -762,7 +762,7 @@ class PhoneBridge extends EventEmitter {
     const d = this._display();
     if (!k || !d || !this.ctl) return;
     if (k.buttons) this.ctl.mouse(ACTION.MOVE, k.x, k.y, d.w, d.h, 0, k.buttons);
-    else this.ctl.mouse(ACTION.HOVER_MOVE, k.x, k.y, d.w, d.h, 0, 0);
+    else if ((this.getSettings().phone || {}).hover !== false) this.ctl.mouse(ACTION.HOVER_MOVE, k.x, k.y, d.w, d.h, 0, 0); // Phone › Hover (#330)
     this._pointer(true);
   }
 
@@ -871,7 +871,7 @@ class PhoneBridge extends EventEmitter {
     const base = { video: true, control: true, maxFps: 60, videoBitRate: (ph.bitrateMbps || 8) * 1000000, direct: !!ph.direct, lowLatency: !!ph.lowLatency };
     if (kind === 'camera') return { ...base, audio: false, stayAwake: true, flex: false, ...extra };
     if (kind === 'screen') return { ...base, audio: !!ph.sound, maxSize: ph.maxSize || 0, stayAwake: true, ...extra };
-    return { ...base, audio: false, flex: true, ...extra };
+    return { ...base, audio: false, flex: true, stayAwake: true, ...extra }; // an app window: the screen timeout doesn't end its display (#247)
   }
 
   async listCameras() {

@@ -542,6 +542,15 @@ void wl_config(const JObj *c) {
   dragFiles = jbool(c, "dragFiles", 1);
   nDragSides = jhas(c, "dragSideList") ? parse_side_list(jstr(c, "dragSideList", ""), SIDE_NONE, dragSides) : -1;
   accelFlat = !strcmp(jstr(c, "accelProfile", "adaptive"), "flat");
+  // The user session's word on the pointer mode (Full KVM: this helper is the service's, without
+  // that session's XDG_CURRENT_DESKTOP, #244). Our own TWINDESK_POINTER still wins.
+  const char *pm = jstr(c, "pointerMode", "");
+  const char *own = getenv("TWINDESK_POINTER");
+  if ((!strcmp(pm, "output") || !strcmp(pm, "box")) && !(own && *own)) {
+    int want = !strcmp(pm, "output");
+    if (want != per_output) fprintf(stderr, "[wl] pointer: %s (kvmConfig)\n", want ? "placed within the cursor's monitor" : "over all the monitors");
+    per_output = want;
+  }
   accelSpeed = fmax(-1, fmin(1, jnum(c, "accelSpeed", 0)));
   padTap = jbool(c, "padTap", 1);
   padNatural = jbool(c, "padNatural", 0);

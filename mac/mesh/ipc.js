@@ -38,7 +38,7 @@ const SCHEMA = {
   virtual: { enabled: bool, width: (v) => Math.round(clamp(640, 3840, 1920)(v)), height: (v) => Math.round(clamp(480, 2160, 1080)(v)), hiDPI: bool, hz: oneOf([30, 60], 60) },
   kvm: {
     pcSide: oneOf(P.SIDES, 'right'), mouse: bool, keyboard: bool, driveOther: bool, beDriven: bool,
-    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
+    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), scrollSpeed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: Crossing.emergency },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool }, // localApi: General › Local API (Debug's MCP server too)
@@ -53,7 +53,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool, direct: bool, lowLatency: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, hover: bool, uhid: bool, direct: bool, lowLatency: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),

@@ -4,7 +4,7 @@
 'use strict';
 
 const assert = require('assert');
-const { parseKde, parseSway, parseNiri, read } = require('../../linux/pointeraccel.js');
+const { parseKde, parseSway, parseNiri, read, pointerMode } = require('../../linux/pointeraccel.js');
 
 (async () => {
   // KDE: the mouse's group, not the touchpad's; 1 is flat.
@@ -43,6 +43,11 @@ const { parseKde, parseSway, parseNiri, read } = require('../../linux/pointeracc
   assert.deepStrictEqual(parseNiri(kdl), { accelProfile: 'adaptive', accelSpeed: 0.2, padTap: true, padNatural: false });
   assert.deepStrictEqual(parseNiri(kdl.replace('// natural-scroll', 'natural-scroll').replace('        tap\n', '')), { accelProfile: 'adaptive', accelSpeed: 0.2, padTap: false, padNatural: true });
 
+  // The pointer mode the helper is told (#244: the Full KVM service's helper has no XDG_CURRENT_DESKTOP).
+  assert.strictEqual(pointerMode({ XDG_CURRENT_DESKTOP: 'COSMIC' }), 'output');
+  assert.strictEqual(pointerMode({ XDG_CURRENT_DESKTOP: 'KDE' }), '');
+  assert.strictEqual(pointerMode({ XDG_CURRENT_DESKTOP: 'COSMIC', TWINDESK_POINTER: 'box' }), 'box');
+  assert.strictEqual(pointerMode({ TWINDESK_POINTER: 'output' }), 'output');
   console.log('pointeraccel: ok');
 })().catch((e) => {
   console.error(e);

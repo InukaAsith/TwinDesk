@@ -59,6 +59,7 @@ const DEFAULT_SETTINGS = {
     crossingModifier: '', // optional modifier held while leaving this Mac at an edge
     speed: 1.0,
     reverseScroll: false,
+    scrollSpeed: 1, // Scrolling speed here: another computer's wheel on this Mac (shared/wheelscale.js, #315)
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
     linkedBy: {}, // The last `linked` per paired device id, restored on connect
     portalsByPeer: {}, // opt-in directional display-edge portals, stored per paired device
@@ -102,7 +103,7 @@ const DEFAULT_SETTINGS = {
   apps: { offer: false, onVirtual: false, moveWindows: false, moveKey: 'MetaRight' }, // The PC can list and open this Mac's apps; onVirtual: they open on the virtual display, in Mirror mode too (off: on the shared display, as always); moveWindows: a window dragged past the edge with moveKey held moves there (movewin.js)
   papps: { on: false }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.
-  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, uhid: false, direct: false, lowLatency: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
+  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, hover: true, uhid: false, direct: false, lowLatency: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
   mount: { on: false }, // the phone in Finder (phonedrive.js), only when Mount is clicked
   drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.

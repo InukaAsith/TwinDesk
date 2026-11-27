@@ -8,7 +8,10 @@
 // Also the touchpad's tap to click and natural scrolling: while a Wayland helper drives another
 // device it grabs the touchpad, so it makes the taps and scrolling itself, the desktop's way (#222).
 // Niri's are read from its config.kdl.
-//   get()            -> {accelProfile: 'adaptive' | 'flat', accelSpeed: -1..1, padTap, padNatural}
+//   get()            -> {accelProfile: 'adaptive' | 'flat', accelSpeed: -1..1, padTap, padNatural, pointerMode}
+//   pointerMode: 'output' where the compositor maps an absolute pointer to the cursor's monitor
+//   (COSMIC, #244; or TWINDESK_POINTER=output|box), else ''. Told to the helper in kvmConfig, as the
+//   Full KVM service's helper doesn't have this session's environment to tell for itself.
 //   watch(onChange)  reads it now and every 30 s; onChange() when it differs (on Wayland only)
 'use strict';
 
@@ -142,8 +145,14 @@ async function read(env = process.env) {
   return r || { ...DEFAULT };
 }
 
+function pointerMode(env = process.env) {
+  const e = String(env.TWINDESK_POINTER || '').trim();
+  if (e === 'output' || e === 'box') return e;
+  return /cosmic/i.test(env.XDG_CURRENT_DESKTOP || '') ? 'output' : '';
+}
+
 let cur = { ...DEFAULT };
-const get = () => cur;
+const get = () => ({ ...cur, pointerMode: pointerMode() });
 
 async function refresh(onChange) {
   const r = await read().catch(() => null);
@@ -162,4 +171,4 @@ function watch(onChange) {
   setInterval(() => refresh(all), 30000).unref(); // the desktop's mouse settings changed meanwhile
 }
 
-module.exports = { get, watch, read, parseKde, parseSway, parseNiri };
+module.exports = { get, watch, read, parseKde, parseSway, parseNiri, pointerMode };

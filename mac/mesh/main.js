@@ -53,6 +53,7 @@ const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
 const I18n = require('../../shared/i18n.js');
 const Look = require('../../shared/look.js');
+let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
 let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
@@ -833,10 +834,11 @@ app.whenReady().then(() => {
       svc.anyPhone.unit(u);
       if (svc.deck) svc.deck.add(u.link); // that phone's Deck runs here
       // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
-      new PcNow({ server: u.link, key: (code) => {
+      const now = new PcNow({ server: u.link, key: (code) => {
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
       } });
+      if (!pcNowRef) pcNowRef = now; // what plays here, for Calls › Pause what plays here (one is enough: it's this computer's)
     },
   });
   svc.phone.on('change', pushState);
@@ -1258,6 +1260,9 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this computer pauses for a call (shared/callpause.js, #293).
+  const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
+  hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
   if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;

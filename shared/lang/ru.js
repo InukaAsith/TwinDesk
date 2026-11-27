@@ -2365,4 +2365,8 @@
   "It stopped.": "Остановлено.",
   "Starting on the phone…": "Запуск на телефоне…",
   "Which phone Show Phone Screen opens, and this page shows": "Какой телефон открывает «Показать экран телефона» и показывает эта страница",
+  "Mouse hover": "Наведение мыши",
+  "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "Приложения на телефоне видят, как над ними проходит указатель, как с подключённой мышью. Когда выключено, на телефон передаются только нажатия и перетаскивания.",
+  "Scrolling speed here": "Скорость прокрутки здесь",
+  "Another computer’s mouse wheel on this Mac": "Колесо мыши другого компьютера на этом Mac",
 });

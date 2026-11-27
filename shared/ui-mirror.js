@@ -70,12 +70,14 @@
         controls = UI.switch((v) => api.setPhone({ controls: v ? 'side' : 'top' }), { label: tr('Side panel') });
         rows.push(UI.row(tr('Side panel'), tr('All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.'), [controls]));
       }
-      let enterSends = null, arrowSwipe = null;
+      let enterSends = null, arrowSwipe = null, hover = null;
       {
         enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }) });
         rows.push(UI.row(tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }), tr('In WhatsApp, Instagram and Telegram. {shortcut} adds a new line.', { shortcut: mac ? '⇧Return' : 'Shift+Enter' }), [enterSends]));
         arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
         rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
+        hover = UI.switch((v) => api.setPhone({ hover: v }), { label: tr('Mouse hover') });
+        rows.push(UI.row(tr('Mouse hover'), tr('Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.'), [hover]));
       }
       // The phone screen window's Rotate and screen off, here rather than in its title bar (Windows'
       // side panel has them too).
@@ -122,6 +124,7 @@
         if (controls) controls.set(st.controls === 'side');
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
+        if (hover) hover.set(st.hover !== false);
         const wins = br.windows || [];
         if (rotateBtn) {
           const scr = wins.find((w) => w.kind === 'screen');

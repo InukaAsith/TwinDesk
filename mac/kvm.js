@@ -7,6 +7,7 @@
 // Events: 'change' — this.view changed.
 'use strict';
 
+const { WheelScale } = require('../shared/wheelscale.js');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { CapsSync } = require('../shared/capsync.js');
@@ -762,7 +763,11 @@ class Kvm extends EventEmitter {
         break;
       case P.T.K_WHEEL: {
         const s = k.reverseScroll ? -1 : 1;
-        ev = { t: m.t, dx: num(m.dx) * s, dy: num(m.dy) * s, mode: m.mode === 'line' ? 'line' : 'pixel' };
+        const mode = m.mode === 'line' ? 'line' : 'pixel';
+        if (!this.wheel || this.wheel.mode !== mode) this.wheel = Object.assign(new WheelScale(), { mode }); // Scrolling speed here (#315)
+        const w = this.wheel.scale(num(m.dx) * s, num(m.dy) * s, k.scrollSpeed);
+        if (!w.dx && !w.dy) return; // less than a line so far: it adds up
+        ev = { t: m.t, dx: w.dx, dy: w.dy, mode };
         break;
       }
       default:
