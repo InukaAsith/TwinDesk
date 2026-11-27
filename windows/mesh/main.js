@@ -615,8 +615,10 @@ function start() {
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
   link.start();
 
-  link.on('welcome', () => { // a pinned Mac app started while the Mac wasn't connected
-    if (pendingMacApp && Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
+  hub.bus.onPeer('welcome', (pid) => { // a pinned Mac app started while the Mac wasn't connected: a Mac connects
+    const x = hub.sessions.get(pid);
+    if (!pendingMacApp || !x || x.peerOs !== P.OS.MAC) return;
+    if (Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
     pendingMacApp = null;
   });
   createTray();
@@ -895,35 +897,60 @@ function setupNet() {
     applyNet();
     recheck();
   });
+  // The net hook's own link (not the facade): the selected device's, kept while Wi-Fi is being set up or
+  // used for it, so a crossing doesn't cut a transfer through the network it was moved onto (hub.netId).
+  const netLink = require('../../shared/scoped-link.js').scopedLink(hub, null);
+  hub.netId = null;
+  // Each device's last net.caps (what it can do to leave Bluetooth): the hook gets it when it binds there.
+  const netCaps = new Map();
+  hub.bus.on(P.T.NET_CAPS, (m, from) => netCaps.set(from, m));
+  hub.bus.onPeer('closed', (id) => netCaps.delete(id));
   net = new NetLink({
     os: P.OS.WIN,
-    send: (m) => link.sendNow(m),
-    current: () => link.current,
+    send: (m) => !!netLink.id && hub.bus.send(netLink.id, m),
+    current: () => netLink.current,
     host: { can: () => wifi.canHost(), start: (ssid, pass) => wifi.host(ssid, pass), stop: () => wifi.unhost() },
     join: { can: () => wifi.can(), start: (ssid, pass) => wifi.join(ssid, pass), stop: () => wifi.leave() },
     // Connect with hotspot (a phone): it switches its hotspot on, this PC joins it (the Overview asks
     // for its name and password once; joinHotspot).
     hotspot: (why, peerOs) => peerOs === P.OS.ANDROID && why === 'hotspot',
     cable: () => {
-      const c = link.current;
+      const c = netLink.current;
       return !!c && c.os === P.OS.ANDROID && !!wired && wired.toCable(c.deviceId);
     },
   });
   net.on('change', pushState);
   net.on('dropped', () => pcScreen.mode !== 'off' && pcScreen.setMode('off')); // Back to Bluetooth on the phone: it can't carry the screen
-  hub.netHold = (m) => net.holdOut(m, (x) => link.sendNow(x)); // files wait for Wi-Fi (netlink.js)
-  link.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
-  hub.netTap = (m) => net.onMessage(m); // every message of the selected device (net.*)
-  link.on('welcome', () => {
-    net.started();
-    recheck();
+  hub.netHold = (m) => net.holdOut(m, (x) => !!netLink.id && hub.bus.send(netLink.id, x)); // files wait for Wi-Fi (netlink.js)
+  netLink.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+  hub.netTap = (m) => net.onMessage(m); // every message of the net hook's device (net.*)
+  // Bound to a device: the selected one, unless it's busy with another (hosting, joining, asking).
+  const bindNet = (id) => {
+    if (netLink.id === id) return;
+    if (netLink.id && netLink.current) net.ended();
+    netLink.bind(id);
+    hub.netId = id;
+    if (id && netLink.current) { net.started(); recheck(); }
+    if (id && netCaps.has(id)) net.onMessage(netCaps.get(id));
+  };
+  const netBusy = () => ['asking', 'hosting', 'joining', 'joined', 'hotspot'].includes(net.state); // Wi-Fi up or on its way for it
+  hub.on('selected', (id) => { if (!netBusy() || !netLink.current) bindNet(id || null); });
+  net.on('change', () => setImmediate(() => { if (!netBusy() && netLink.id !== (hub.selectedId || null)) bindNet(hub.selectedId || null); })); // done: the selection's again
+  hub.bus.onPeer('welcome', (id) => {
+    if (id === netLink.id) { net.started(); recheck(); } else if (!netLink.current && id === hub.selectedId) bindNet(id);
   });
-  link.on('closed', () => net.ended());
-  link.on('transport', () => {
+  hub.bus.onPeer('closed', (id) => {
+    if (id !== netLink.id) return;
+    net.ended();
+    if (hub.selectedId && hub.selectedId !== id) bindNet(hub.selectedId);
+  });
+  hub.bus.onPeer('transport', (id) => {
+    if (id !== netLink.id) return;
     pushState();
     screen.policy();
     if (!net.onBle && settings.files.mountMac && smb.mac && !smb.drive) smbMount(); // on Wi-Fi now: the folder too
   });
+  bindNet(hub.selectedId || null);
   // The other computer's folder through Bluetooth: not mapped there (its address is the pipe's);
   // Open moves the session onto Wi-Fi Direct and maps it then, kept up while it's mapped.
   const smbMount = () => smb.mountNow();

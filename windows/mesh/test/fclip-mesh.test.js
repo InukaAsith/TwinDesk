@@ -18,6 +18,7 @@ const { Pairing } = require('../hostpair.js');
 const { LinkManager } = require('../links.js');
 const { Hub } = require('../hub.js');
 const { FilesSet } = require('../../../shared/files-mesh.js');
+const { FileDropSet } = require('../../../shared/filedrop-mesh.js');
 const { meshFileClip } = require('../../../shared/fclip-mesh.js');
 const { runTests } = require('./lib/run.js');
 const { loadTestCert } = require('./lib/testcert.js');
@@ -62,7 +63,8 @@ const said = { fileSource: {}, frontFolder: {} };
 function files(n, settings) {
   const helper = { request: async (cmd) => said[cmd] || {}, send() {}, on() {} };
   const set = new FilesSet({ hub: n.hub, make: (link) => ({ fileRecv: new FileRecv({ link, helper, settings, onChange() {} }), dragRecv: { onRelease() {}, onHome() {}, dragging: false, view: () => ({ state: '' }) } }) });
-  const fileDrop = new FileDrop({ link: n.hub.facade, settings, onProgress() {} });
+  // A FileDrop per device, as main.js makes them (shared/filedrop-mesh.js): the facade has no events any more.
+  const fileDrop = new FileDropSet({ hub: n.hub, FileDrop, settings, make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, onProgress() {} }) });
   const popups = [];
   const clip = new MeshFileClip({
     hub: n.hub, files: set, helper, fileDrop, settings, peerName: () => 'the other computer', popup: (kind, text) => popups.push(text), onChange() {},

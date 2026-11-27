@@ -4,14 +4,16 @@
 //
 // Three views of the same connections:
 //   mesh    every connected device (the Mesh registry) and the roster of direct links
-//   bus     pooled features (clipboard, notifications): messages of ANY connected device, sends to any
-//   facade  targeted features (files, screen, terminal, ...): the SELECTED device only, with the API
-//           of the one-to-one Peer (peer.js)
+//   bus     messages of ANY connected device, sends to any; scoped(id) / sticky(): a feature's own
+//           link to one device (every feature is one per device, or binds itself: step 5 of
+//           docs/mesh-graph.md)
+//   facade  the SELECTED device's status, snapshot and sends, for the pages; no events, no replay
 //
 // Selection: `selectedId` is a string (or null), `selected` is its Session (or null). Never mix them.
-// The first device that connects while nothing is selected is selected; when the selected device
-// drops, another connected one is picked. Every change of the selection tells the facade's handlers
-// 'closed' and then, for the new device, 'welcome' with {macId, macName, os}.
+// It is the device the pages show and a crossing picks; nothing routes through it. The first device
+// that connects while nothing is selected is selected; when the selected device drops, another
+// connected one is picked; 'selected' says so. netTarget: the device the net hook serves (netId, set by
+// main.js; else the selected one): its messages go to netTap, files to it wait in netHold.
 //
 // Events: 'change' (anything the UI shows), 'selected' (id or null), 'peerAdded' (id),
 // 'peerRemoved' (id).
@@ -62,10 +64,8 @@ class Hub extends EventEmitter {
     this.facade = this._makeFacade();
     this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
-    this._facadeHandlers = new Map(); // type | 'welcome' | 'closed' -> [fn(arg)]
     this._facadeStateFns = [];
     this.heard = new Heard(); // each device's last policies and states, selected or not (peerstate.js)
-    this._facadeSaid = new Said(); // the policies the facade told the selected device
     this._audioSticky = {};
     this._audioRoute = null;
     this._inputPeer = null; // the device using this computer (setInputPeer), for the microphone
@@ -252,6 +252,12 @@ class Hub extends EventEmitter {
     if (this.server) this.server.setBusy(id, f);
   }
 
+  // The device the net hook serves (netlink.js: Bluetooth to Wi-Fi): the one main binds it to (netId),
+  // else the selected one.
+  get netTarget() {
+    return this.netId !== undefined ? this.netId : this.selectedId;
+  }
+
   // ---- what the UI shows ----
 
   // Every paired device, connected or not. state: 'connected' | the guest link's state (connecting,
@@ -352,18 +358,13 @@ class Hub extends EventEmitter {
     }
     this.heard.note(s.id, msg);
     busVerbose(s, msg); // Debug › Verbose log › bus
-    // The selected device's messages reach the net hook first (netlink.js: its net.* and file chunks).
-    if (this.netTap && s.id === this.selectedId) this.netTap(msg);
+    // The net hook's device's messages reach it first (netlink.js: its net.* and file chunks).
+    if (this.netTap && s.id === this.netTarget) this.netTap(msg);
     let consumed = false;
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
       for (const fn of fns) fn(msg, s.id);
-    }
-    // A feature's type from a device that is not selected: nobody reads it here, and it is not unknown.
-    if (this._facadeHandlers.has(msg.t)) {
-      consumed = true;
-      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg);
     }
     if (this._audioRoute && this._audioRoute.targetId === s.id
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
@@ -385,8 +386,7 @@ class Hub extends EventEmitter {
     this.mesh.addPeer({ id: s.id, name: s.displayName(), os: s.peerOs, send: (m) => s.send(m), mesh: s.meshCapable });
     this._rosterAll();
     this._peerEvent('welcome', s.id, this._welcomeInfo(s));
-    if (this.selectedId === s.id) this._facadeEmit('welcome', this._welcomeInfo(s)); // the selected device came back (replaced)
-    else if (this.selectedId === null) this._select(s.id);
+    if (this.selectedId === null) this._select(s.id);
     if (this._audioRoute) this._audioRoute.refresh();
     this.emit('peerAdded', s.id);
     this._change();
@@ -395,15 +395,12 @@ class Hub extends EventEmitter {
   // replaced: the device got a new socket, so it is down and up again at once. Its selection stays.
   _down(s, replaced = false) {
     this.heard.forget(s.id); // its next session says it all again
-    this._facadeSaid.forget(s.id);
     this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});
     if (this._audioRoute) this._audioRoute.drop(s.id);
-    if (this.selectedId === s.id) {
-      if (replaced) this._facadeEmit('closed', {});
-      else this._select(this._pickConnected());
-    } else if (this._audioRoute) this._audioRoute.refresh();
+    if (this.selectedId === s.id && !replaced) this._select(this._pickConnected());
+    else if (this._audioRoute) this._audioRoute.refresh();
     this.emit('peerRemoved', s.id);
     this._change();
   }
@@ -413,7 +410,6 @@ class Hub extends EventEmitter {
     if (tr !== s.lastTransport) {
       s.lastTransport = tr;
       this._peerEvent('transport', s.id, {});
-      if (s.id === this.selectedId) this._facadeEmit('transport', {});
     }
     const e = this.mesh.get(s.id);
     if (e) {
@@ -448,28 +444,14 @@ class Hub extends EventEmitter {
 
   // ---- internals: selection and the facade ----
 
+  // The selection is the device the pages show (and a crossing picks). Nothing routes through it any more
+  // (step 5 of docs/mesh-graph.md): the facade has no events, no replay and no goodbyes; every feature is
+  // on its own link per device, and the ones that follow the selection bind to it themselves ('selected').
   _select(id) {
     const next = id || null;
     if (next === this.selectedId) return;
-    if (this.selectedId !== null) {
-      this._facadeEmit('closed', {});
-      // The device stays connected: what the facade told it is on goes off (peerstate.js GOODBYE).
-      const old = this.sessions.get(this.selectedId);
-      for (const m of this._facadeSaid.goodbyes(this.selectedId)) if (old && old.connected) old.send(m);
-    }
     this.selectedId = next;
     if (this.server) this.server.setPrimary(next);
-    if (next) {
-      const s = this.sessions.get(next);
-      if (s) {
-        this._facadeEmit('welcome', this._welcomeInfo(s));
-        // What it said while another device was selected: the features reset it on 'welcome'.
-        for (const m of this.heard.replay(next)) {
-          if (m.t === 'net.caps' && this.netTap) this.netTap(m); // the net hook's (netlink.js: it asks for Wi-Fi with them)
-          else if (this._facadeHandlers.has(m.t)) this._facadeEmit(m.t, m);
-        }
-      }
-    }
     this._facadeState();
     if (this._audioRoute) this._audioRoute.refresh();
     this.emit('selected', next);
@@ -478,14 +460,7 @@ class Hub extends EventEmitter {
 
   _facadeSend(obj) {
     const s = this.selected;
-    const ok = !!s && s.send(obj) === true;
-    if (ok) this._facadeSaid.note(s.id, obj);
-    return ok;
-  }
-
-  _facadeEmit(type, arg) {
-    const fns = this._facadeHandlers.get(type);
-    if (fns) for (const fn of fns) fn(arg);
+    return !!s && s.send(obj) === true;
   }
 
   _facadeState() {
@@ -538,7 +513,10 @@ class Hub extends EventEmitter {
       onState(fn) { hub._facadeStateFns.push(fn); },
       send(obj) {
         const s = sess();
-        return !!s && s.connected && s.send(obj) === true;
+        if (!s || !s.connected) return false;
+        // The net hook's device on Bluetooth: files wait for Wi-Fi (netHold), whichever link sends them.
+        if (hub.netHold && link.id === hub.netTarget && hub.netHold(obj)) return true;
+        return s.send(obj) === true;
       },
       inject(msg) {
         const s = sess();
@@ -640,12 +618,13 @@ class Hub extends EventEmitter {
     const fx = require('../../shared/meshfx.js').facadeFx(() => hub.selected, () => hub.sessions.list(), hub.sessions.fxShared);
     return {
       fx,
-      on: (type, fn) => addTo(hub._facadeHandlers, type, fn),
+      // No events (step 5): a feature listens on its own link (hub.scoped, hub.sticky) or the bus.
+      on: (type) => { throw new Error(`hub.facade.on('${type}'): the facade has no events; use hub.scoped(id), hub.sticky() or hub.bus`); },
       onState: (fn) => hub._facadeStateFns.push(fn),
       // A message to the selected device; while it is on Bluetooth, files may wait for Wi-Fi (netHold).
       send: (obj) => {
         chunk(obj);
-        if (hub.netHold && hub.netHold(obj)) return true;
+        if (hub.netHold && hub.selectedId === hub.netTarget && hub.netHold(obj)) return true;
         return hub._facadeSend(obj);
       },
       sendNow: (obj) => {
@@ -662,11 +641,6 @@ class Hub extends EventEmitter {
           address: hosting ? s.ctx.address : (s.link && s.link.pairing ? s.link.pairing.address : ''),
           rttMs: s.status.rtt, lastRx: s.lastRx, ws: hosting ? s.ctx.ws : (s.link ? s.link.ws : null),
         };
-      },
-      // A message as if the selected device had sent it (the phone bridge answers for the phone).
-      inject: (msg) => {
-        const s = hub.selected;
-        if (s && s.connected) hub._facadeEmit(msg.t, msg);
       },
       get status() {
         const s = hub.selected;

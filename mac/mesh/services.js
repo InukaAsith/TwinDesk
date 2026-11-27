@@ -225,18 +225,18 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     setTimeout(() => helper.start(), delay);
   });
 
-  // Keep the display awake while a PC is connected.
+  // Keep the display awake while a computer is connected (any device, not only the selected one).
   let blocker = null;
   function updateAwake() {
-    const want = s().app.keepAwake !== false && !!server.current;
+    const want = s().app.keepAwake !== false && meshHub.bus.connectedIds().length > 0;
     if (want && blocker === null) blocker = powerSaveBlocker.start('prevent-display-sleep');
     if (!want && blocker !== null) {
       powerSaveBlocker.stop(blocker);
       blocker = null;
     }
   }
-  server.on('client', updateAwake);
-  server.on('closed', updateAwake);
+  meshHub.bus.onPeer('welcome', updateAwake);
+  meshHub.bus.onPeer('closed', updateAwake);
 
   helper.start();
 

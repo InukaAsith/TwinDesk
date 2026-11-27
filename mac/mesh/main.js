@@ -314,16 +314,18 @@ function publishState() {
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
 
+// To every connected device (each may watch this Mac's screen; the facade told the selected one only), once
+// per device and change.
 function sendScreenState() {
-  const c = peer && peer.current;
-  if (!c || !svc) return void (screenStateKey = '');
+  if (!svc || !hub) return void (screenStateKey = '');
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
-  const key = JSON.stringify([c.deviceId, msg]);
+  const ids = hub.bus.connectedIds();
+  const key = JSON.stringify([ids, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
-  peer.sendToClient(msg);
+  for (const pid of ids) hub.bus.send(pid, msg);
 }
 
 function displayPick(m) {
@@ -633,14 +635,14 @@ app.whenReady().then(() => {
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
-  peer.on('client', (ctx) => {
-    console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
+  hub.bus.onPeer('welcome', (pid) => {
+    const x = hub.sessions.get(pid);
+    if (x) console.log(`[peer] session with ${x.displayName()} (${x.peerOs}, ${x.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     pushState();
   });
   // Whether this Mac takes input from its stream: to every device (each may watch it), not only the selected one.
   hub.bus.onPeer('welcome', (pid) => hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false }));
-  peer.on('closed', pushState);
-  peer.on('rtt', pushState);
+  hub.bus.onPeer('closed', pushState);
   // Overview's controls of the selected device, and this Mac's for it (shared/devctl.js).
   {
     const { DevCtl } = require('../../shared/devctl.js');
@@ -1034,7 +1036,7 @@ app.whenReady().then(() => {
   const blockEdge = svc.kvm.blockEdge;
   svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
-  peer.on(`t:${P.T.SCREEN_CTL}`, (m) => onScreenCtl(m));
+  hub.bus.on(P.T.SCREEN_CTL, (m) => onScreenCtl(m)); // from any device watching this Mac's screen
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),
@@ -1201,11 +1203,19 @@ function setupNet() {
     invite: (devId) => svc.ble.invite(devId) || svc.bleLook.invite(devId),
   };
   const wifi = (cmd, args, ms) => svc.helper.request(cmd, args, ms);
+  // The net hook's own peer (not the facade): the selected device's, kept while Wi-Fi is being set up or
+  // used for it, so a crossing doesn't cut a transfer through the network it was moved onto (hub.netId).
+  const netPeer = new (require('./phones').ScopedPhonePeer)(hub, server, null);
+  hub.netId = null;
+  // Each device's last net.caps (what it can do to leave Bluetooth): the hook gets it when it binds there.
+  const netCaps = new Map();
+  hub.bus.on(P.T.NET_CAPS, (m, from) => netCaps.set(from, m));
+  hub.bus.onPeer('closed', (pid) => netCaps.delete(pid));
   svc.net = new NetLink({
     os: P.OS.MAC,
-    send: (m) => peer.sendNow(m),
+    send: (m) => netPeer.sendNow(m),
     current: () => {
-      const c = peer.current;
+      const c = netPeer.current;
       return c && { deviceId: c.deviceId, os: c.os, role: c.role, transport: c.transport === 'ble' ? 'ble' : 'ip', address: c.address };
     },
     host: null, // a Mac can't host a network others join while it stays on its own
@@ -1221,7 +1231,7 @@ function setupNet() {
     // 'user': Connect with Wi-Fi Direct; 'hotspot': Connect with hotspot.
     hotspot: (why, peerOs) => peerOs === P.OS.ANDROID && why !== 'files' && why !== 'user',
     cable: () => {
-      const c = peer.current;
+      const c = netPeer.current;
       return !!c && c.os === P.OS.ANDROID && !!svc.wired && svc.wired.toCable(c.deviceId);
     },
   });
@@ -1230,12 +1240,24 @@ function setupNet() {
     pushState();
   });
   svc.net.on('dropped', () => settings.sharing.on && actions.setSharing(false)); // Bluetooth can't carry the screen
-  peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
-  peer.tap = (m) => svc.net.onMessage(m);
-  peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
-  peer.on('client', () => svc.net.started());
-  peer.on('closed', () => svc.net.ended());
-  peer.on('transport', () => {
+  hub.netHold = (m) => svc.net.holdOut(m, (x) => netPeer.sendNow(x)); // files wait for Wi-Fi, on any route to it
+  hub.netTap = (m) => svc.net.onMessage(m); // every message of the net hook's device (net.*)
+  netPeer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+  netPeer.on('client', () => svc.net.started());
+  netPeer.on('closed', () => svc.net.ended());
+  // Bound to a device: the selected one, unless it's busy with another (hosting, joining, asking).
+  const netBusy = () => ['asking', 'hosting', 'joining', 'joined', 'hotspot'].includes(svc.net.state);
+  const bindNet = (pid) => {
+    if (netPeer.id === pid) return;
+    netPeer.bind(pid); // 'closed' for the one it leaves, 'client' for the next
+    hub.netId = pid;
+    if (pid && netCaps.has(pid)) svc.net.onMessage(netCaps.get(pid));
+  };
+  hub.on('selected', (pid) => { if (!netBusy() || !netPeer.current) bindNet(pid || null); });
+  svc.net.on('change', () => setImmediate(() => { if (!netBusy() && netPeer.id !== (hub.selectedId || null)) bindNet(hub.selectedId || null); })); // done: the selection's again
+  hub.bus.onPeer('closed', (pid) => { if (pid === netPeer.id && hub.selectedId && hub.selectedId !== pid) bindNet(hub.selectedId); });
+  bindNet(hub.selectedId || null);
+  netPeer.on('transport', () => {
     pushState();
     if (!svc.smb.onBle) svc.smb.mountPc(); // on Wi-Fi now: the PC's folder too
   });
@@ -1243,7 +1265,7 @@ function setupNet() {
   // The phone's screen or an app window asked for while on Bluetooth: its hotspot, then the window.
   let pendingView = null;
   svc.phoneViews.onNoAdb = (v) => {
-    const c = peer.current;
+    const c = netPeer.current;
     if (!c || c.transport !== 'ble' || c.os !== P.OS.ANDROID) return false;
     pendingView = v;
     svc.net.need('phone').then((ok) => !ok && (pendingView = null));

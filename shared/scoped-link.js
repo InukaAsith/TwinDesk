@@ -2,7 +2,7 @@
 // A feature per device in Multi-device (step 5 of docs/mesh-graph.md), Windows and Linux: hub.scoped(id)
 // with what the one-to-one features read besides, and the hub's devices as they come.
 //
-//   scopedLink(hub, id)  hub.scoped(id) plus current ({deviceId, name, os, transport, address}) and welcome(): a feature made
+//   scopedLink(hub, id)  hub.scoped(id) plus current ({deviceId, name, os, role, transport, address}) and welcome(): a feature made
 //                        after its device's 'welcome' (the hub's 'peerAdded' comes after it) gets that one
 //   eachDevice(hub, up(id, link))  up for every connected device and each one that connects, once a
 //                        device: up makes the feature on link, then link.welcome() runs
@@ -26,7 +26,7 @@ function scopedLink(hub, id) {
   };
   link.welcome = () => { for (const fn of welcomes) fn({}); };
   Object.defineProperty(link, 'current', {
-    get: () => { const x = hub.sessions.get(id); return x && x.connected ? { deviceId: id, name: x.displayName(), os: x.peerOs, transport: x.transport, address: addressOf(x) } : null; },
+    get: () => { const x = hub.sessions.get(id); return x && x.connected ? { deviceId: id, name: x.displayName(), os: x.peerOs, role: x.role, transport: x.transport, address: addressOf(x) } : null; },
   });
   return link;
 }
