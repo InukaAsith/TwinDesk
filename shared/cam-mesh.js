@@ -68,7 +68,7 @@ function shareWithAll(hub, cam, at) {
 
 function camLink(hub, cam, log = (...a) => console.log(...a)) {
   const busy = () => busyOf(cam);
-  const link = hub.sticky(busy);
+  const link = hub.sticky(busy, { remember: ['cam.policy'] }); // whether that computer shares its camera
   hub.bus.on(T.CAM_OPEN, (m, from) => {
     if (steer(hub, cam, link.id, from, log)) link.moveTo(from);
   });
@@ -95,7 +95,7 @@ function camRoute(hub, cam, log = (...a) => console.log(...a)) {
     if (busy() && route && route.targetId && isComputer(h, route.targetId)) return route.targetId;
     if (asked && isComputer(h, asked)) return asked;
     return h.selectedId;
-  });
+  }, { remember: ['cam.policy'] }); // whether that computer shares its camera
   hub.bus.on(T.CAM_OPEN, (m, from) => {
     if (!steer(hub, cam, route.targetId, from, log)) return;
     asked = from;

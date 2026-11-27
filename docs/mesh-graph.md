@@ -343,3 +343,19 @@ What still ran on the facade and only served (or heard) the selected device:
 - **The rest that listened on the facade**: the pinned-app launcher (a Mac connecting), the Mac's
   `screen.state` (to every device) and `screen.ctl` (from any device), keep-awake (any device connected),
   the session log line and the Connect hint (any device's welcome). Linux's unused facade sender is gone.
+
+### Step 5, phase 5c as built: peerstate.js gone
+
+`shared/peerstate.js` (one store in the hub of every device's policies and states, a fixed REMEMBER list
+played into the facade and the routes, and a fixed GOODBYE list) is gone. The links that move between
+devices keep what they need themselves (`shared/link-memory.js`):
+
+- **What a device said meanwhile** (`LinkMemory`): each moving link names the states its features need
+  when it arrives — Monitor 2's link and the Mac's viewer `screen.state`, Move windows and the Mac's apps
+  `papp.policy`, the camera `cam.policy`, the microphone `audio.policy`/`mic.policy`, the Mac's phone
+  route `hub.state`/`call.state` — and keeps the last of each from every device (the bus hears them all),
+  without `ask`, forgotten when the device goes. The net hook keeps each device's `net.caps` (5b).
+- **Goodbyes** (`Goodbyes`): no list; any `*.policy` a link turned on at its device (`accept: true`,
+  `share: true`) is switched off there once when the link leaves it.
+
+The links that don't move (one per device, bound once when the device connects) need neither.

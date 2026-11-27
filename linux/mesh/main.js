@@ -284,7 +284,7 @@ function start() {
   if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
   // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
   // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
-  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()));
+  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()), { remember: ['screen.state'] }); // whether that device shares its screen
   screen = new Screen({
     link: screenLink,
     clip,
@@ -503,7 +503,7 @@ function start() {
   screen.apps = apps;
   // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
   // with the device they went to until they're back (hub.sticky; #313). Their own sender, numbered apart.
-  const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size));
+  const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size), { remember: ['papp.policy'] }); // whether that device takes our windows
   pcApps = new PcApps({ link: appsLink, helper, sender: Object.assign(new Sender(appsLink), { counter: 2000000 }), settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
   // Another computer's apps here: a PeerApps per device, each on its own link (shared/papps-mesh.js), so
   // windows from several computers stay open and a crossing closes none of them (#313).

@@ -301,7 +301,7 @@ function start() {
   clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
   // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
   // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
-  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()));
+  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()), { remember: ['screen.state'] }); // whether that device shares its screen
   screen = new Screen({
     link: screenLink,
     clip,
@@ -522,7 +522,7 @@ function start() {
   wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
   // with the device they went to until they're back (hub.sticky; #313).
-  const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size));
+  const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size), { remember: ['papp.policy'] }); // whether that device takes our windows
   const sender = new Sender(appsLink, 2000000); // the app windows' rtc2 video sessions (each screen target has its own)
   let senders = 0; // one per sharing target (a link of its own each), numbers far from the selected-device sender's
   pcScreen = new PcScreenSet({
