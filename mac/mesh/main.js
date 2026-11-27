@@ -1260,8 +1260,12 @@ let callwin = null;
 function loadHub() {
   if (phoneHub) return phoneHub;
   const { PhoneHub } = require('../../shared/phonehub.js');
+  // One phone at a time, the active one, kept while it has a call (shared/phonehub-link.js, step 4).
+  const hubLink = require('../../shared/phonehub-link.js').hubLink({
+    phones: phonesLink, ctxOf: (id) => svc.phoneDir.ctxOf(id), sendTo: (id, m) => svc.phoneDir.hub.bus.send(id, m), held: () => !!(phoneHub && phoneHub.call),
+  });
   const hub = new PhoneHub({
-    server: phonesLink, getSettings: () => settings, save: () => store.saveSettings(settings),
+    server: hubLink, getSettings: () => settings, save: () => store.saveSettings(settings),
     audio: (opts) => require('../callaudio.js').create({ helper: svc.helper, ...opts }), // the calls' sound over Bluetooth
     send: (paths, batch) => { // Files: into a folder on the phone (the one the page shows, not the selected device)
       const c = phonesLink.current;
@@ -1294,7 +1298,9 @@ function loadHub() {
   const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
   hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
-  if (phonesLink.current && P.isPhoneOs(phonesLink.current.os)) hub.started();
+  hub.on('call', () => hubLink.refresh()); // a call that ended lets it go to the active phone
+  if (svc.phone) svc.phone.on('change', () => hubLink.refresh()); // another phone active
+  if (hubLink.current) hub.started();
   return hub;
 }
 
