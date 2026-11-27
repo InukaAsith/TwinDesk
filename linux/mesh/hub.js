@@ -68,6 +68,7 @@ class Hub extends EventEmitter {
     this._facadeSaid = new Said(); // the policies the facade told the selected device
     this._audioSticky = {};
     this._audioRoute = null;
+    this._inputPeer = null; // the device using this computer (setInputPeer), for the microphone
     this._audioLink = null;
     this._host = { on: false, error: '' };
 
@@ -156,7 +157,7 @@ class Hub extends EventEmitter {
   audioRoute() {
     if (!this._audioRoute) {
       this._audioRoute = new Route(this, (hub) => hub._pickAudioRoute());
-      this._audioRoute.on('client', (v) => console.log('[audio-route] sound and mic go to', this._nameOf(v.deviceId), '(selected', this._nameOf(this.selectedId) + ', staying', JSON.stringify(this._audioSticky) + ')'));
+      this._audioRoute.on('client', (v) => console.log('[audio-route] the microphone goes to', this._nameOf(v.deviceId), '(input peer', this._nameOf(this._inputPeer) + ', selected', this._nameOf(this.selectedId) + ', staying', JSON.stringify(this._audioSticky) + ')'));
       this._audioRoute.on('closed', (v) => console.log('[audio-route] left', (v && v.name) || '-'));
       this._audioRoute.refresh();
     }
@@ -170,11 +171,21 @@ class Hub extends EventEmitter {
     if (this._audioRoute) this._audioRoute.refresh();
   }
 
+  // The microphone's graph (docs/mesh-graph.md, step 3): one device, the one using this computer (the input
+  // peer, from MeshShadow) before the selection; a live microphone stays where it is.
+  setInputPeer(id) {
+    if ((this._inputPeer || null) === (id || null)) return;
+    this._inputPeer = id || null;
+    if (this._audioRoute) this._audioRoute.refresh();
+  }
+
   _pickAudioRoute() {
     for (const id of Object.values(this._audioSticky)) {
       const s = id ? this.sessions.get(id) : null;
       if (s && s.connected) return id;
     }
+    const p = this._inputPeer ? this.sessions.get(this._inputPeer) : null;
+    if (p && p.connected && !P.isPhoneOs(p.peerOs)) return p.id; // a phone's microphone has its own stack
     return this.selectedId;
   }
 

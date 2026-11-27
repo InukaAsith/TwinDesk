@@ -1537,17 +1537,21 @@ function loadCamera() {
   if (camShare || !settings.camera.on) return camShare;
   const { CamShare } = require('../../shared/camshare.js');
   loadVcam();
-  const computer = () => link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os));
+  // Its own link: it stays with the computer the camera runs with, goes to a computer that opens this one's
+  // camera, else follows the selection (shared/cam-mesh.js). Made first, so it hears cam.open first.
+  const cl = require('../../shared/cam-mesh.js').camLink(hub, () => camShare);
+  const computer = () => cl.status.state === 'connected' && !(cl.current && P.isPhoneOs(cl.current.os));
   camShare = new CamShare({
     getLanguage: () => i18n.locale,
-    link: { on: (t, fn) => link.on(t, fn), send: (m) => link.send(m), connected: computer, ble: () => !!(link.current && link.current.transport === 'ble'), closed: (fn) => link.on('closed', fn) },
+    link: { on: (t, fn) => cl.on(t, fn), send: (m) => cl.send(m), connected: computer, ble: () => !!(cl.current && cl.current.transport === 'ble'), closed: (fn) => cl.on('closed', fn) },
     cfg: () => settings.camera,
     save: saveSettings,
     popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
-    peerName,
-    onChange: pushState,
+    peerName: () => (cl.current && cl.current.name) || peerName(),
+    onChange: () => { pushState(); cl.settle(); },
   });
-  camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+  cl.shareWithAll(); // every connected computer hears whether it's shared, not only the selected one
+  camShare.sendPolicy(); // connected already: they hear it now
   return camShare;
 }
 

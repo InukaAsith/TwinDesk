@@ -2,7 +2,7 @@
 // Multi-device, step 1 of docs/mesh-graph.md: the graph in shadow. Beside today's routing, it works out
 // what the graph would do for the services routed on this computer (its sound, its microphone, the name
 // the popups give) and logs it next to what happens, as [graph] lines, once per change. It changes
-// nothing: it only reads the hub, the kvm, Sound and Mic.
+// nothing but the one thing step 3 moved onto it: the hub hears the input peer, which the microphone follows.
 //   new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start()
 'use strict';
 
@@ -59,6 +59,7 @@ class MeshShadow {
       if (id && !sessions.some((s) => s.id === id)) this.peer.forget(id);
     }
     if (kvm) this.peer.note(kvm.mode, kvm.partner, this.now());
+    if (hub.setInputPeer) hub.setInputPeer(this.peer.id); // step 3: the microphone follows it (hub _pickAudioRoute)
     this._line('input peer', this.peer.id ? `${name(this.peer.id)} (${this.peer.why})` : 'nobody yet');
 
     const settings = this.settings();

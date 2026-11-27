@@ -942,25 +942,30 @@ app.whenReady().then(() => {
   svc.loadCamera = () => {
     if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
     const { CamShare } = require('../../shared/camshare.js');
+    // Its own route: it stays with the computer the camera runs with, goes to a computer that opens this
+    // Mac's camera, else follows the selection (shared/cam-mesh.js). Made first, so it hears cam.open first.
+    const camRoute = require('../../shared/cam-mesh.js').camRoute(hub, () => svc.camShare);
+    const camPeer = new Peer(camRoute, server);
     // A computer; a phone's camera goes through its own stack.
-    const computer = () => !!peer.current && !P.isPhoneOs(peer.current.os);
+    const computer = () => !!camPeer.current && !P.isPhoneOs(camPeer.current.os);
     svc.loadVcam();
     svc.camShare = new CamShare({
       getLanguage: () => i18n.locale,
       link: {
-        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
-        send: (m) => peer.sendToClient(m),
+        on: (t, fn) => (t === 'welcome' ? camPeer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : camPeer.on(`t:${t}`, (m) => fn(m))),
+        send: (m) => camPeer.sendToClient(m),
         connected: computer,
-        ble: () => !!(peer.current && peer.current.transport === 'ble'),
-        closed: (fn) => peer.on('closed', fn),
+        ble: () => !!(camPeer.current && camPeer.current.transport === 'ble'),
+        closed: (fn) => camPeer.on('closed', fn),
       },
       cfg: () => settings.camera,
       save: () => store.saveSettings(settings),
       popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
-      peerName: () => (peer.current && peer.current.name) || 'the other computer',
-      onChange: pushState,
+      peerName: () => (camPeer.current && camPeer.current.name) || 'the other computer',
+      onChange: () => { pushState(); camRoute.settle(); },
     });
-    svc.camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+    camRoute.shareWithAll(); // every connected computer hears whether it's shared, not only the selected one
+    svc.camShare.sendPolicy(); // connected already: they hear it now
     return svc.camShare;
   };
   svc.cam = () => ({ camShare: svc.camShare || null, vcam: svc.vcam || null });

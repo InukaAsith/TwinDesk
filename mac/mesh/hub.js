@@ -66,6 +66,7 @@ class Hub extends EventEmitter {
     this.routes = [];
     this.heard = new Heard(); // each device's last policies and states; a route plays them on 'client' (peerstate.js)
     this._audioSticky = {};
+    this._inputPeer = null; // the device using this Mac (setInputPeer), for the microphone
     this.facade = this.route(() => this.selectedId);
     this._addFacadeApi(this.facade);
     this._host = { on: false, error: '' };
@@ -106,11 +107,21 @@ class Hub extends EventEmitter {
     if (this._audioRoute) this._audioRoute.refresh();
   }
 
+  // The microphone's graph (docs/mesh-graph.md, step 3): one device, the one using this computer (the input
+  // peer, from MeshShadow) before the selection; a live microphone stays where it is.
+  setInputPeer(id) {
+    if ((this._inputPeer || null) === (id || null)) return;
+    this._inputPeer = id || null;
+    if (this._audioRoute) this._audioRoute.refresh();
+  }
+
   _pickAudioRoute() {
     for (const id of Object.values(this._audioSticky)) {
       const s = id ? this.sessions.get(id) : null;
       if (s && s.connected) return id;
     }
+    const p = this._inputPeer ? this.sessions.get(this._inputPeer) : null;
+    if (p && p.connected && !P.isPhoneOs(p.peerOs)) return p.id; // a phone's microphone has its own stack
     return this.selectedId;
   }
 
