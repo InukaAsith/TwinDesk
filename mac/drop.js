@@ -86,9 +86,10 @@ function finderWindows() {
 }
 
 class Drop extends EventEmitter {
-  constructor({ server, helper, displays, getSettings }) {
+  // accepts(): Receive files from this device, its pair's switch (shared/consent.js); else the settings'
+  constructor({ server, helper, displays, getSettings, accepts = null }) {
     super();
-    Object.assign(this, { server, helper, displays, getSettings });
+    Object.assign(this, { server, helper, displays, getSettings, accepts });
     this.active = new Map(); // id -> transfer
     this.recent = []; // newest first: {name, size, path, at, ok, error}
     this.drag = null; // { dest: null|dir, waiting: [transfer] } while files are dragged in (drop:'release')
@@ -138,6 +139,10 @@ class Drop extends EventEmitter {
     return this.getSettings().files;
   }
 
+  _accepts() {
+    return this.accepts ? !!this.accepts() : !!this.cfg.acceptDrops;
+  }
+
   // Where a drop at normalized (x, y) on the shared display should land.
   async _destination(m) {
     const t = this.displays.target();
@@ -173,7 +178,7 @@ class Drop extends EventEmitter {
     const refuse = (why) => this.server.sendToClient({ t: P.T.FILE_REFUSE, id: m.id, why });
     if (typeof m.id !== 'string' || this.active.has(m.id)) return;
     if (m.drop === 'send' || m.drop === 'paste' || m.drop === 'rezume') return this._offerBatch(m, refuse, ctx, ws); // rezume: a document taken here (shared/rezume.js)
-    if (!this.cfg.acceptDrops) return refuse('not_allowed');
+    if (!this._accepts()) return refuse('not_allowed');
     const size = Number(m.size);
     if (!Number.isFinite(size) || size < 0 || size > P.FILE_MAX_BYTES) return refuse('too_big');
     const name = cleanName(m.name);
@@ -213,11 +218,11 @@ class Drop extends EventEmitter {
       const pasted = this.expected.get(m.batch);
       if ((m.drop === 'paste' || m.drop === 'rezume') && !pasted) return refuse('not_allowed'); // we never asked for it
       const asked = m.drop === 'send' && this.asked.allow(ctx, m, ws);
-      if (m.drop === 'send' && !this.cfg.acceptDrops && !asked) return refuse('not_allowed');
+      if (m.drop === 'send' && !this._accepts() && !asked) return refuse('not_allowed');
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one
       b = { kind: m.drop, dir: was ? was.dir : (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS, app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [],
         bytes: Number(m.bytes) > 0 ? Number(m.bytes) : 0, doneBytes: 0, at: Date.now(), cont: was ? m.cont : '',
-        askedGrant: !this.cfg.acceptDrops && asked ? this.asked.open : null }; // bytes: the batch's total, when the sender says
+        askedGrant: !this._accepts() && asked ? this.asked.open : null }; // bytes: the batch's total, when the sender says
       this.batches.set(m.batch, b);
       this.expected.delete(m.batch);
       if (asked) this.asked.take(m.batch);

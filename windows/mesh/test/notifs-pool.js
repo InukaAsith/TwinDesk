@@ -20,7 +20,15 @@ async function world(ids, links, o = {}) {
     const dev = net.add(id, { name: 'PC-' + id });
     dev.helper = new FakeHelper();
     dev.settings = { notifs: { send: true, receive: !(o.receiveOff || []).includes(id), muted: [], hideText: false } };
+    // o.pairs: { A: { B: { out, in } } } — A's own pair with B (shared/consent.js), else the settings'.
+    const consent = o.pairs ? {
+      get: (peer, f, dir) => {
+        const p = (o.pairs[id] || {})[peer];
+        return p && typeof p[dir] === 'boolean' ? p[dir] : !!dev.settings.notifs[dir === 'out' ? 'send' : 'receive'];
+      },
+    } : null;
     dev.notifs = new Notifs({
+      consent,
       bus: dev.bus,
       mesh: dev.mesh,
       helper: dev.helper,
@@ -201,6 +209,26 @@ scenario('one connected device: a notification goes both ways, once', async () =
   assert.deepStrictEqual(toasts(devs.B).map((t) => t.title), ['Hi']);
   assert.deepStrictEqual(toasts(devs.A).map((t) => t.title), ['back']);
   assert.strictEqual(notifSends(net), 2);
+});
+
+scenario('each pair its own switches: A’s notifications go to C, not to B', async () => {
+  // Full mesh of three: A's pair with B has Send off; C's pair with A has Receive off on a chain later.
+  const { net, devs } = await world(['A', 'B', 'C'], full(['A', 'B', 'C']), { pairs: { A: { B: { out: false } } } });
+  await local(net, devs.A);
+  assert.strictEqual(toasts(devs.C).length, 1, 'C, whose pair is on, shows it');
+  assert.strictEqual(toasts(devs.B).length, 0, 'B gets it neither from A nor relayed by C');
+  assert.strictEqual(net.sent('notif', 'A', 'B').length, 0);
+  await local(net, devs.B, { title: 'from b' });
+  assert.strictEqual(toasts(devs.A).length, 1, 'B’s own still reach A');
+});
+
+scenario('a relayed notification from a device whose notifications this one doesn’t take is not shown', async () => {
+  const { net, devs } = await world(['A', 'B', 'C'], [['A', 'B'], ['B', 'C']], { pairs: { C: { A: { in: false } } } });
+  await local(net, devs.A);
+  assert.strictEqual(toasts(devs.B).length, 1);
+  assert.strictEqual(toasts(devs.C).length, 0, 'not shown on C');
+  await local(net, devs.B, { title: 'b itself' });
+  assert.strictEqual(toasts(devs.C).length, 1, 'B’s own is');
 });
 
 async function main() {

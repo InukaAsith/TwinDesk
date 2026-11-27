@@ -303,6 +303,8 @@ class ClipImages {
 // ble(id), peerName(id), remember(dir, item, fromName), log(line) (default console.log), and the
 // text's Latest (shared/clipsync.js) so the latest copy wins between a text and a picture too:
 // copied() → {ts, o} for a picture copied here, newest(pic) → false for one older than the newest copy.
+// sendsTo(id) / takes(id), optional: our pair with that device (shared/consent.js), else the settings' Send
+// and Receive for every device.
 // Every picture copied here or come in is logged ([clip]): where it went, or why it stayed.
 class MeshClipImages extends ClipImages {
   constructor(o) {
@@ -318,11 +320,17 @@ class MeshClipImages extends ClipImages {
   _name(id) {
     return this.o.peerName(id) || String(id).slice(0, 8);
   }
+  _sendsTo(id) {
+    return this.o.sendsTo ? this.o.sendsTo(id) : !!this.o.cfg().send;
+  }
+  _takesFrom(id) {
+    return this.o.takes ? this.o.takes(id) : !!this.o.cfg().receive;
+  }
   // Why a picture copied here doesn't go to a device (or to any): for the log.
   why(id) {
     const c = this.o.cfg();
     if (!this.on) return 'Pictures is off here';
-    if (!c.send) return 'sending the clipboard is off here';
+    if (id === undefined ? !(this.o.sendsTo ? this.o.ids().some((x) => this._sendsTo(x)) : c.send) : !this._sendsTo(id)) return 'sending the clipboard is off here';
     if (id === undefined) {
       const ids = this.o.ids();
       return ids.length ? ids.map((x) => `${this._name(x)}: ${this.why(x)}`).join('; ') : 'no connected device takes this computer’s clipboard';
@@ -352,9 +360,8 @@ class MeshClipImages extends ClipImages {
     return p;
   }
   _takes(id) {
-    const c = this.o.cfg();
     const p = this.peers.get(id);
-    return !!(this.on && c.send && p && p.images && this.o.ids().includes(id) && !this.o.ble(id));
+    return !!(this.on && this._sendsTo(id) && p && p.images && this.o.ids().includes(id) && !this.o.ble(id));
   }
   get targets() {
     return this.o.ids().filter((id) => this._takes(id));
@@ -411,7 +418,7 @@ class MeshClipImages extends ClipImages {
   async _gotFrom(pic, from) {
     if (!pic) return;
     const what = `[clip] ${pic.shot ? 'screenshot' : 'picture'} ${pic.w}x${pic.h}, ${Math.round(pic.png.length / 1024)} KB from ${this._name(from)}`;
-    if (!this.accept) return void this.log(`${what}: not taken, ${this.on ? 'receiving the clipboard is off here' : 'Pictures is off here'}`);
+    if (!this.on || !this._takesFrom(from)) return void this.log(`${what}: not taken, ${this.on ? 'receiving the clipboard is off here' : 'Pictures is off here'}`);
     const img = this.nativeImage.createFromBuffer(pic.png);
     if (img.isEmpty()) return void this.log(`${what}: not a picture this computer can read`);
     if (this.o.newest && !this.o.newest(pic)) return void this.log(`${what}: older than the newest copy here, not applied`);

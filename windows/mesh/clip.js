@@ -21,13 +21,14 @@ const { isConcealed, formats } = require('../../shared/eclip.js');
 
 // The Pool's view of the mesh for the clipboard. Items from a device are always applied (its
 // clip.policy says what it wants from us, not what it sends); items go only to devices whose
-// clip.policy accepted (mesh entry .pool), which is checked in send().
-function clipPeers(mesh) {
+// clip.policy accepted (mesh entry .pool) and that our pair with sends to (consent), checked in send().
+// One we don't send to stays in the item's `d`, so no device relays it there either.
+function clipPeers(mesh, clip) {
   return mesh.peers().map((e) => ({
     id: e.id,
     mesh: e.mesh,
     pool: true,
-    send: (msg) => e.pool !== false && e.send(msg),
+    send: (msg) => e.pool !== false && clip._sendsTo(e.id) && e.send(msg),
   }));
 }
 
@@ -37,6 +38,7 @@ class Clip {
   //              selectedId() -> string|null, connectedIds() -> string[] }
   //   mesh     shared/mesh.js Mesh (entries: {id, name, send, mesh, pool})
   //   getSettings()  -> settings.clipboard
+  //   consent        optional shared/consent.js: each device's own Send / Receive (else the settings' for all)
   //   onChange()     the view changed
   //   clipboard      optional; default Electron's clipboard
   //   session(id)    optional: hub.js's session of a device (bufferedAmount, transport), for pictures
@@ -47,7 +49,8 @@ class Clip {
     this.getSettings = opts.getSettings;
     this.onChange = opts.onChange;
     this.clipboard = opts.clipboard || electronClipboard;
-    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh) });
+    this.consent = opts.consent || null;
+    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh, this) });
     this.latest = new Latest({ selfId: this.mesh.selfId }); // the latest copy wins (shared/clipsync.js)
     this.lastSync = { sent: null, received: null };
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size, from}
@@ -62,6 +65,7 @@ class Clip {
     this.images = new MeshClipImages({
       cfg: () => this.cfg, clipboard: this.clipboard,
       ids: () => this.bus.connectedIds().filter((id) => this._accepts(id)),
+      sendsTo: (id) => this._sendsTo(id), takes: (id) => this._takes(id),
       send: (id, m) => this.bus.send(id, m),
       backlog: (id) => { const x = sess(id); return (x && x.bufferedAmount) || 0; },
       ble: (id) => { const x = sess(id); return !!x && x.transport === 'ble'; },
@@ -111,6 +115,21 @@ class Clip {
     return this.getSettings();
   }
 
+  // Our pair with that device: our clipboard goes there / theirs is taken here (shared/consent.js).
+  _sendsTo(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'out') : !!c.send);
+  }
+
+  _takes(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'in') : !!c.receive);
+  }
+
+  _anySend() {
+    return this.bus.connectedIds().some((id) => this._sendsTo(id));
+  }
+
   _name(id) {
     const e = this.mesh.get(id);
     return (e && e.name) || String(id).slice(0, 8);
@@ -136,7 +155,7 @@ class Clip {
 
   _accepts(id) {
     const e = this.mesh.get(id);
-    return !!e && e.pool !== false;
+    return !!e && e.pool !== false && this._sendsTo(id);
   }
 
   _othersConnected(id) {
@@ -154,7 +173,7 @@ class Clip {
 
   _applyPoll() {
     const c = this.cfg;
-    if (c.enabled && c.send && c.mode === 'instant' && this.bus.connectedIds().length) this._startPoll();
+    if (c.mode === 'instant' && this._anySend()) this._startPoll();
     else this._stopPoll();
   }
 
@@ -164,8 +183,7 @@ class Clip {
   }
 
   _sendPolicy(id) {
-    const c = this.cfg;
-    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
+    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: this._takes(id), images: !!(this.images.on && this._takes(id)), queue: true }); // queue: clip.queue understood here
   }
 
   _startPoll() {
@@ -237,9 +255,10 @@ class Clip {
 
   async _onClip(m, from) {
     const c = this.cfg;
-    if (!c.enabled || !c.receive || !m || !P.clipAllowed(m.text)) return;
+    if (!c.enabled || !this._takes(from) || !m || !P.clipAllowed(m.text)) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh) return;
+    if (r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose clipboard we don't take
     // An older copy than the newest this device knows (its own last copy counts): not applied. The pool
     // relayed it anyway, so each device decides for itself.
     const name = this._nameOf(r.msg.o, m.on, from);
@@ -260,7 +279,7 @@ class Clip {
   // device's pool sequence numbers at the receiver, so there is none.
   async sendIfChanged(why) {
     const c = this.cfg;
-    if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
+    if (!this._anySend()) return;
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
     // Read together: one await before the checks below, so no other copy or clip runs in between.
     const [text, concealed] = await Promise.all([this._readText(), c.skipConcealed && isConcealed(this.clipboard)]);

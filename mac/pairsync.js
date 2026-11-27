@@ -47,8 +47,9 @@ const VALUES = {
 class PairSync {
   // only: the features this app has (else all of them)
   // bus (mesh hub): pair.sync from every connected device; peerRole / peerOs name them for stash + welcome
-  constructor({ server, getSettings, saveSettings, apply, only, bus, peerRole, peerOs }) {
-    Object.assign(this, { server, getSettings, saveSettings, apply, bus: bus || null, peerRole, peerOs });
+  // onPair(id): a pair stashed for a device that isn't selected (shared/consent.js)
+  constructor({ server, getSettings, saveSettings, apply, only, bus, peerRole, peerOs, onPair }) {
+    Object.assign(this, { server, getSettings, saveSettings, apply, bus: bus || null, peerRole, peerOs, onPair });
     this.features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => !only || only.includes(f)));
     this.last = null; // values as both sides agree on them now
     this.peerId = null;
@@ -122,6 +123,7 @@ class PairSync {
 
   _stash(peerId, m) {
     this._mergeSaved(peerId, this._wireToSaved(m, peerId));
+    if (this.onPair) this.onPair(peerId); // shared/consent.js: what serves that device reads its pair again
   }
 
   // A device connected while not selected: push what we remember for that pair (host only).

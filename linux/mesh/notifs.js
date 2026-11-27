@@ -22,12 +22,13 @@ const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
 
 // The Pool's view of the mesh for notifications. Items from a device are always shown here; items
 // go only to devices whose notif.policy accepted (mesh entry .notifPool === true), checked in send().
-function notifPeers(mesh) {
+// And to a device our pair with sends to (consent); one we don't stays in the item's `d`, so no relay sends it.
+function notifPeers(mesh, notifs) {
   return mesh.peers().map((e) => ({
     id: e.id,
     mesh: e.mesh,
     pool: true,
-    send: (msg) => e.notifPool === true && e.send(msg),
+    send: (msg) => e.notifPool === true && notifs._sendsTo(e.id) && e.send(msg),
   }));
 }
 
@@ -47,6 +48,7 @@ class Notifs extends EventEmitter {
     super();
     this.bus = opts.bus;
     this.mesh = opts.mesh;
+    this.consent = opts.consent || null; // shared/consent.js: each device's own Send / Receive (else the settings' for all)
     this.settings = opts.settings;
     this.save = opts.save;
     this.peerName = opts.peerName;
@@ -56,7 +58,7 @@ class Notifs extends EventEmitter {
     this.Notification = opts.Notification || electronNotification;
     this.spawn = opts.spawn || spawn;
     this.iconsIn = electron.nativeImage ? new IconsIn(electron.nativeImage, path.join(__dirname, '..', 'assets', 'sidebar-icon@2x.png')) : null; // TwinDesk's for apps without one
-    this.pool = new Pool({ name: 'notif', selfId: this.mesh.selfId, peers: () => notifPeers(this.mesh) });
+    this.pool = new Pool({ name: 'notif', selfId: this.mesh.selfId, peers: () => notifPeers(this.mesh, this) });
     this.readable = null; // dbus-monitor could start
     this.apps = new Map(); // app → {app, appName, at} seen here
     this.sent = 0;
@@ -100,8 +102,17 @@ class Notifs extends EventEmitter {
   _anyAccepts() {
     return this.bus.connectedIds().some((id) => {
       const e = this.mesh.get(id);
-      return !!e && e.notifPool === true;
+      return !!e && e.notifPool === true && this._sendsTo(id);
     });
+  }
+
+  // Our pair with that device: our notifications go there / theirs show here (shared/consent.js).
+  _sendsTo(id) {
+    return this.consent ? this.consent.get(id, 'notifs', 'out') : !!this.cfg.send;
+  }
+
+  _takes(id) {
+    return this.consent ? this.consent.get(id, 'notifs', 'in') : !!this.cfg.receive;
   }
 
   _selfName() {
@@ -115,7 +126,7 @@ class Notifs extends EventEmitter {
   }
 
   _sendPolicy(id) {
-    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: require('../../shared/notifpop.js').popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups
+    this.bus.send(id, { t: T.NOTIF_POLICY, accept: this._takes(id), rich: require('../../shared/notifpop.js').popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups
   }
 
   applySettings() {
@@ -148,7 +159,7 @@ class Notifs extends EventEmitter {
   // dbus-monitor runs only while something would be sent; whether it could start is `readable`
   // (Notifications tab).
   _watch() {
-    const on = !!(this.cfg.send && this._anyAccepts()) || !!this.webWant;
+    const on = this._anyAccepts() || !!this.webWant;
     if (!on) {
       if (this.mon) { this.mon.stdin.end(); this.mon = null; } // the wrapper stops dbus-monitor
       return;
@@ -233,7 +244,7 @@ class Notifs extends EventEmitter {
     if (this.webWant && !this.cfg.muted.includes(app)) {
       this.emit('notif', { id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle), body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now() });
     }
-    if (this.cfg.send && !this.cfg.muted.includes(app) && this._anyAccepts()) {
+    if (!this.cfg.muted.includes(app) && this._anyAccepts()) {
       const r = this.pool.publish({
         t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),
         body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now(), on: this._selfName(),
@@ -245,8 +256,9 @@ class Notifs extends EventEmitter {
 
   // A notification from another device: relayed by the pool, shown here once when fresh.
   _show(m, from) {
-    if (!this.cfg.receive) return;
+    if (!this._takes(from)) return;
     const r = this.pool.receive(from, m);
+    if (r.fresh && r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose notifications we don't take
     if (!r.fresh || !this.Notification.isSupported()) return;
     if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
     if (hidden(this, m)) return; // an app set to Hide (Notifications): not kept either
