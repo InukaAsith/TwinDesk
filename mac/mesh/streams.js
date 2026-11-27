@@ -57,6 +57,12 @@ class StreamSet extends EventEmitter {
     return this.byId.get(this.hub.selectedId) || this.first;
   }
 
+  // That device watches this Mac's stream now (its Stream has a session): its input is taken (input.js).
+  watching(id) {
+    const st = id && this.byId.get(id);
+    return !!(st && st.active);
+  }
+
   get view() {
     const a = this.active;
     return {

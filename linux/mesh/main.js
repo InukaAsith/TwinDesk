@@ -312,7 +312,27 @@ function start() {
   sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
-  terminal = new Terminal({ link, settings, onChange: pushState });
+  // Terminal, this computer to another: one per computer (shared/papps-mesh.js), each with its own alias,
+  // `ssh twindesk-<name>`, and its own pair's switch; `ssh twindesk` is the selected device's (#313).
+  const SshConfig = require('../../shared/sshconfig.js');
+  terminal = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => hub.selectedId, empty: { status: 'no_mac', message: '', user: null, command: 'ssh ' + SshConfig.ALIAS },
+    all: ['apply'], selected: ['open'],
+  });
+  require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => {
+    const x = hub.sessions.get(pid);
+    if (!x || P.isPhoneOs(x.peerOs)) return;
+    terminal.ensure(pid, () => new Terminal({
+      link: l, settings, onChange: pushState, alias: SshConfig.aliasFor(x.displayName(), pid),
+      enabled: () => consent.get(pid, 'terminal', 'in'), isDefault: () => hub.selectedId === pid,
+      address: () => (l.current && l.current.address) || '', peerName: () => (l.current && l.current.name) || '',
+    }));
+  });
+  hub.on('selected', (pid) => { // `ssh twindesk`: the selected device's, or none
+    const u = terminal.byId.get(pid);
+    if (u) u.takeDefault();
+    else try { SshConfig.setHost(null); } catch (_) { /* config not writable */ }
+  });
   sshd = new Sshd({ link, bus: hub.bus, consent, settings, save: saveSettings, onChange: pushState }); // every device's key, by its own pair
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
   helper = new Helper(() => system.inputBlocker(session));
@@ -460,7 +480,7 @@ function start() {
     bus: hub.bus, mesh, settings, save: saveSettings,
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); pushState(); }); // a device's pair: its policies (and its key) again
+  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply(); pushState(); }); // a device's pair: its policies (and its keys) again
   wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   vdd = new Vdd({ onChange: pushState });
@@ -474,7 +494,18 @@ function start() {
   // with the device they went to until they're back (hub.sticky; #313). Their own sender, numbered apart.
   const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size));
   pcApps = new PcApps({ link: appsLink, helper, sender: Object.assign(new Sender(appsLink), { counter: 2000000 }), settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
-  peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
+  // Another computer's apps here: a PeerApps per device, each on its own link (shared/papps-mesh.js), so
+  // windows from several computers stay open and a crossing closes none of them (#313).
+  peerApps = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => hub.selectedId,
+    empty: { list: [], loading: false, message: '', open: 0, peerPc: true },
+    merge: (v, all) => ({ ...v, open: all.reduce((n, x) => n + (x.open || 0), 0) }), // the Apps tab: the selected device's list, every window
+    all: ['apply', 'acceptReZume', 'shutdown'], selected: ['refresh', 'launch'], any: ['returnWindow'],
+  });
+  require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => peerApps.ensure(pid, () => new PeerApps({
+    link: l, settings, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
+    peerName: () => { const x = hub.sessions.get(pid); return x ? x.displayName() : peerName(); },
+  })));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   // In Multi-device it goes to the device the pointer went to, selected first, with what that

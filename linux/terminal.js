@@ -29,11 +29,15 @@ const which = (cmd) => (process.env.PATH || '/usr/bin:/bin').split(':').some((d)
 
 class Terminal {
   // opts: link, settings (shared), onChange()
+  //   Multi-device, one per device (shared/papps-mesh.js set): alias (its `Host twindesk-<name>`),
+  //   enabled() (its pair's "Open a terminal on {name}", shared/consent.js), isDefault() (it's the
+  //   selected device: `ssh twindesk` is it too), address() / peerName(): its own (the link has no snapshot)
   constructor(opts) {
     Object.assign(this, opts);
+    if (!this.alias) this.alias = SshConfig.ALIAS;
     this.dir = path.join(app.getPath('userData'), 'ssh');
     this.key = path.join(this.dir, 'macshare_ed25519');
-    this.knownHosts = path.join(this.dir, 'known_hosts');
+    this.knownHosts = path.join(this.dir, this.alias === SshConfig.ALIAS ? 'known_hosts' : 'known_hosts-' + this.alias);
     this.info = null; // last ssh.info
     this.status = 'off';
     this.message = '';
@@ -44,7 +48,7 @@ class Terminal {
     } catch (_) { /* leave it */ }
 
     this.link.on('welcome', () => this.apply());
-    this.link.on('closed', () => { this.info = null; this._set(this.cfg.enabled ? 'no_mac' : 'off', ''); });
+    this.link.on('closed', () => { this.info = null; this._set(this._on() ? 'no_mac' : 'off', ''); });
     this.link.on(T.SSH_INFO, (m) => this._onInfo(m));
   }
 
@@ -52,15 +56,23 @@ class Terminal {
     return this.settings.terminal;
   }
 
+  _on() {
+    return this.enabled ? !!this.enabled() : !!this.cfg.enabled;
+  }
+
+  _default() {
+    return this.alias === SshConfig.ALIAS || (this.isDefault ? !!this.isDefault() : false);
+  }
+
   get available() {
     return which('ssh') && which('ssh-keygen');
   }
 
   async apply() {
-    if (!this.cfg.enabled) {
+    if (!this._on()) {
       if (this.info) this.link.send({ t: T.SSH_FORGET });
       this.info = null;
-      try { SshConfig.setHost(null); } catch (_) { /* config not writable */ }
+      try { SshConfig.setHost(null, this.alias); } catch (_) { /* config not writable */ }
       return this._set('off', '');
     }
     if (!this.available) return this._set('error', 'The OpenSSH client is missing (sudo apt install openssh-client).');
@@ -83,7 +95,7 @@ class Terminal {
   }
 
   _onInfo(m) {
-    if (!this.cfg.enabled) return;
+    if (!this._on()) return;
     this.info = m;
     if (!m.enabled) {
       const why = m.why === 'remote_login_off' && this.link.peerOs !== P.OS.MAC ? 'sshd_off' : m.why;
@@ -94,7 +106,8 @@ class Terminal {
       .filter((k) => /^(ssh|ecdsa)-\S+ [A-Za-z0-9+/=]+$/.test(k));
     if (!keys.length || typeof m.user !== 'string' || !/^[A-Za-z0-9._@ -]{1,100}$/.test(m.user)) return this._set('error', '{Name} sent no usable host key or user name.');
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(this.knownHosts, SshConfig.knownHosts(keys), { mode: 0o600 });
+    this.hostKeys = keys;
+    fs.writeFileSync(this.knownHosts, SshConfig.knownHosts(keys, [...new Set([this.alias, SshConfig.ALIAS])]), { mode: 0o600 });
     try {
       this._writeHost();
     } catch (e) {
@@ -105,9 +118,20 @@ class Terminal {
 
   // `Host twindesk` for the paired computer (its address can change; rewritten on every open).
   _writeHost() {
-    SshConfig.setHost({ address: this.link.snapshot().link.address, port: this.info.port, user: this.info.user,
-      identityFile: this.key, knownHostsFile: this.knownHosts });
+    const host = { address: this.address ? this.address() : this.link.snapshot().link.address, port: this.info.port, user: this.info.user,
+      identityFile: this.key, knownHostsFile: this.knownHosts };
+    SshConfig.setHost(host, this.alias);
+    if (this.alias !== SshConfig.ALIAS && this._default()) SshConfig.setHost(host); // the selected device: `ssh twindesk` too
   }
+
+  // Multi-device: this device was just selected; `ssh twindesk` is it now (or nothing, while it isn't ready).
+  takeDefault() {
+    try {
+      if (this.status === 'ready' && this.info && !this.onBle) this._writeHost();
+      else SshConfig.setHost(null);
+    } catch (_) { /* config not writable */ }
+  }
+
 
   // Opens the desktop's terminal with `ssh twindesk`.
   // Through Bluetooth there's no address ssh can reach (the session runs through a local pipe).
@@ -121,7 +145,7 @@ class Terminal {
     try { this._writeHost(); } catch (e) { return this._set('error', e.message); }
     const t = TERMINALS.find(([cmd]) => which(cmd));
     if (!t) { this.message = 'No terminal app found. Run ssh twindesk in any terminal.'; return this.onChange(); }
-    const p = spawn(t[0], [...t[1], 'ssh', SshConfig.ALIAS], { detached: true, stdio: 'ignore' });
+    const p = spawn(t[0], [...t[1], 'ssh', this.alias], { detached: true, stdio: 'ignore' });
     p.on('error', (e) => { this.message = 'Couldn’t open ' + t[0] + ': ' + e.message; this.onChange(); });
     p.unref();
   }
@@ -134,9 +158,9 @@ class Terminal {
 
   view() {
     if (this.status === 'ready' && this.onBle) {
-      return { status: 'unavailable', message: 'The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join {name}’s network.', user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
+      return { status: 'unavailable', message: 'The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join {name}’s network.', user: this.info && this.info.user, command: 'ssh ' + this.alias };
     }
-    return { status: this.status, message: this.message, user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
+    return { status: this.status, message: this.message, user: this.info && this.info.user, command: 'ssh ' + this.alias };
   }
 }
 
