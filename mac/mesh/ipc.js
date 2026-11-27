@@ -91,9 +91,10 @@ function setupIpc(ctx) {
     }
     return sessionIsUp(id, { current: ctx.server && ctx.server.current, clients, authedHostIds });
   };
-  // The pending "Asked … / Connecting …" hint ends when that device's session is up.
-  ctx.server.on('client', (client) => {
-    const next = settleConnect(connect, client);
+  // The pending "Asked … / Connecting …" hint ends when that device's session is up (any device: it
+  // needn't be the selected one).
+  if (ctx.hub) ctx.hub.bus.onPeer('welcome', (deviceId) => {
+    const next = settleConnect(connect, { deviceId });
     if (!next) return;
     Object.assign(connect, next);
     pushState();

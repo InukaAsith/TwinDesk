@@ -81,6 +81,12 @@ class Hub extends EventEmitter {
   }
 
   // A route for a feature: pick(hub) -> the device id it follows.
+  // The device the net hook serves (netlink.js: Bluetooth to Wi-Fi): the one main binds it to (netId),
+  // else the selected one. Its messages go to netTap; files to it on any route wait in netHold.
+  get netTarget() {
+    return this.netId !== undefined ? this.netId : this.selectedId;
+  }
+
   route(pick) {
     const r = new Route(this, pick);
     this.routes.push(r);
@@ -323,6 +329,8 @@ class Hub extends EventEmitter {
     }
     this.heard.note(s.id, msg);
     busVerbose(s, msg); // Debug › Verbose log › bus
+    // The net hook's device's messages reach it first (netlink.js: its net.* and file chunks).
+    if (this.netTap && s.id === this.netTarget) this.netTap(msg);
     let consumed = false;
     const fns = this._busHandlers.get(msg.t);
     if (fns) {

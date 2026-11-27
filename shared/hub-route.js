@@ -138,6 +138,8 @@ class Route extends EventEmitter {
 
   send(obj) {
     if (this.hold && this.hold(obj)) return true;
+    // The net hook's device on Bluetooth: files wait for Wi-Fi (hub.netHold), whichever route sends them.
+    if (this.hub.netHold && this.targetId && this.targetId === this.hub.netTarget && this.hub.netHold(obj)) return true;
     return this.sendNow(obj);
   }
 

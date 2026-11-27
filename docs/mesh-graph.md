@@ -328,3 +328,18 @@ What still ran on the facade and only served (or heard) the selected device:
   `pairsync.js` is unchanged.
 - **`pairFor` is gone**: sound (`windows|linux/sound.js`, `mac/audio.js`, `shared/sound-mesh.js`), the
   shadow and the pointer (`*/mesh/kvm.js`) ask `hub.consent` (shared/consent.js) for each device's pair.
+
+### Step 5, phase 5b as built: no events on the facade
+
+- **The facade** (Windows, Linux hubs): no events, no replay, no goodbyes. It is the selected device's
+  status, snapshot and sends, for the pages; `facade.on()` throws, so nothing can route through the
+  selection again. The selection is the device the pages show and a crossing picks; 'selected' says so.
+- **The net hook** (netlink.js, Bluetooth to Wi-Fi), all three platforms: its own link, bound to the
+  selected device and kept while Wi-Fi is being set up or used for it (a crossing no longer cuts a
+  transfer through the network it was moved onto). The hub serves its device (`netTarget`, `netId`):
+  its messages go to `netTap`, and files to it wait in `netHold` on any link or route to it (only the
+  facade's sends waited before, so files on a device's own link went through Bluetooth). Each device's
+  last `net.caps` is kept for the hook when it binds there.
+- **The rest that listened on the facade**: the pinned-app launcher (a Mac connecting), the Mac's
+  `screen.state` (to every device) and `screen.ctl` (from any device), keep-awake (any device connected),
+  the session log line and the Connect hint (any device's welcome). Linux's unused facade sender is gone.
