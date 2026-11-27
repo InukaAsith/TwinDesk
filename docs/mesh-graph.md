@@ -302,3 +302,18 @@ What still ran on the facade and only served (or heard) the selected device:
 - **The Mac's input** (`mac/input.js`, `bus`): from every device watching this Mac's stream (StreamSet
   streams to all of them; only the selected one's input was taken), each with its own Ctrl/Cmd swap;
   what one device holds is let go when another's input comes. `stream.input` goes to every device.
+
+### Step 5, phase 4 as built: Linux's screen per device, the Mac's apps
+
+- **Share screen on Linux** (`shared/pcscreen-set.js`, moved from `windows/mesh/`, now Windows' and
+  Linux's): a PcScreen per device, each on its own link and sender (`linux/mesh/sender.js`), with the
+  Windows rules (one device on Extend, a Mirror monitor each; the Share screen page's Displays card).
+  The facade's one stopped sharing to a device on every crossing. `linux/pcscreen.js` is still the
+  one-to-one file, with what a unit needs (`welcome()`, `monitorId`, `extendFree`, `displayModel`):
+  `windows/mesh/pcscreen.js`, a copy, has fallen behind its one-to-one file (no retry after a lock).
+- **This Mac's apps on another computer** (`mac/mesh/services.js`): a route of their own, as the camera's.
+  While apps are open for a computer it stays with it (a crossing gave back ReZume's windows, let the
+  virtual display go and turned sharing off); a computer that isn't selected can list and open them
+  while they're free, one that asks while they're in use is told so. One virtual display, so one
+  computer at a time.
+- **Terminal page**: shows `ssh twindesk` (the selected device's) again; `twindesk-<name>` is written too.

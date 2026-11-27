@@ -10,6 +10,9 @@
 // while it is false. A peer that never sends one (an older app) counts as watching, after a moment
 // for its first policy to arrive. We tell the viewer what we share (`screen.state`) and, when
 // "Let <peer> start and switch this screen" is on (pcScreen.remote), obey its `screen.ctl`.
+// Multi-device: one per device (shared/pcscreen-set.js), each on its own link, sender and mode; the set
+// gives a unit made after its device's 'welcome' that welcome (welcome()), its own Mirror monitor
+// (monitorId) and extendFree() (one virtual monitor: one device on Extend).
 const { desktopCapturer, powerMonitor, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
 const RemoteInput = require('./remote-input');
@@ -31,8 +34,10 @@ const RETRY_MS = 2000; // a capture that ended by itself (the session locked): t
 
 class PcScreen {
   // opts: link, helper, sender, vdd, settings (shared), popup(kind, text), inputAllowed() (KVM at home), onChange(), needDriver?() (Extend asked, no driver)
+  //   extendFree?() (Multi-device: no other device is on Extend)
   constructor(opts) {
     Object.assign(this, opts);
+    this.monitorId = null; // this target's own Mirror monitor (Multi-device), else the shared setting's
     this.mode = 'off'; // 'off' | 'mirror' | 'extend' — never saved
     this.mac = { accept: false, width: 0, height: 0, told: false }; // the viewer's screen.policy (told: it sent one)
     this.sending = null; // {session, displayId, rect (physical px), key}
@@ -46,15 +51,7 @@ class PcScreen {
     this.live = false; // the capture reached 'live' (a start that never does is not retried on Wayland)
 
     const link = this.link;
-    link.on('welcome', () => {
-      this.mac = { accept: false, width: 0, height: 0, told: false };
-      this.stateKey = '';
-      clearTimeout(this.policyTimer);
-      this.policyTimer = setTimeout(() => { // never told: an older app, always watching
-        if (!this.mac.told) { this.mac.accept = true; this.apply(); }
-      }, 1500);
-      this.apply();
-    });
+    link.on('welcome', () => this.welcome());
     link.on('closed', () => { clearTimeout(this.policyTimer); this.mac.accept = false; this.stateKey = ''; this.apply(); });
     // The session moved (Bluetooth -> a Wi-Fi Direct link, or back): a session offered on the old path
     // never connects on the new one; the transport is part of the key, so apply() starts again.
@@ -96,6 +93,17 @@ class PcScreen {
   }
 
 
+  // The device is there (a link event, or the set that made this one for a device already connected).
+  welcome() {
+    this.mac = { accept: false, width: 0, height: 0, told: false };
+    this.stateKey = '';
+    clearTimeout(this.policyTimer);
+    this.policyTimer = setTimeout(() => { // never told: an older app, always watching
+      if (!this.mac.told) { this.mac.accept = true; this.apply(); }
+    }, 1500);
+    this.apply();
+  }
+
   // The capture ended by itself: try again while it's still wanted.
   _retryLater() {
     if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -135,6 +143,10 @@ class PcScreen {
     if (mode === 'last') return this.lastMode === 'extend' ? this.extend() : this.setMode('mirror');
     if (!['off', 'mirror', 'extend'].includes(mode) || this.busy) return;
     if (mode === 'extend' && !this.vdd.state.installed) mode = 'mirror'; // this desktop can't add a virtual monitor
+    if (mode === 'extend' && this.extendFree && !this.extendFree()) { // one virtual monitor, another device has it
+      this.status.error = 'The virtual display is already used by another device';
+      return this.onChange();
+    }
     const was = this.mode;
     if (mode !== 'off') this.lastMode = mode;
     this.mode = mode;
@@ -211,7 +223,7 @@ class PcScreen {
       return all.find((d) => { const r = screenRect(d); return r.x === mon.x && r.y === mon.y; })
         || (WAYLAND ? { id: mon.name, label: 'Virtual remote monitor', bounds: { x: mon.x, y: mon.y, width: mon.width, height: mon.height }, scaleFactor: 1 } : null);
     }
-    return all.find((d) => String(d.id) === this.cfg.monitor) || displays.getPrimaryDisplay();
+    return all.find((d) => String(d.id) === (this.monitorId || this.cfg.monitor)) || displays.getPrimaryDisplay();
   }
 
   // After welcome, a policy, a settings or display change.
@@ -372,5 +384,19 @@ class PcScreen {
     return { ...this.cfg, mode: this.mode, busy: this.busy, mac: this.mac, ...this.status, stats: this.stats || null, extendPx: this._extendSize(), sending: !!this.sending, monitors: this.monitors(), vdd: this.vdd.view() };
   }
 }
+
+// This computer's displays as the screen-mesh model (shared/screen-mesh.js): ids are Electron's,
+// positions relative to the main display, the helper's pixels (screenRect).
+PcScreen.displayModel = () => {
+  const primary = displays.getPrimaryDisplay();
+  const rects = displays.getAllDisplays().map((d) => ({ d, r: screenRect(d) }));
+  const o = rects.find(({ d }) => d.id === primary.id);
+  const ox = o ? o.r.x : 0;
+  const oy = o ? o.r.y : 0;
+  return rects.map(({ d, r }, i) => ({
+    id: String(d.id), name: d.label || (d.internal ? 'Built-in screen' : 'Monitor ' + (i + 1)),
+    x: r.x - ox, y: r.y - oy, w: r.width, h: r.height, scale: d.scaleFactor || 1, primary: d.id === primary.id,
+  }));
+};
 
 module.exports = PcScreen;

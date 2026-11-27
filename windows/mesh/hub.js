@@ -524,7 +524,7 @@ class Hub extends EventEmitter {
 
   // The facade API for ONE device, whether or not it is selected: handlers hear only that device
   // ('welcome' / 'closed' for it coming and going), send() goes to its session. Per-device stacks
-  // (pcscreenset.js) are made on it; bind(id) attaches one made before the device was there.
+  // (shared/pcscreen-set.js) are made on it; bind(id) attaches one made before the device was there.
   scoped(id = null) {
     const hub = this;
     const sess = () => (link.id ? hub.sessions.get(link.id) : null);

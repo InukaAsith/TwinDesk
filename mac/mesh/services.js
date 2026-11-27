@@ -69,7 +69,37 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const terminal = new Terminal(server, s, { bus: meshHub.bus, consent }); // every device's key, by its own pair
   const smb = new SmbSet({ Smb, hub: meshHub, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) }); // a folder per device, this Mac's to all (smbset.js)
 
-  const apps = new Apps({ server, helper, displays, stream, getSettings: s });
+  // This Mac's apps on another computer: their own route (as the camera's, shared/cam-mesh.js). While apps
+  // are open for a computer it stays with it, so a crossing no longer gives back ReZume's windows, lets
+  // the virtual display go and turns sharing off (the facade's 'closed'); a computer that isn't selected
+  // can list and open them while they're free (its asks were dropped), and one that asks while they're in
+  // use with another is told so; free again, it follows the selection.
+  let appsRef = null;
+  let appsFor = null; // the computer the apps were last asked for
+  let appsAt = 0; // … when (its list is looked at before an app is opened)
+  const APPS_ASKED_MS = 120000;
+  const appsBusy = () => !!(appsRef && appsRef.launched.size);
+  const appsServeRoute = meshHub.route((h) => {
+    const at = appsFor ? h.sessions.get(appsFor) : null;
+    if (at && at.connected && (appsBusy() || Date.now() - appsAt < APPS_ASKED_MS)) return appsFor;
+    appsFor = null;
+    return h.selectedId;
+  });
+  const nameOf = (pid) => { const x = pid && meshHub.sessions.get(pid); return x ? x.displayName() : 'another device'; };
+  for (const t of [P.T.APPS_LIST, P.T.APP_LAUNCH]) meshHub.bus.on(t, (m, from) => { // before the route hears it
+    if (from === appsServeRoute.targetId) { appsFor = from; appsAt = Date.now(); return; }
+    if (appsBusy()) {
+      const why = `in use with ${nameOf(appsServeRoute.targetId)}`;
+      meshHub.bus.send(from, t === P.T.APPS_LIST ? { t: P.T.APPS_RESULT, apps: [], why } : { t: P.T.APP_LAUNCHED, id: String(m.id || ''), ok: false, why });
+      return console.log(`[apps] ${nameOf(from)} asked for this Mac's apps: ${why}`);
+    }
+    appsFor = from;
+    appsAt = Date.now();
+    appsServeRoute.refresh();
+  });
+  const apps = new Apps({ server: new Peer(appsServeRoute, meshHub.server), helper, displays, stream, getSettings: s });
+  appsRef = apps;
+  apps.on('change', () => setImmediate(() => { if (!appsBusy()) appsServeRoute.refresh(); })); // free again: the selection (never inside a move)
   // Terminal, this Mac to another computer: one per computer (shared/papps-mesh.js), each with its own
   // alias, `ssh twindesk-<name>`, and its own pair's switch; `ssh twindesk` is the selected device's (#313).
   const SshConfig = require('../../shared/sshconfig.js');
