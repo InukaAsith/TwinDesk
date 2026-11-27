@@ -424,6 +424,12 @@ function start() {
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined);
   };
   helper.on('exit', pushState);
+  // General › Lock together (#322, shared/locksync.js): this computer locked, the other one locks too.
+  const lockSync = new (require('../shared/locksync.js').LockSync)({
+    platform: 'linux', helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { const c = link.current; if (c && !P.isPhoneOs(c.os)) link.send(m); },
+  }).start();
+  link.on('lock.now', () => lockSync.onMessage(peerName()));
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) displays.on(ev, sendScreens);

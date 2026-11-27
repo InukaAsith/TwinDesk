@@ -2370,4 +2370,6 @@
   "Scrolling speed here": "Buradaki kaydırma hızı",
   "Another computer’s mouse wheel on this Mac": "Başka bir bilgisayarın fare tekerleği bu Mac’te",
   "Open {device}’s shared folder": "{device} cihazının paylaşılan klasörünü aç",
+  "Lock together": "Birlikte kilitle",
+  "This computer locks when another connected computer locks, and the other way round. On each computer": "Bağlı başka bir bilgisayar kilitlendiğinde bu bilgisayar da kilitlenir, tersi de geçerli. Her bilgisayarda açın",
 });

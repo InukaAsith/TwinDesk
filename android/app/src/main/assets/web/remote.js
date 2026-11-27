@@ -576,14 +576,15 @@
     if (on === (id in lsHeld)) return;
     if (on) { lsHeld[id] = padKey(id); press(lsHeld[id], true); } else { press(lsHeld[id], false); delete lsHeld[id]; }
   }
-  stick($('ls'), (x, y) => {
+  const lsMove = (x, y) => {
     if (asPad()) return padSet('lx', x, 'ly', y);
     const T = 0.4;
     lsSet('lsUp', y < -T);
     lsSet('lsDown', y > T);
     lsSet('lsLeft', x < -T);
     lsSet('lsRight', x > T);
-  });
+  };
+  stick($('ls'), lsMove);
 
   // Right stick: the mouse, every frame while it's pushed, faster the further (fine aim near the middle).
   let rs = { x: 0, y: 0 };
@@ -596,11 +597,57 @@
     move(rs.x * k, rs.y * k);
     rsFrame = requestAnimationFrame(rsStep);
   }
-  stick($('rs'), (x, y) => {
+  const rsMove = (x, y) => {
     if (asPad()) { rs = { x: 0, y: 0 }; return padSet('rx', x, 'ry', y); }
     rs = { x, y };
     if (!rsFrame && Math.hypot(x, y) >= 0.12) rsFrame = requestAnimationFrame(rsStep);
-  });
+  };
+  stick($('rs'), rsMove);
+
+  // A controller plugged into this device (USB-C, or paired to it over Bluetooth, #324): the Gamepad API,
+  // read every frame while the Gamepad page is open, through the same sticks and buttons as the touch
+  // ones: a real gamepad on the computer (remote.pad) when it takes one, else their keys. The standard
+  // mapping (Chromium's): buttons A B X Y LB RB LT RT Back Start L3 R3 Up Down Left Right, axes LX LY RX RY.
+  const HW = ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'back', 'start', 'l3', 'r3', 'up', 'down', 'left', 'right'];
+  const DEAD = 0.12;
+  const hwHeld = {}; // id -> the key it pressed (key mode), or true (real gamepad)
+  let hwFrame = 0;
+  let hwSticks = [0, 0, 0, 0];
+  const dz = (v) => (Math.abs(v) < DEAD ? 0 : Math.max(-1, Math.min(1, v)));
+  function hwButton(id, down) {
+    if (down === (id in hwHeld)) return;
+    if (down) {
+      hwHeld[id] = asPad() ? true : padKey(id);
+      if (hwHeld[id] === true) padButton(id, true); else if (hwHeld[id]) press(hwHeld[id], true);
+    } else {
+      if (hwHeld[id] === true) padButton(id, false); else if (hwHeld[id]) press(hwHeld[id], false);
+      delete hwHeld[id];
+    }
+  }
+  function hwRelease() {
+    for (const id of Object.keys(hwHeld)) hwButton(id, false);
+    if (hwSticks.some((v) => v)) { hwSticks = [0, 0, 0, 0]; lsMove(0, 0); rsMove(0, 0); }
+  }
+  function hwPoll() {
+    hwFrame = 0;
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter((g) => g && g.connected) : [];
+    const g = pads.find((x) => x.mapping === 'standard') || pads[0];
+    if (opts.mode !== 'gamepad' || editing || !g) { hwRelease(); if (pads.length) hwFrame = requestAnimationFrame(hwPoll); return; }
+    HW.forEach((id, i) => {
+      const btn = g.buttons[i];
+      if (!btn) return;
+      if ((id === 'lt' || id === 'rt') && asPad()) { padSet(id, Math.max(0, Math.min(1, btn.value || 0))); return; } // analog triggers
+      hwButton(id, btn.pressed || btn.value > 0.5);
+    });
+    const ax = [0, 1, 2, 3].map((i) => dz(g.axes[i] || 0));
+    if (ax[0] !== hwSticks[0] || ax[1] !== hwSticks[1]) lsMove(ax[0], ax[1]);
+    if (ax[2] !== hwSticks[2] || ax[3] !== hwSticks[3]) rsMove(ax[2], ax[3]);
+    hwSticks = ax;
+    hwFrame = requestAnimationFrame(hwPoll);
+  }
+  window.addEventListener('gamepadconnected', () => { if (!hwFrame) hwFrame = requestAnimationFrame(hwPoll); });
+  window.addEventListener('gamepaddisconnected', () => { hwRelease(); });
+  if (navigator.getGamepads && [...navigator.getGamepads()].some(Boolean) && !hwFrame) hwFrame = requestAnimationFrame(hwPoll);
 
   // ---- editing the gamepad (Edit): move, size, hide, rename and set the key of any control; add
   // buttons of your own. The layout: {items: {id: {x, y, s, hide, label}}, custom: [{id, label, key, x, y, s, hide}]},

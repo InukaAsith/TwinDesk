@@ -82,6 +82,8 @@ class Kvm {
     // is where the other computer is along our crossing side.
     this.map = new KvmMap({
       electron: require('electron'),
+      // Wayland: the numbers as the helper's XWayland docks, which go where they're asked (wlstrip.c, #182).
+      identifyHere: (list) => !!(process.env.WAYLAND_DISPLAY && this.helper && this.helper.running && this.helper.send('identify', { list }) !== false),
       send: (m) => this.connected && this.link.send(m),
       side: () => this.crossingSide,
       getAlong: () => (typeof this.cfg.along === 'number' ? this.cfg.along : null),

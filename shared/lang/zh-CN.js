@@ -2371,4 +2371,6 @@
   "Scrolling speed here": "此处滚动速度",
   "Another computer’s mouse wheel on this Mac": "另一台电脑的鼠标滚轮在这台 Mac 上的滚动速度",
   "Open {device}’s shared folder": "打开 {device} 的共享文件夹",
+  "Lock together": "一起锁定",
+  "This computer locks when another connected computer locks, and the other way round. On each computer": "另一台已连接的电脑锁定时，这台电脑也会锁定，反之亦然。需在每台电脑上开启",
 });

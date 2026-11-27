@@ -97,6 +97,7 @@ namespace MacShare
             {
                 MoveTo(p.X, p.Y);
                 WatchStuck(cur);
+                CursorShow.Check(); // #329: Windows showing no pointer for the other computer's mouse
             }
             if (Moved != null) Moved(p.X, p.Y, dx, dy);
         }
@@ -442,6 +443,7 @@ namespace MacShare
 
         public void ReleaseAll()
         {
+            CursorShow.Reset(); // the drive ended: the next one checks the pointer again
             foreach (int s in new List<int>(heldScans)) SendScan(s, false);
             heldScans.Clear();
             tapDown.Clear();

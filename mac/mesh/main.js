@@ -724,6 +724,13 @@ app.whenReady().then(() => {
   // In Multi-device it goes to the device the pointer went to, selected first, with what that
   // device said about taking windows (shared/mesh-movewin.js: #250, #251).
   const meshMoves = require('../../shared/mesh-movewin.js').meshMoves(hub, P.T);
+  // General › Lock together (#322, shared/locksync.js): this Mac locked, every connected computer locks too.
+  const isPc = (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected && !P.isPhoneOs(s.peerOs); };
+  const lockSync = new (require('../../shared/locksync.js').LockSync)({
+    platform: 'mac', helper: svc.helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { for (const pid of hub.bus.connectedIds()) if (isPc(pid)) hub.bus.send(pid, m); },
+  }).start();
+  hub.bus.on('lock.now', (m, from) => isPc(from) && lockSync.onMessage(hub.sessions.get(from).displayName()));
   svc.kvm.onMoveWindow = (m, to) => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;

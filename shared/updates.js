@@ -199,6 +199,8 @@ class Updates {
     // downloaded or installed here.
     this.store = opts.store === true;
     this.self = this.store ? null : opts.selfUpdate === undefined ? makeSelf(opts.platform, this.fetch) : opts.selfUpdate;
+    // This version is up: an update waiting to know keeps it (the Mac's swap, #204); one that didn't start is logged.
+    if (this.self && typeof this.self.markStarted === 'function') this.self.markStarted();
     this.idleTimer = null;
     this.status = {
       checking: false,

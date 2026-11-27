@@ -2371,4 +2371,6 @@
   "Scrolling speed here": "Scrolling speed here",
   "Another computer’s mouse wheel on this Mac": "Another computer’s mouse wheel on this Mac",
   "Open {device}’s shared folder": "Open {device}’s shared folder",
+  "Lock together": "Lock together",
+  "This computer locks when another connected computer locks, and the other way round. On each computer": "This computer locks when another connected computer locks, and the other way round. On each computer",
 });

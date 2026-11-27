@@ -2370,4 +2370,6 @@
   "Scrolling speed here": "Скорость прокрутки здесь",
   "Another computer’s mouse wheel on this Mac": "Колесо мыши другого компьютера на этом Mac",
   "Open {device}’s shared folder": "Открыть общую папку {device}",
+  "Lock together": "Блокировать вместе",
+  "This computer locks when another connected computer locks, and the other way round. On each computer": "Этот компьютер блокируется, когда блокируется другой подключённый компьютер, и наоборот. Включите на каждом компьютере",
 });

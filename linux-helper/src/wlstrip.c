@@ -210,11 +210,74 @@ static void got_uris(void) {
   free(text);
 }
 
+// ---- Identify (#182): a number on each monitor ----
+// On Wayland the app's own windows can't be placed (the compositor put every number on one monitor), so
+// the numbers are dock windows here on XWayland, which the compositor puts where they're asked, as the
+// strip. Each is drawn as seven segments (the core X fonts are too small).
+#define ID_MAX 8
+#define ID_SIZE 200
+static Window ids[ID_MAX];
+static int idN, idNum[ID_MAX];
+static double idUntil;
+
+static void id_draw(int k) {
+  static const unsigned char SEG[10] = { 0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f }; // a b c d e f g
+  static const short R[7][4] = { { 55, 30, 90, 18 }, { 127, 30, 18, 79 }, { 127, 91, 18, 79 }, { 55, 152, 90, 18 }, { 55, 91, 18, 79 }, { 55, 30, 18, 79 }, { 55, 91, 90, 18 } };
+  GC gc = XCreateGC(dpy, ids[k], 0, NULL);
+  XSetForeground(dpy, gc, WhitePixel(dpy, DefaultScreen(dpy)));
+  unsigned char m = SEG[idNum[k] % 10];
+  for (int i = 0; i < 7; i++) if (m & (1 << i)) XFillRectangle(dpy, ids[k], gc, R[i][0], R[i][1], (unsigned)R[i][2], (unsigned)R[i][3]);
+  XFreeGC(dpy, gc);
+}
+
+static void id_clear(void) {
+  for (int i = 0; i < idN; i++) XDestroyWindow(dpy, ids[i]);
+  idN = 0;
+  idUntil = 0;
+  XFlush(dpy);
+}
+
+// list: "x,y,w,h,n;…" each monitor's rectangle (XWayland's root, as the strip's) and its number.
+void wlstrip_identify(const char *list) {
+  if (!open_x()) return;
+  id_clear();
+  Window root = DefaultRootWindow(dpy);
+  const char *s = list ? list : "";
+  while (*s && idN < ID_MAX) {
+    int x, y, w, h, n, used = 0;
+    if (sscanf(s, "%d,%d,%d,%d,%d%n", &x, &y, &w, &h, &n, &used) != 5) break;
+    s += used;
+    if (*s == ';') s++;
+    Window iw = XCreateSimpleWindow(dpy, root, x + (w - ID_SIZE) / 2, y + (h - ID_SIZE) / 2, ID_SIZE, ID_SIZE, 0, 0, 0x2b2b2b);
+    Atom dock = atom("_NET_WM_WINDOW_TYPE_DOCK");
+    XChangeProperty(dpy, iw, atom("_NET_WM_WINDOW_TYPE"), XA_ATOM, 32, PropModeReplace, (unsigned char *)&dock, 1);
+    Atom st[3] = { atom("_NET_WM_STATE_ABOVE"), atom("_NET_WM_STATE_SKIP_TASKBAR"), atom("_NET_WM_STATE_SKIP_PAGER") };
+    XChangeProperty(dpy, iw, atom("_NET_WM_STATE"), XA_ATOM, 32, PropModeReplace, (unsigned char *)st, 3);
+    XSizeHints *hints = XAllocSizeHints();
+    hints->flags = PPosition | PSize | USPosition | USSize;
+    hints->x = x + (w - ID_SIZE) / 2; hints->y = y + (h - ID_SIZE) / 2; hints->width = ID_SIZE; hints->height = ID_SIZE;
+    XSetWMNormalHints(dpy, iw, hints);
+    XFree(hints);
+    XStoreName(dpy, iw, "TwinDesk identify");
+    XSelectInput(dpy, iw, ExposureMask);
+    XMapRaised(dpy, iw);
+    ids[idN] = iw;
+    idNum[idN] = n;
+    idN++;
+  }
+  idUntil = now_ms() + 1800;
+  XFlush(dpy);
+}
+
 void wlstrip_read(void) {
   if (!dpy) return;
   while (XPending(dpy)) {
     XEvent e;
     XNextEvent(dpy, &e);
+    if (e.type == Expose) {
+      for (int i = 0; i < idN; i++) if (ids[i] == e.xexpose.window && e.xexpose.count == 0) id_draw(i);
+      continue;
+    }
     if (!win) continue;
     if (e.type == SelectionNotify && e.xselection.requestor == win) {
       if (e.xselection.property != None) got_uris();
@@ -259,6 +322,7 @@ void wlstrip_read(void) {
 
 // Each tick: a drag that was caught and never dropped here (or not taken) lets the strip go after a while.
 void wlstrip_tick(void) {
+  if (dpy && idN && now_ms() > idUntil) id_clear(); // Identify's numbers go after 1.8 s
   if (!dpy || !taken) return;
   if (now_ms() - takenAt > 60000) { reset(); wlstrip_hide(); }
 }
