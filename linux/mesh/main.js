@@ -71,7 +71,7 @@ const PeerApps = require('../peerapps');
 const desktopApps = require('../desktopapps');
 const loopback = require('../loopback');
 const autostart = require('../autostart');
-const { PairSync } = require('../pairsync');
+const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { PhoneDrive } = require('../phonedrive');
@@ -150,6 +150,7 @@ let wake = null;
 let updates = null;
 let updateNote = null; // the update notification, kept so it isn't collected before a click
 let pairSync = null;
+let consent = null; // each device's own two-way switches (shared/consent.js)
 let terminal = null;
 let sshd = null;
 let apps = null;
@@ -260,7 +261,13 @@ function start() {
   });
   startHost();
   autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
-  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard(), session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) }); // wl-clipboard where Wayland needs it (#97)
+  // Each device's own two-way switches (shared/consent.js): the settings are the selected device's pair,
+  // every other device's is its saved one. The clipboard, notifications and files serve them all at once.
+  consent = require('../../shared/consent.js').consent({
+    features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
+    send: (to, m) => hub.bus.send(to, m), save: saveSettings,
+  });
+  clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard(), session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) }); // wl-clipboard where Wayland needs it (#97)
   wlClipboardMissing = require('../wlclip').missing(); // other apps' copies unseen here (#97)
   if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
   // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
@@ -278,7 +285,7 @@ function start() {
   // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
   fileDrop = new FileDropSet({
     hub, FileDrop, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'),
-    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, onProgress: () => { screen.sendDropProgress(fillAll(fileDrop.view())); pushState(); } }),
+    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, sends: () => consent.get(id, 'files', 'out'), onProgress: () => { screen.sendDropProgress(fillAll(fileDrop.view())); pushState(); } }),
   });
   screen.fileDrop = fileDrop;
   // Monitor 2 open and showing nothing follows a device that starts sharing (#256: a PC driving this one
@@ -305,8 +312,8 @@ function start() {
   const files = new FilesSet({
     hub, partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
     make: (scoped) => ({
-      fileRecv: new FileRecv({ link: scoped, helper, settings, onChange: pushState }),
-      dragRecv: new DragRecv({ link: scoped, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState }),
+      fileRecv: new FileRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), onChange: pushState }),
+      dragRecv: new DragRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState }),
     }),
   });
   fileRecv = files.fileRecv;
@@ -438,9 +445,11 @@ function start() {
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
   sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
   notifs = new Notifs({
+    consent,
     bus: hub.bus, mesh, settings, save: saveSettings,
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
+  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); pushState(); }); // a device's pair: its policies again
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   vdd = new Vdd({ onChange: pushState });
@@ -505,7 +514,7 @@ function start() {
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
+  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, onPair: (pid) => consent.changed(pid), only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
     bus: hub.bus,
     peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
     peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)

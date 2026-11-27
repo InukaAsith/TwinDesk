@@ -17,7 +17,7 @@ const { EventEmitter } = require('events');
 const { ScopedPhonePeer: ScopedPeer } = require('./phones.js');
 
 class DropSet extends EventEmitter {
-  // hub: hub.js; server: the Server; make(peer) -> Drop; partner() -> the device driving this Mac, or null.
+  // hub: hub.js; server: the Server; make(peer, id) -> Drop; partner() -> the device driving this Mac, or null.
   constructor({ hub, server, make, partner = () => null }) {
     super();
     Object.assign(this, { hub, server, make, partner });
@@ -33,7 +33,7 @@ class DropSet extends EventEmitter {
   _ensure(id) {
     if (!id || this.byId.has(id)) return;
     const peer = new ScopedPeer(this.hub, this.server, null);
-    const d = this.make(peer);
+    const d = this.make(peer, id);
     d.recent = this.recent;
     d.dragIn.isDriven = () => this.isDriven();
     d.on('change', () => this.emit('change'));

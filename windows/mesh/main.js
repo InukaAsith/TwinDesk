@@ -64,7 +64,7 @@ const FileClip = require('../fclip');
 const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip);
 const Wake = require('../wake');
 const SendTo = require('../sendto');
-const { PairSync } = require('../pairsync');
+const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { Phone } = require('./phone');
@@ -171,6 +171,7 @@ let updates = null;
 let updateNote = null; // the update notification, kept so it isn't collected before a click
 let sendTo = null;
 let pairSync = null;
+let consent = null; // each device's own two-way switches (shared/consent.js)
 let fileRecv = null;
 let notifs = null;
 let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
@@ -279,7 +280,13 @@ function start() {
   });
   startHost();
   autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
-  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
+  // Each device's own two-way switches (shared/consent.js): the settings are the selected device's pair,
+  // every other device's is its saved one. The clipboard, notifications and files serve them all at once.
+  consent = require('../../shared/consent.js').consent({
+    features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
+    send: (to, m) => hub.bus.send(to, m), save: saveSettings,
+  });
+  clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
   // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
   // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
   const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()));
@@ -297,7 +304,7 @@ function start() {
   // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
   fileDrop = new FileDropSet({
     hub, FileDrop, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'),
-    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, onProgress: () => { screen.sendDropProgress({ ...fileDrop.view(), peerName: peerName() }); pushState(); } }),
+    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, sends: () => consent.get(id, 'files', 'out'), onProgress: () => { screen.sendDropProgress({ ...fileDrop.view(), peerName: peerName() }); pushState(); } }),
   });
   screen.fileDrop = fileDrop;
   // Monitor 2 open and showing nothing follows a device that starts sharing (#256: a PC driving this one
@@ -324,8 +331,8 @@ function start() {
   const files = new FilesSet({
     hub, partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
     make: (scoped) => ({
-      fileRecv: new FileRecv({ link: scoped, helper, settings, onChange: pushState }),
-      dragRecv: new DragRecv({ link: scoped, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState }),
+      fileRecv: new FileRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), onChange: pushState }),
+      dragRecv: new DragRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState }),
     }),
   });
   fileRecv = files.fileRecv;
@@ -402,9 +409,11 @@ function start() {
   vdd = new Vdd({ helper, onChange: pushState });
   // Notifications both ways, Send files, copy/paste files with shortcuts
   notifs = new Notifs({
+    consent,
     bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
+  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); pushState(); }); // a device's pair: its policies again
   // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
   // device asks for goes to it through a sender of its own.
   fileClip = new MeshFileClip({
@@ -543,7 +552,7 @@ function start() {
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
+  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, onPair: (pid) => consent.changed(pid), only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
     bus: hub.bus,
     peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
     peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)

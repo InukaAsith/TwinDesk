@@ -60,10 +60,15 @@ class FileDrop {
     });
   }
 
+  // Send files to this link's device: its pair's switch (opts.sends, shared/consent.js), else the settings'.
+  _sends() {
+    return this.sends ? !!this.sends() : !!this.settings.files.dropToMac;
+  }
+
   // paths from the Monitor 2 drop (x/y normalized over the video, or null), or from a drag across
   // the edge (release = true: the Mac places them where its pointer is when the button comes up).
   drop(paths, x, y, release) {
-    if (!this.settings.files.dropToMac) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)', 'Dropping files onto Monitor 2 is off (Files tab)');
+    if (!this._sends()) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)', 'Dropping files onto Monitor 2 is off (Files tab)');
     const files = [];
     for (const p of paths) {
       try {
@@ -79,7 +84,7 @@ class FileDrop {
   // A drag across the edge: walk the folders. Returns what kvm.take and
   // beginDrag need, or null when nothing can go. Nothing is sent yet: kvm.take goes first.
   prepareDrag(paths) {
-    if (!this.settings.files.dropToMac || this.link.status.state !== 'connected') return null;
+    if (!this._sends() || this.link.status.state !== 'connected') return null;
     const d = plan(paths);
     return d && { drag: crypto.randomBytes(8).toString('hex'), ...d, count: d.items.length };
   }

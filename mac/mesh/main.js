@@ -74,7 +74,7 @@ const { startServices } = require('./services');
 const { setupIpc, TABS } = require('./ipc');
 const login = require('../login');
 const { Hud } = require('../hud');
-const { PairSync } = require('../pairsync');
+const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { Phone } = require('../phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneSet, PhoneDir } = require('./phones');
@@ -109,6 +109,7 @@ function applyLocalApi() {
   localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
 }
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
+let consent = null; // each device's own two-way switches (shared/consent.js)
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 
@@ -677,8 +678,19 @@ app.whenReady().then(() => {
   }
   hub.start();
 
+  // Each device's own two-way switches (shared/consent.js): the settings are the selected device's pair,
+  // every other device's is its saved one. The clipboard, notifications and files serve them all at once.
+  consent = require('../../shared/consent.js').consent({
+    features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
+    send: (to, m) => hub.bus.send(to, m), save: () => store.saveSettings(settings),
+  });
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
-    hub, mesh, layoutSync, selfName: () => id.macName });
+    hub, mesh, layoutSync, selfName: () => id.macName, consent });
+  consent.on('change', () => { // a device's pair: its policies again
+    svc.clipboard.applySettings();
+    svc.notifs.applySettings();
+    pushState();
+  });
   const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
   dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
     app, hub, device: { id: id.macId, name: id.macName }, settings, save: () => store.saveSettings(settings),
@@ -1012,7 +1024,7 @@ app.whenReady().then(() => {
     terminal: (dir, on) => { actions.setTerminal({ [dir === 'out' ? 'allowPc' : 'connectPc']: on }); if (dir === 'in') svc.sshClient.applySettings(); }, // already set: setTerminal sees no change
     files: (dir, on) => actions.setFiles({ acceptDrops: on }),
   };
-  pairSync = new PairSync({ server: peer, bus: hub.bus,
+  pairSync = new PairSync({ server: peer, bus: hub.bus, onPair: (pid) => consent.changed(pid),
     peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
     peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; },
     getSettings: () => settings, saveSettings: () => store.saveSettings(settings), only: Object.keys(SYNC_ACTIONS), // no ReZume or Remote here

@@ -127,6 +127,7 @@ class PairSync {
 
   _stash(peerId, m) {
     this._mergeSaved(peerId, this._wireToSaved(m, peerId));
+    if (this.onPair) this.onPair(peerId); // shared/consent.js: what serves that device reads its pair again
   }
 
   _busWelcome(peerId) {

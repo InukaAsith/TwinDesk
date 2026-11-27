@@ -37,8 +37,8 @@ const store = require('./store');
 const P = require('../../shared/protocol.js');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
-// this Mac's name, sent with its notifications.
-function startServices({ server, getSettings, pushState, onHelperReady, hub: meshHub, mesh, layoutSync, selfName = () => '' }) {
+// this Mac's name, sent with its notifications; consent: shared/consent.js, each device's own two-way switches.
+function startServices({ server, getSettings, pushState, onHelperReady, hub: meshHub, mesh, layoutSync, selfName = () => '', consent = null }) {
   const s = getSettings;
   server.setMaxListeners(50); // one 'client'/'closed' listener per feature
   const helper = new Helper();
@@ -51,10 +51,10 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
     swapKeys: () => server.keySwap(s()), // never between two Macs
   });
-  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id) });
+  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, consent, session: (id) => meshHub.sessions.get(id) });
   // Files from every device, each on its own peer: the computer driving this Mac isn't selected here (dropset.js).
   const drop = new DropSet({
-    hub: meshHub, server, make: (peer) => new Drop({ server: peer, helper, displays, getSettings: s }),
+    hub: meshHub, server, make: (peer, id) => new Drop({ server: peer, helper, displays, getSettings: s, accepts: consent ? () => consent.get(id, 'files', 'in') : null }),
     partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
   });
   // Sending: a FileSend per device (sendset.js), so a crossing mid-send doesn't stop it.
@@ -97,7 +97,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     viewRoute.refresh();
   });
   const pcApps = new PcApps({ server, getSettings: s });
-  const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });
+  const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, consent, saveSettings: () => store.saveSettings(s()), selfName });
   // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).
   const history = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: require('electron').app.getPath('userData'), clip: clipboard, notifs, changed: pushState });
   // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another

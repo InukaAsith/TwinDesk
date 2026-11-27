@@ -72,6 +72,11 @@ class DragRecv {
     }
   }
 
+  // Receive files from this link's device: its pair's switch (opts.accepts, shared/consent.js), else the settings'.
+  _accepts() {
+    return this.accepts ? !!this.accepts() : !!this.settings.files.acceptFromMac;
+  }
+
   _start(m) {
     const end = (result, why) => {
       console.log('[drag] in, ' + result + (why ? ': ' + why : ''));
@@ -81,8 +86,8 @@ class DragRecv {
     if (this.cur) this.cancel('cancelled', false);
     const home = Date.now() < this.homeUntil; // the Mac's drag came over with the pointer, back home
     this.homeUntil = 0;
-    if (!this.settings.files.edgeDrag || !this.settings.files.acceptFromMac || !(this.isDriven() || home)) {
-      return end('cancelled', !this.settings.files.edgeDrag ? 'Drag across the edge is off here' : !this.settings.files.acceptFromMac ? 'Receive files is off here' : 'the pointer isn’t here');
+    if (!this.settings.files.edgeDrag || !this._accepts() || !(this.isDriven() || home)) {
+      return end('cancelled', !this.settings.files.edgeDrag ? 'Drag across the edge is off here' : !this._accepts() ? 'Receive files is off here' : 'the pointer isn’t here');
     }
     const list = Array.isArray(m.list) ? m.list : [];
     if (!list.length && !(Array.isArray(m.dirs) && m.dirs.length) || list.length > MAX_FILES) return end('failed');

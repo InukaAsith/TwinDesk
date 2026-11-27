@@ -19,13 +19,14 @@ const PREVIEW = 300; // characters kept per history item for the UI
 
 // The Pool's view of the mesh for the clipboard. Items from a device are always applied (its
 // clip.policy says what it wants from us, not what it sends); items go only to devices whose
-// clip.policy accepted (mesh entry .pool), which is checked in send().
-function clipPeers(mesh) {
+// clip.policy accepted (mesh entry .pool) and that our pair with sends to (consent), checked in send().
+// One we don't send to stays in the item's `d`, so no device relays it there either.
+function clipPeers(mesh, clip) {
   return mesh.peers().map((e) => ({
     id: e.id,
     mesh: e.mesh,
     pool: true,
-    send: (msg) => e.pool !== false && e.send(msg),
+    send: (msg) => e.pool !== false && clip._sendsTo(e.id) && e.send(msg),
   }));
 }
 
@@ -35,6 +36,7 @@ class Clip extends EventEmitter {
   //              selectedId() -> string|null, connectedIds() -> string[] }   (hub.js)
   //   mesh     shared/mesh.js Mesh (entries: {id, name, send, mesh, pool})
   //   getSettings()  -> settings (settings.clipboard is used)
+  //   consent  optional shared/consent.js: each device's own Send / Receive (else the settings' for all)
   //   clipboard  {readText() -> string|Promise, writeText(text)}; default Electron's
   //   helper   optional: the helper process {running, send(name, args), request(name, args) -> Promise,
   //            on('event' | 'ready')}: 'clipboard' events (instant mode) and 'clipboardInfo' (concealed)
@@ -47,7 +49,8 @@ class Clip extends EventEmitter {
     this.getSettings = opts.getSettings;
     this.clipboard = opts.clipboard || require('electron').clipboard;
     this.helper = opts.helper || null;
-    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh) });
+    this.consent = opts.consent || null;
+    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh, this) });
     this.latest = new Latest({ selfId: this.mesh.selfId }); // the latest copy wins (shared/clipsync.js)
     this.lastSync = { sent: null, received: null };
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size, from}
@@ -58,6 +61,7 @@ class Clip extends EventEmitter {
     this.images = new MeshClipImages({
       cfg: () => this.cfg, clipboard: this.clipboard,
       ids: () => this.bus.connectedIds().filter((id) => this._accepts(id)),
+      sendsTo: (id) => this._sendsTo(id), takes: (id) => this._takes(id),
       send: (id, m) => this.bus.send(id, m),
       backlog: (id) => { const x = sess(id); return (x && x.bufferedAmount) || 0; },
       ble: (id) => { const x = sess(id); return !!x && x.transport === 'ble'; },
@@ -113,6 +117,21 @@ class Clip extends EventEmitter {
     return this.getSettings().clipboard;
   }
 
+  // Our pair with that device: our clipboard goes there / theirs is taken here (shared/consent.js).
+  _sendsTo(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'out') : !!c.send);
+  }
+
+  _takes(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'in') : !!c.receive);
+  }
+
+  _anySend() {
+    return this.bus.connectedIds().some((id) => this._sendsTo(id));
+  }
+
   // True when some connected device accepts clipboard from us (true with nobody connected, as before).
   get peerAccepts() {
     const ids = this.bus.connectedIds();
@@ -122,7 +141,7 @@ class Clip extends EventEmitter {
 
   _accepts(id) {
     const e = this.mesh.get(id);
-    return !!e && e.pool !== false;
+    return !!e && e.pool !== false && this._sendsTo(id);
   }
 
   // Call after settings.clipboard changed.
@@ -137,8 +156,7 @@ class Clip extends EventEmitter {
   // The helper reports copies only while something would be sent.
   _applyWatch() {
     if (!this.helper || !this.helper.running) return;
-    const c = this.cfg;
-    this.helper.send('clipboardWatch', { on: !!(c.enabled && c.send && this.bus.connectedIds().length) });
+    this.helper.send('clipboardWatch', { on: this._anySend() });
   }
 
   // Our clip.policy to every connected device.
@@ -147,8 +165,7 @@ class Clip extends EventEmitter {
   }
 
   _sendPolicy(id) {
-    const c = this.cfg;
-    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
+    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: this._takes(id), images: !!(this.images.on && this._takes(id)), queue: true }); // queue: clip.queue understood here
   }
 
   // A copy was made on this Mac (helper event). Instant mode sends new copies only, not what was
@@ -199,9 +216,10 @@ class Clip extends EventEmitter {
 
   async _onClip(m, from) {
     const c = this.cfg;
-    if (!c.enabled || !c.receive || !m || !P.clipAllowed(m.text)) return;
+    if (!c.enabled || !this._takes(from) || !m || !P.clipAllowed(m.text)) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh) return;
+    if (r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose clipboard we don't take
     // An older copy than the newest this device knows (its own last copy counts): not applied. The pool
     // relayed it anyway, so each device decides for itself.
     const name = this._nameOf(r.msg.o, m.on, from);
@@ -221,7 +239,7 @@ class Clip extends EventEmitter {
   // accepts it (the requester included).
   async sendIfChanged(why) {
     const c = this.cfg;
-    if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
+    if (!this._anySend()) return;
     if (!this.peerAccepts) return this._skip("A connected device doesn’t accept this Mac’s clipboard");
     if (why === 'instant' && this.remote) return; // Universal Clipboard: see ../clipboard.js (#211)
     const text = await this._readText();

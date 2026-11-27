@@ -240,3 +240,30 @@ phone at a time (a computer takes one phone's services, `perIn` 1):
   phone with it);
 - moving to another phone is `closed` for the one it leaves, which is told the hub is off here
   (`hub.policy`, all false), and `client` for the next.
+
+### Steps 5 and 6: the plan
+
+Done together, a PR per phase: per-pair consent first, then every feature that still runs on the facade
+made per device, then the facade, `peerstate.js`, sticky links and `pairFor` removed, then the matrix
+(the whole mesh, every device publishing its consent and live edges). The selection stays: it is the
+device the pages show and what Use and a crossing pick; only routing through it goes.
+
+### Step 5, phase 1 as built: consent per pair
+
+`shared/consent.js` answers "does this pair have it on" for any device: the settings for the selected
+device (the pages show its pair), its saved pair (`settings.pairSync[id]`, kept by PairSync) for every
+other one, the settings for a device never paired. `set()` saves one for a device that isn't selected
+and tells it (`pair.sync`, from our side); PairSync reports a pair it stashed (`onPair`).
+
+The features that serve every device at once read it per device; they read the flat switch before, so
+every device got the selected device's pair:
+
+- the clipboard pool (Windows, Linux, Mac): sent only to a device whose pair sends (one left out stays
+  in the item's `d`, so no relay sends it there either), our `clip.policy` to each device says our own
+  Receive for it, and a relayed copy from a device whose clipboard we don't take isn't applied;
+  pictures the same (`MeshClipImages` `sendsTo` / `takes`);
+- the notification pool, the same way;
+- files from each device (`FileRecv`, `DragRecv`, the Mac's `Drop`: `accepts`) and to each device
+  (`FileDrop`: `sends`).
+
+Nothing new on the wire: `pair.sync` already was the pair's consent, agreed by both ends.

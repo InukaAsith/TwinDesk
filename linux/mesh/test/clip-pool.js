@@ -28,8 +28,15 @@ async function world(ids, links, o = {}) {
       maxKB: 256,
       skipConcealed: true,
     };
+    // o.pairs: { A: { B: { out, in } } } — A's own pair with B (shared/consent.js), else the settings'.
+    const consent = o.pairs ? {
+      get: (peer, f, dir) => {
+        const p = (o.pairs[id] || {})[peer];
+        return p && typeof p[dir] === 'boolean' ? p[dir] : !!dev.settings[dir === 'out' ? 'send' : 'receive'];
+      },
+    } : null;
     dev.clip = new Clip({
-      bus: dev.bus, mesh: dev.mesh, getSettings: () => dev.settings, onChange: () => {}, clipboard: dev.clipboard,
+      bus: dev.bus, mesh: dev.mesh, getSettings: () => dev.settings, onChange: () => {}, clipboard: dev.clipboard, consent,
     });
     made.push(dev.clip);
     devs[id] = dev;
@@ -260,6 +267,30 @@ for (const instant of [false, true]) {
     assert.deepStrictEqual(writes(devs.B), ['one', 'one']);
   });
 }
+
+scenario('each pair its own switches: A sends to C but not to B; B takes nothing from A', async () => {
+  // Full mesh of three. A's pair with B: Send off. B's pair with A: Receive off (so B tells A not to send).
+  const { net, devs } = await world(['A', 'B', 'C'], full(['A', 'B', 'C']), { pairs: { A: { B: { out: false } }, B: { A: { in: false } } } });
+  await copy(net, devs.A, 'for c');
+  assert.deepStrictEqual(writes(devs.C), ['for c'], 'C, whose pair is on, gets it');
+  assert.deepStrictEqual(writes(devs.B), [], 'B gets it neither from A nor relayed by C');
+  assert.strictEqual(net.sent('clip', 'A', 'B').length, 0);
+  assert.strictEqual(net.sent('clip', 'C', 'B').length, 0, 'C doesn’t relay it: B was one of A’s own links');
+  // B's own copy goes to A and C: its pair with A only turned off what it takes from A.
+  await copy(net, devs.B, 'from b');
+  assert.deepStrictEqual(writes(devs.A), ['from b']);
+  assert.deepStrictEqual(writes(devs.C), ['for c', 'from b']);
+});
+
+scenario('a relayed copy from a device whose clipboard this one doesn’t take is not applied', async () => {
+  // Chain A-B-C: C's pair with A has Receive off, but A's copy comes through B (C takes B's).
+  const { net, devs } = await world(['A', 'B', 'C'], [['A', 'B'], ['B', 'C']], { pairs: { C: { A: { in: false } } } });
+  await copy(net, devs.A, 'via b');
+  assert.deepStrictEqual(writes(devs.B), ['via b']);
+  assert.deepStrictEqual(writes(devs.C), [], 'not applied on C');
+  await copy(net, devs.B, 'b itself');
+  assert.deepStrictEqual(writes(devs.C), ['b itself'], 'B’s own still is');
+});
 
 async function main() {
   for (const s of scenarios) {
