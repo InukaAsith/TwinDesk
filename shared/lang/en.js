@@ -2370,4 +2370,5 @@
   "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.",
   "Scrolling speed here": "Scrolling speed here",
   "Another computer’s mouse wheel on this Mac": "Another computer’s mouse wheel on this Mac",
+  "Open {device}’s shared folder": "Open {device}’s shared folder",
 });

@@ -2369,4 +2369,5 @@
   "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "Приложения на телефоне видят, как над ними проходит указатель, как с подключённой мышью. Когда выключено, на телефон передаются только нажатия и перетаскивания.",
   "Scrolling speed here": "Скорость прокрутки здесь",
   "Another computer’s mouse wheel on this Mac": "Колесо мыши другого компьютера на этом Mac",
+  "Open {device}’s shared folder": "Открыть общую папку {device}",
 });

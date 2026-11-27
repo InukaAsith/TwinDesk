@@ -1324,7 +1324,7 @@ function buildState() {
     pcScreen: pcScreen.view(),
     pcApps: pcApps.view(),
     macApps: settings.macApps,
-    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, server: sshd.view() },
+    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, installedKeys: undefined, server: sshd.view() },
     files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
     history: historyKeeper ? historyKeeper.view() : null,

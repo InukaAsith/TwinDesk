@@ -738,6 +738,7 @@ app.whenReady().then(() => {
   // svc.phone is also the single-phone API for the active one. One adb for all of them.
   const adb = new Adb();
   const phoneDir = new PhoneDir(hub, server);
+  svc.phoneDir = phoneDir;
   svc.wired = new Wired({ adb, raw: server, peer: phoneDir, getId: () => id.macId, getName: () => id.macName,
     hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
   pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
@@ -818,7 +819,9 @@ app.whenReady().then(() => {
       ph.bridge = bridge;
       ph.wired = svc.wired;
       bridge.wired = svc.wired;
-      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend: svc.fileSend });
+      // A drop on this phone's window goes to this phone, not to the selected device (#313).
+      const fileSend = { sendBatch: (...a) => { const f = scoped.id && svc.fileSend.unit(scoped.id); return f ? f.sendBatch(...a) : null; } };
+      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend });
       return { phone: ph, bridge, views };
     },
     onUnit: (u) => {
@@ -1222,13 +1225,22 @@ function setupNet() {
 // Calls, Messages, Photos and Files from a phone (shared/phonehub.js): loaded when a phone connects with
 // one of them on, or the first time a page uses it. Before that none of it exists: no module, no
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
+// The phones' side of Calls, Messages and Media (shared/phonehub.js): what any phone says (PhoneDir), and
+// what's sent goes to the active phone (the Phone pages' one), as Windows' and Linux's phone-link.js do.
+// On the selected device's peer, a phone that wasn't selected rang, texted and played unheard (#313).
+const phonesLink = {
+  on: (ev, fn) => { svc.phoneDir.on(ev, fn); return phonesLink; },
+  get current() { const u = svc.phone && svc.phone.active; return (u && u.link.current) || null; },
+  sendToClient: (m) => { const u = svc.phone && svc.phone.active; return !!(u && u.link.current) && u.link.sendToClient(m); },
+};
+
 function setupHub() {
   const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
-  peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
+  phonesLink.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
-  peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
-  peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
-  peer.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
+  phonesLink.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
+  phonesLink.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  phonesLink.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
 }
 
 let callwin = null;
@@ -1236,9 +1248,13 @@ function loadHub() {
   if (phoneHub) return phoneHub;
   const { PhoneHub } = require('../../shared/phonehub.js');
   const hub = new PhoneHub({
-    server: peer, getSettings: () => settings, save: () => store.saveSettings(settings),
+    server: phonesLink, getSettings: () => settings, save: () => store.saveSettings(settings),
     audio: (opts) => require('../callaudio.js').create({ helper: svc.helper, ...opts }), // the calls' sound over Bluetooth
-    send: (paths, batch) => !!(svc.fileSend && svc.fileSend.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
+    send: (paths, batch) => { // Files: into a folder on the phone (the one the page shows, not the selected device)
+      const c = phonesLink.current;
+      const f = svc.fileSend && c && svc.fileSend.unit(c.deviceId);
+      return !!(f && f.sendBatch(paths, 'send', batch));
+    },
     shareSheet: (paths) => new (require('electron').ShareMenu)({ filePaths: paths }).popup(win && !win.isDestroyed() ? { browserWindow: win } : {}), // Photos › Share
     choose: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openFile', 'openDirectory', 'multiSelections'] })
       .then((r) => (r.canceled ? [] : r.filePaths)),
@@ -1265,7 +1281,7 @@ function loadHub() {
   const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
   hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
-  if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
+  if (phonesLink.current && P.isPhoneOs(phonesLink.current.os)) hub.started();
   return hub;
 }
 

@@ -6,9 +6,12 @@
 // so at most one target can be on Extend.
 //
 // This object is also the single-peer API the rest of the app grew up with (`pcScreen`): setMode(),
-// view() and the Share screen page act on the ACTIVE target (the selected device, else the first
-// one), so with one device everything behaves as before. Settings changes (apply, sizeExtend,
-// applyInput, sendState, shutdown) reach every target.
+// view(), the tray's Share Screen, Extend and Mirror and the Share screen page's Mode act on the ACTIVE
+// target, so with one device everything behaves as before. Active is the device that is already being
+// shared to, else the one whose viewer is open and watching (its Monitor 2), else the selected device
+// (#256: the selection follows the pointer's last crossing, so Extend went to the Mac the pointer had
+// just visited instead of the Linux computer watching). The selected device wins among several.
+// Settings changes (apply, sizeExtend, applyInput, sendState, shutdown) reach every target.
 'use strict';
 
 const { EventEmitter } = require('events');
@@ -56,7 +59,14 @@ class PcScreenSet extends EventEmitter {
   }
 
   get active() {
-    return this.byId.get(this.hub.selectedId) || (this.all.find((u) => u.link.id !== null && this.hub.sessions.get(u.link.id)?.connected)) || this.first;
+    const live = [...this.byId].filter(([id]) => this.hub.sessions.get(id)?.connected).map(([, u]) => u);
+    const sel = this.byId.get(this.hub.selectedId);
+    const pick = (list) => (list.includes(sel) ? sel : list[0]);
+    const sharing = live.filter((u) => u.mode && u.mode !== 'off');
+    if (sharing.length) return pick(sharing);
+    const watching = live.filter((u) => u.mac && u.mac.told && u.mac.accept); // its viewer said it watches (pcscreen.js screen.policy)
+    if (watching.length) return pick(watching);
+    return sel || live[0] || this.first;
   }
 
   unit(id) {

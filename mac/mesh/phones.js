@@ -30,7 +30,7 @@ class PhoneDir extends EventEmitter {
     this.server = server;
     this.wired = new Set();
     hub.bus.onPeer('welcome', (id) => { const c = this.ctxOf(id); if (c) this.emit('client', c); });
-    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && P.isPhoneOs(s.peerOs)) this.emit('closed', { deviceId: id }); });
+    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && P.isPhoneOs(s.peerOs)) this.emit('closed', { deviceId: id, os: s.peerOs }); });
     this.on('newListener', (ev) => {
       if (typeof ev !== 'string' || !ev.startsWith('t:') || this.wired.has(ev)) return;
       this.wired.add(ev);
