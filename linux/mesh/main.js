@@ -24,6 +24,7 @@ const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
 const I18n = require('../../shared/i18n.js');
 const Look = require('../../shared/look.js');
+let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
 const store = require('../store');
@@ -659,11 +660,12 @@ function startPhone(server, pairing) {
       phoneRemote.unit(u);
       anyPhone.unit(u);
       if (loadDeck()) deck.add(u.link); // that phone's Deck runs here
-      new PcNow({ server: u.link, key: (code) => {
+      const now = new PcNow({ server: u.link, key: (code) => {
         if (!helper) return;
         helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
         helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
       } });
+      if (!pcNowRef) pcNowRef = now; // what plays here, for Calls › Pause what plays here (one is enough: it's this computer's)
     },
   });
   loadBtAudio();
@@ -724,6 +726,9 @@ function loadHub() {
     callwin.update(phoneHub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   phoneHub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this computer pauses for a call (shared/callpause.js, #293).
+  const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
+  phoneHub.on('call', (c) => callPause.onCall(c));
   phoneHub.on('change', popup);
   if (phoneLink.current && P.isPhoneOs(phoneLink.current.os)) phoneHub.started();
   return phoneHub;

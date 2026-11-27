@@ -44,6 +44,7 @@ UI.tab({
     let crossingModifierRow;
     const speed = UI.slider({ min: 0.25, max: 4, step: 0.25, format: (v) => `${v.toFixed(2)}×` }, (v) => api.setKvm({ speed: v }));
     const reverse = UI.switch((v) => api.setKvm({ reverseScroll: v }), { label: I18n.t('Reverse scrolling') });
+    const scrollSpeed = UI.slider({ min: 0.25, max: 4, step: 0.25, format: (v) => `${v.toFixed(2)}×` }, (v) => api.setKvm({ scrollSpeed: v }));
     const gestures = UI.switch((v) => api.setKvm({ gestures: v }), { label: I18n.t('Trackpad gestures') });
     const gestureRow = UI.row(I18n.t('Trackpad gestures'), I18n.t('Pinch to zoom, swipe between desktops, Mission Control / Task View, back and forward — done the native way on {name}. The same on both'), [gestures]);
     const syncPads = UI.switch((v) => api.setKvm({ syncPads: v }), { label: I18n.t('Sync touchpads') });
@@ -100,6 +101,7 @@ UI.tab({
         crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'), [crossingModifier.el]),
         speedRow = peerRow(I18n.t('Pointer speed here'), '', [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
+        UI.row(I18n.t('Scrolling speed here'), I18n.t('Another computer’s mouse wheel on this Mac'), [scrollSpeed]),
         gestureRow,
         syncRow,
         shakeRow,
@@ -137,6 +139,7 @@ UI.tab({
       speedRow.label.dataset.peer = UI.isPhone(s) ? I18n.t('Pointer speed on {name}') : I18n.t('Pointer speed here');
       speedRow.label.textContent = UI.fill(speedRow.label.dataset.peer);
       reverse.set(k.reverseScroll);
+      scrollSpeed.set(k.scrollSpeed || 1);
       gestures.set(k.gestures !== false);
       syncPads.set(k.syncPads === true);
       shake.set(k.shakeHome !== false);

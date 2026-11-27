@@ -592,6 +592,7 @@ class PhoneViews extends EventEmitter {
     switch (m.t) {
       case 'touch': // a finger (pointer ≥ 0) or the mouse (-1) at video coordinates
         if (!size) return;
+        if (m.action === ACTION.HOVER_MOVE && (this.getSettings().phone || {}).hover === false) return; // Phone › Hover off (#330)
         s.touch(m.action | 0, Math.max(-3, Math.min(9, m.pointer | 0)), num(m.x), num(m.y), size.width, size.height,
           m.action === ACTION.UP ? 0 : 1, m.actionButton | 0, m.buttons | 0);
         break;

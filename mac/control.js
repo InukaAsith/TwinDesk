@@ -171,7 +171,7 @@ const UI = {
     };
     if (onClick) {
       row.classList.add('clickable');
-      row.onclick = (e) => { if (!e.target.closest('input,button,select')) onClick(); };
+      row.onclick = (e) => { if (!e.target.closest('input,button,select')) onClick(e); };
     }
     return row;
   },

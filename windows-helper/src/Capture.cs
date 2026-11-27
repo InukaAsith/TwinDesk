@@ -439,6 +439,10 @@ namespace MacShare
                     c["reason"] = "secureDesktop";
                     emit(c);
                 }
+                // Back from it: a button pressed here for the other computer (the click that opened
+                // the prompt) had its release land on the secure desktop, where nothing gets in. Still
+                // held, it kept the next crossing from working until this PC's own mouse moved (#210).
+                if (!secure && ReleaseInjected != null) ReleaseInjected();
                 Dictionary<string, object> e = Ev("secureDesktop");
                 e["on"] = secure;
                 emit(e);

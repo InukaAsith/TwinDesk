@@ -166,6 +166,11 @@ namespace MacShare
             IntPtr root = GetAncestor(w, 2); // GA_ROOT
             uint pid;
             GetWindowThreadProcessId(root != IntPtr.Zero ? root : w, out pid);
+            return ElevatedPid(pid);
+        }
+
+        static bool ElevatedPid(uint pid)
+        {
             if (pid == 0) return false;
             IntPtr h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
             if (h == IntPtr.Zero) return false;
@@ -218,7 +223,23 @@ namespace MacShare
                 return;
             }
             if (down) heldButtons.Add(b); else heldButtons.Remove(b);
+            if (down && b <= 1) WatchClick();
             Send(Mouse(0, 0, data, flags));
+        }
+
+        // A click over a window run as administrator goes nowhere, and nothing says so: the moves land
+        // (the cursor is the system's), only the press and release are dropped, and SendInput doesn't
+        // tell (UIPI's refusal is silent by design). The pointer goes home with the note, as WatchStuck
+        // does (#278: cmd, Device Manager, an installer). Not when we're elevated ourselves (or SYSTEM):
+        // then the window takes our input.
+        static int selfElevated = -1;
+        void WatchClick()
+        {
+            if (Stuck == null) return;
+            if (selfElevated < 0) selfElevated = ElevatedPid((uint)System.Diagnostics.Process.GetCurrentProcess().Id) ? 1 : 0;
+            if (selfElevated == 1) return;
+            Native.POINT p;
+            if (Native.GetCursorPos(out p) && Elevated(WindowFromPoint(p))) Stuck();
         }
 
         bool captionHeld;

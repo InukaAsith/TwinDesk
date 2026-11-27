@@ -2365,4 +2365,8 @@
   "It stopped.": "Durdu.",
   "Starting on the phone…": "Telefonda başlatılıyor…",
   "Which phone Show Phone Screen opens, and this page shows": "Telefon Ekranını Göster’in açtığı ve bu sayfanın gösterdiği telefon",
+  "Mouse hover": "Fareyle üzerine gelme",
+  "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "Telefondaki uygulamalar, fare takılıymış gibi işaretçinin üzerlerinden geçtiğini görür. Kapalıyken telefona yalnızca tıklamalar ve sürüklemeler ulaşır.",
+  "Scrolling speed here": "Buradaki kaydırma hızı",
+  "Another computer’s mouse wheel on this Mac": "Başka bir bilgisayarın fare tekerleği bu Mac’te",
 });

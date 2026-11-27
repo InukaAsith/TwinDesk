@@ -2365,4 +2365,8 @@
   "It stopped.": "Parou.",
   "Starting on the phone…": "Iniciando no celular…",
   "Which phone Show Phone Screen opens, and this page shows": "Qual celular o Mostrar a tela do celular abre e esta página mostra",
+  "Mouse hover": "Passar o mouse",
+  "Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.": "Os apps do celular veem o ponteiro passar sobre eles, como com um mouse conectado. Desativado: só cliques e arrastos chegam ao celular.",
+  "Scrolling speed here": "Velocidade de rolagem aqui",
+  "Another computer’s mouse wheel on this Mac": "A roda do mouse de outro computador neste Mac",
 });

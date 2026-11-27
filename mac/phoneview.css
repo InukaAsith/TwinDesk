@@ -18,7 +18,7 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 .tools button.active svg { stroke: #30d158; }
 .tools svg { width: 15px; height: 15px; fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 #stage { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; display: grid; place-items: center; }
-#screen { max-width: 100%; max-height: 100%; outline: none; cursor: default; }
+#screen { max-width: 100%; max-height: 100%; outline: none; cursor: default; touch-action: none; }
 #status { position: absolute; color: var(--muted); text-align: center; padding: 0 24px; }
 body.app #b-recents, body.app #b-notifs, body.app #b-rotate { display: none; }
 #b-torch, #b-flip, #b-zoomin, #b-zoomout { display: none; }

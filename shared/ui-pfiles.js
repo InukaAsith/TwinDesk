@@ -33,6 +33,7 @@ UI.tab({
     let hidden = false;
     let asking = '';
     const chosen = new Set(); // names in cwd
+    let anchor = ''; // the name last chosen or let go: Shift-click does the same to every row from it (#319)
     let confirmDelete = false;
     let renaming = ''; // the name being renamed
     let refs = 0;
@@ -58,9 +59,10 @@ UI.tab({
       confirmDelete = false;
       paint();
     }, 'small');
+    const allBtn = UI.button(tr('All'), () => chooseAll(), 'small');
     const clearBtn = UI.button(tr('Done'), () => { chosen.clear(); confirmDelete = false; paint(); }, 'small');
     const folderBtn = UI.saveFolderButton();
-    const selBar = el('div', { class: 'hub-media-bar hub-fs-sel' }, [selText, el('span', { class: 'hub-grow' }), folderBtn, saveBtn, renameBtn, deleteBtn, clearBtn]);
+    const selBar = el('div', { class: 'hub-media-bar hub-fs-sel' }, [selText, el('span', { class: 'hub-grow' }), folderBtn, saveBtn, renameBtn, deleteBtn, allBtn, clearBtn]);
 
     // A new folder, named here.
     const newName = el('input', { class: 'hub-input hub-grow', type: 'text', attrs: { 'aria-label': tr('Folder name'), maxlength: '255' } });
@@ -123,6 +125,7 @@ UI.tab({
       cwd = path;
       asking = path;
       chosen.clear();
+      anchor = '';
       confirmDelete = false;
       renaming = '';
       newRow.hidden = true;
@@ -145,10 +148,35 @@ UI.tab({
       paint();
     }
 
+    // Chooses (on) or lets go of a row; with Shift, every row between it and the last one clicked too.
+    function choose(name, on, shift) {
+      const a = shift && anchor ? items.findIndex((x) => x.name === anchor) : -1;
+      const b = items.findIndex((x) => x.name === name);
+      const names = a >= 0 && b >= 0 ? items.slice(Math.min(a, b), Math.max(a, b) + 1).map((x) => x.name) : [name];
+      for (const n of names) if (on) chosen.add(n); else chosen.delete(n);
+      anchor = name;
+      confirmDelete = false;
+      paint();
+    }
+
+    function chooseAll() {
+      for (const x of items) chosen.add(x.name);
+      confirmDelete = false;
+      paint();
+    }
+
+    // Ctrl+A (⌘A) on this page chooses every row, unless typing in a field.
+    document.addEventListener('keydown', (e) => {
+      if (page.hidden || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a' || e.target.closest('input,textarea,[contenteditable]')) return;
+      if (!items.length) return;
+      e.preventDefault();
+      chooseAll();
+    });
+
     function row(it) {
       const check = el('input', { type: 'checkbox', class: 'hub-fs-check', attrs: { 'data-literal': '', 'aria-label': tr('Choose {file}', { file: it.name }) } });
       check.checked = chosen.has(it.name);
-      check.onchange = () => { if (check.checked) chosen.add(it.name); else chosen.delete(it.name); confirmDelete = false; paint(); };
+      check.onclick = (e) => choose(it.name, check.checked, e.shiftKey);
       const when = it.at ? UI.clock(it.at) : '';
       const hint = it.dir ? [it.n != null ? tr(it.n === 1 ? '{count} item' : '{count} items', { count: it.n }) : tr('Folder'), when] : [UI.bytes(it.size || 0), when];
       let r;
@@ -168,7 +196,7 @@ UI.tab({
       } else {
         r = UI.row(it.name, hint.filter(Boolean).join(' · '), it.dir ? [el('span', { class: 'chev', text: '›' })] : [UI.button(tr('Save'), () => save([it.name]), 'small')], {
           literal: true,
-          onClick: () => (it.dir ? open(join(it.name)) : (check.checked = !check.checked, check.onchange())),
+          onClick: (e) => (it.dir ? open(join(it.name)) : choose(it.name, !chosen.has(it.name), !!(e && e.shiftKey))),
         });
       }
       if (renaming !== it.name) { r.label.textContent = it.name; delete r.label.dataset.peer; } // a name as it is, braces too

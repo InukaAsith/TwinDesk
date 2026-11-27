@@ -5,7 +5,8 @@
 //   Shift+Enter is a new line there. Anywhere else Enter is Enter. With the phone's Accessibility
 //   on (the full app), the phone clicks the app's own Send button (phone.send); without it,
 //   Instagram's Send is reached with Tab, and WhatsApp and Telegram send on Enter once their own
-//   "Enter is send" setting is on.
+//   "Enter is send" setting is on. Messenger has no such setting: it sends only with Accessibility
+//   (#331), without it Enter stays its new line.
 //   The arrow keys swipe the screen (Phone page › Settings › Arrow keys swipe, off): for feeds,
 //   Reels and Shorts, a reader's pages. Off, they are arrow keys (text fields, games).
 'use strict';
@@ -14,6 +15,7 @@ const CHATS = {
   'com.whatsapp': 'whatsapp', 'com.whatsapp.w4b': 'whatsapp',
   'com.instagram.android': 'instagram', 'com.instagram.lite': 'instagram',
   'org.telegram.messenger': 'telegram', 'org.telegram.messenger.web': 'telegram', 'org.telegram.plus': 'telegram',
+  'com.facebook.orca': 'messenger', 'com.facebook.mlite': 'messenger',
 };
 const KEYCODE = { TAB: 61, ENTER: 66 };
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
