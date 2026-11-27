@@ -198,3 +198,28 @@ A line is written only when a service's would or does changes:
 [graph] sound: would Ryzen9, AMXLPDL-47H-169 (MacBook-Air-de-Ortega: Send is off for it) | does MacBook-Air-de-Ortega, not sending
 [graph] input peer: Ryzen9 (it drives this computer)
 ```
+
+### Step 3 as built
+
+**Screen** was already per device: `PcScreenSet` (a `PcScreen` per device on `hub.scoped(id)`) for
+sharing, and Monitor 2's viewer on a sticky link that stays with the device it shows while its window
+is open.
+
+**Microphone:** one device, the input peer before the selection (`resolve('mic')`). The input peer is
+the shadow's (`MeshShadow` tells `hub.setInputPeer()` each tick), and the hub's audio route, now the
+microphone's alone, picks a live microphone's device first, then the input peer (a computer), then the
+selection (`_pickAudioRoute`, Windows, Linux and the Mac). So the shadow's `would` and `does` for the
+microphone are the same, and a crossing that only passes through a device doesn't move it (the
+dwell).
+
+**Camera** (`shared/cam-mesh.js`): its own link instead of the facade, a sticky link on Windows and
+Linux (`camLink`) and a route on the Mac (`camRoute`):
+
+- while the camera runs either way it stays with its device, so a crossing no longer ends the call;
+- a computer that isn't selected can open this one's camera: its `cam.open` takes the link there when
+  the camera is free, and gets `cam.state failed` ("in use with …") when it isn't;
+- free again, it follows the selection (the tab views the selected computer's camera);
+- whether the camera is shared (`cam.policy`) goes to every connected computer, and again after a
+  move's goodbye.
+
+Nothing new on the wire: an older app sees an ordinary one-to-one camera.
