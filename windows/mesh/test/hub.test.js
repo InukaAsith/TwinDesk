@@ -582,7 +582,12 @@ test('(h) the facade gets what a device said while another was selected; the dev
     C.hub.bus.send(A.id, { t: 'cam.policy', share: true });
     C.hub.bus.send(A.id, { t: 'screen.state', on: false, mode: '' });
     C.hub.bus.send(A.id, { t: 'screen.state', on: true, mode: 'extend', ask: true });
+    C.hub.bus.send(A.id, { t: 'net.caps', host: true, join: true, hotspot: false }); // what it can do to leave Bluetooth
+    const tapped = [];
+    A.hub.netTap = (m) => m.t === 'net.caps' && tapped.push(m.host);
     await waitFor(() => (A.hub.heard.by.get(C.id) || new Map()).get('screen.state')?.on === true, 'A keeps what C said');
+    await waitFor(() => !!(A.hub.heard.by.get(C.id) || new Map()).get('net.caps'), 'and its net.caps');
+    assert.deepStrictEqual(tapped, [], 'the net hook hears only the selected device');
     assert.ok(!got.some((x) => x[0] === 'cam.policy'), 'not delivered while C is not selected');
 
     // The facade tells B our camera policy; selecting C switches it off on B, and replays C's.
@@ -591,6 +596,7 @@ test('(h) the facade gets what a device said while another was selected; the dev
     got.length = 0;
     assert.strictEqual(A.hub.select(C.id), true);
     assert.deepStrictEqual(got, [['welcome', C.id], ['cam.policy', true], ['screen.state', true]], 'welcome, then the latest of each, once');
+    assert.deepStrictEqual(tapped, [true], 'its net.caps reach the net hook (netlink.js) as it is selected');
     await waitFor(() => atB.length === 2, 'B hears the camera policy go off');
     assert.deepStrictEqual(atB, [true, false]);
 

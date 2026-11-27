@@ -250,6 +250,7 @@ function setupIpc(ctx) {
   });
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.drive ? shell.openPath(smb.drive + '\\') : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
+  handle('openDrive', (id) => { const u = typeof id === 'string' && smb.unitOf ? smb.unitOf(id) : null; if (u && u.drive) shell.openPath(u.drive + '\\'); }); // another device's folder (Files)
   handle('cancelDrop', () => fileDrop.cancel());
   handle('pauseSend', (batch) => typeof batch === 'string' && fileDrop.pause(batch));
   handle('resumeSend', (id) => typeof id === 'string' && fileDrop.resume(id));

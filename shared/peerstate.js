@@ -28,6 +28,7 @@ const REMEMBER = new Set([
   'dev.state', // its device state (the Overview's controls)
   'hub.state', // a phone's Phone hub permissions
   'call.state', // a phone's call
+  'net.caps', // {host, join, hotspot}: what it can do to leave Bluetooth for Wi-Fi (shared/netlink.js; the net hook hears it)
 ]);
 
 // The policies that are switched off on the device a facade or route leaves: type -> the field.

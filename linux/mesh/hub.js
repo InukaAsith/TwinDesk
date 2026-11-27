@@ -453,7 +453,10 @@ class Hub extends EventEmitter {
       if (s) {
         this._facadeEmit('welcome', this._welcomeInfo(s));
         // What it said while another device was selected: the features reset it on 'welcome'.
-        for (const m of this.heard.replay(next)) if (this._facadeHandlers.has(m.t)) this._facadeEmit(m.t, m);
+        for (const m of this.heard.replay(next)) {
+          if (m.t === 'net.caps' && this.netTap) this.netTap(m); // the net hook's (netlink.js: it asks for Wi-Fi with them)
+          else if (this._facadeHandlers.has(m.t)) this._facadeEmit(m.t, m);
+        }
       }
     }
     this._facadeState();

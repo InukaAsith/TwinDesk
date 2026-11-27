@@ -104,10 +104,10 @@ class Sshd {
     if (this.service !== 'running') return this._info(false, 'remote_login_off');
     const line = OPTIONS + ' ' + this.pendingKey + ' macshare:' + this.peerId();
     const digest = crypto.createHash('sha256').update(line).digest('hex');
-    if (this.cfg.installedKey !== digest || !this._has(line)) {
+    if (this._installed() !== digest || !this._has(line)) {
       try {
         this._install(line);
-        this.cfg.installedKey = digest;
+        this._mark(digest);
         this.save();
         this.message = '';
       } catch (e) {
@@ -116,6 +116,21 @@ class Sshd {
       }
     }
     this._info(true);
+  }
+
+  // What we installed for the device of this session (each device's line by its id; a key installed
+  // before that list existed counts for whichever device it was).
+  _installed() {
+    const map = this.cfg.installedKeys || {};
+    return map[this.peerId()] || (Object.keys(map).length ? '' : this.cfg.installedKey);
+  }
+
+  _mark(digest) {
+    this.cfg.installedKeys = { ...(this.cfg.installedKeys || {}) };
+    if (digest) this.cfg.installedKeys[this.peerId()] = digest;
+    else delete this.cfg.installedKeys[this.peerId()];
+    const left = Object.values(this.cfg.installedKeys);
+    this.cfg.installedKey = digest || left[left.length - 1] || '';
   }
 
   _has(line) {
@@ -145,6 +160,7 @@ class Sshd {
     try {
       if (fs.existsSync(KEYS)) fs.writeFileSync(KEYS, fs.readFileSync(KEYS, 'utf8').split(/\r?\n/).filter((l) => l && !OURS.test(l)).join('\n') + '\n');
       this.cfg.installedKey = '';
+      this.cfg.installedKeys = {};
       this.save();
       this.message = '';
     } catch (e) {
@@ -158,7 +174,7 @@ class Sshd {
     const marker = ' macshare:' + this.peerId();
     try {
       if (fs.existsSync(KEYS)) fs.writeFileSync(KEYS, fs.readFileSync(KEYS, 'utf8').split(/\r?\n/).filter((l) => l && !l.endsWith(marker)).join('\n') + '\n');
-      this.cfg.installedKey = '';
+      this._mark('');
       this.save();
     } catch (e) {
       this.message = '{Name}’s key is still installed: ' + e.message;

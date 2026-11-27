@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('macshare', {
   chooseShareFolder: call('chooseShareFolder'),
   removeShare: call('removeShare'),
   openMacDrive: call('openMacDrive'),
+  openDrive: call('openDrive'),
   listApps: call('listApps'),
   launchApp: call('launchApp'),
   pinApp: call('pinApp'),

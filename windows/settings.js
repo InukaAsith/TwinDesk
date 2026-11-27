@@ -164,7 +164,11 @@ function normalize(s) {
     terminal: {
       enabled: bool(term.enabled, false), // shell on the Mac from this PC
       allowMac: bool(term.allowMac, false), // let the Mac open a shell here (needs OpenSSH Server)
-      installedKey: typeof term.installedKey === 'string' ? term.installedKey : '', // digest of the Mac key line we installed
+      installedKey: typeof term.installedKey === 'string' ? term.installedKey : '', // digest of the last key line we installed ('': none of ours)
+      // Each device's installed line, by its id (Multi-device: switching between two devices with keys
+      // rewrote authorized_keys every time, behind an administrator prompt on Windows).
+      installedKeys: Object.fromEntries(Object.entries(term.installedKeys && typeof term.installedKeys === 'object' ? term.installedKeys : {})
+        .filter(([k, v]) => /^[A-Za-z0-9._-]{1,64}$/.test(k) && /^[0-9a-f]{64}$/.test(v)).slice(0, 32)),
     },
     files: {
       dropToMac: bool(files.dropToMac, false),

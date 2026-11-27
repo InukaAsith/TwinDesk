@@ -27,7 +27,17 @@ class SmbSet {
     // Ours: sent to every connected device; it hears nothing (each device's answers go to its own Smb).
     this.lead = new Smb({ link: this._broadcastLink(), settings, save, onChange });
     bus.onPeer('welcome', (id) => this._welcome(id));
+    // A device that moves off Bluetooth (onto Wi-Fi, or Wi-Fi Direct): its folder connects now, whether
+    // or not it's selected (main.js did it only for the selected device's facade).
+    if (bus.onPeer) bus.onPeer('transport', (id) => this._transport(id));
     for (const id of bus.connectedIds()) this._welcome(id);
+  }
+
+  _transport(id) {
+    const e = this.byId.get(id);
+    if (!e || !this.canMount(id)) return;
+    const smb = e.smb;
+    if (smb.cfg.mountMac && smb.mac && !(smb.mounted || smb.drive)) smb.mount();
   }
 
   // ---- a device comes ----
@@ -107,6 +117,7 @@ class SmbSet {
   set mountMessage(v) { const c = this.current; if (c) c.mountMessage = v; }
 
   mount() { const c = this.current; return c ? c.mount() : Promise.resolve(); }
+  unitOf(id) { const e = this.byId.get(id); return e ? e.smb : null; } // a device's folder (Files › Open {device}'s shared folder)
   mountNow() { const c = this.current; return c ? c.mountNow() : Promise.resolve(); }
   open() { const c = this.current; if (c && c.open) c.open(); }
 
@@ -147,7 +158,7 @@ class SmbSet {
     const drives = [];
     for (const [id, e] of this.byId) {
       const d = e.smb.mounted ? e.smb.mounted.path || e.smb.mounted.uri : e.smb.drive;
-      if (d) drives.push({ id, name: (this.hub.peers().find((x) => x.id === id) || {}).name || '', drive: d });
+      if (d) drives.push({ id, name: (this.hub.peers().find((x) => x.id === id) || {}).name || '', drive: d, selected: id === this.hub.selectedId });
     }
     return {
       ...v,

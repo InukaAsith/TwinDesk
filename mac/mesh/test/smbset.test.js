@@ -39,17 +39,19 @@ class FakeSmb extends EventEmitter {
 function fakeHub() {
   const handlers = new Map();
   const peerFns = [];
+  const transportFns = [];
   const devices = new Map();
   return {
     selectedId: null,
     bus: {
       on: (t, fn) => { if (!handlers.has(t)) handlers.set(t, []); handlers.get(t).push(fn); },
-      onPeer: (ev, fn) => { if (ev === 'welcome') peerFns.push(fn); },
+      onPeer: (ev, fn) => { if (ev === 'welcome') peerFns.push(fn); else if (ev === 'transport') transportFns.push(fn); },
       send: (id, m) => { const d = devices.get(id); if (!d) return false; d.sent.push(m); return true; },
       connectedIds: () => [...devices.keys()],
     },
     sessions: { get: (id) => { const d = devices.get(id); return d ? { id, connected: true, hostUp: true, ctx: { address: d.address }, role: 'host', transport: 'ip', peerOs: 'win', status: {}, lastRx: 0, displayName: () => id } : null; } },
     connect(id, address) { devices.set(id, { address, sent: [] }); for (const fn of peerFns) fn(id, {}); },
+    moved(id) { for (const fn of transportFns) fn(id, {}); },
     from(id, m) { for (const fn of handlers.get(m.t) || []) fn(m, id); },
     sent: (id) => devices.get(id).sent,
   };
@@ -67,7 +69,7 @@ hub.selectedId = 'B';
 hub.from('C', { t: T.SMB_OFFER, share: 'MacShare' });
 assert.strictEqual(set.byId.get('C').smb.mount.path, '/Volumes/10.0.0.3', 'C folder mounted at C address, B selected');
 assert.strictEqual(set.view.mounted, null, 'the view shows the selected device (B)');
-assert.deepStrictEqual(set.view.drives, [{ id: 'C', name: 'C', path: '/Volumes/10.0.0.3' }]);
+assert.deepStrictEqual(set.view.drives, [{ id: 'C', name: 'C', path: '/Volumes/10.0.0.3', selected: false }]);
 set.openPc();
 assert.ok(set.byId.get('C').smb.opened, 'Open: the one mounted folder when the selected device has none');
 hub.from('C', { t: T.SMB_REVOKE, share: 'MacShare' });
@@ -86,5 +88,12 @@ set.stopSharing().then(() => {
   set.wifi = fn;
   hub.connect('D', '10.0.0.4');
   assert.strictEqual(set.byId.get('D').smb.wifi, fn, 'a later device gets the Wi-Fi Direct hook');
+  // A device that isn't selected moves off Bluetooth: its offered folder mounts then (mountPc waits on Bluetooth).
+  const d = set.byId.get('D').smb;
+  d.offer = { share: 'DShare', host: '10.0.0.4' };
+  hub.moved('D');
+  assert.strictEqual(d.mount.path, '/Volumes/10.0.0.4', 'mounted at its move, D not selected');
+  hub.moved('B'); // no offer from B: nothing
+  assert.strictEqual(set.byId.get('B').smb.mount.path, null);
   console.log('passed: smbset');
 });

@@ -69,10 +69,10 @@ class Sshd {
     if (this.service !== 'running') return this._info(false, 'remote_login_off');
     const line = OPTIONS + ' ' + this.pendingKey + ' macshare:' + this.macId();
     const digest = crypto.createHash('sha256').update(line).digest('hex');
-    if (this.cfg.installedKey !== digest) {
+    if (this._installed() !== digest) {
       try {
         await this._install(line);
-        this.cfg.installedKey = digest;
+        this._mark(digest);
         this.save();
         this.message = '';
       } catch (e) {
@@ -81,6 +81,21 @@ class Sshd {
       }
     }
     this._info(true);
+  }
+
+  // What we installed for the device of this session (each device's line by its id; a key installed
+  // before that list existed counts for whichever device it was).
+  _installed() {
+    const map = this.cfg.installedKeys || {};
+    return map[this.macId()] || (Object.keys(map).length ? '' : this.cfg.installedKey);
+  }
+
+  _mark(digest) {
+    this.cfg.installedKeys = { ...(this.cfg.installedKeys || {}) };
+    if (digest) this.cfg.installedKeys[this.macId()] = digest;
+    else delete this.cfg.installedKeys[this.macId()];
+    const left = Object.values(this.cfg.installedKeys);
+    this.cfg.installedKey = digest || left[left.length - 1] || '';
   }
 
   // Replace our marked line in the right authorized_keys file.
@@ -120,6 +135,7 @@ class Sshd {
         if (fs.existsSync(f)) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => l && !OURS.test(l)).join('\n') + '\n');
       }
       this.cfg.installedKey = '';
+      this.cfg.installedKeys = {};
       this.save();
       this.message = '';
     } catch (e) {
@@ -138,7 +154,7 @@ class Sshd {
         const f = path.join(os.homedir(), '.ssh', 'authorized_keys');
         if (fs.existsSync(f)) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => l && !l.endsWith(marker)).join('\n') + '\n');
       }
-      this.cfg.installedKey = '';
+      this._mark('');
       this.save();
     } catch (e) {
       this.message = '{Name}’s key is still installed: ' + e.message;

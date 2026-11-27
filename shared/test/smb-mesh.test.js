@@ -50,12 +50,13 @@ class FakeSmb {
 function fakeHub() {
   const handlers = new Map();
   const peerFns = [];
+  const transportFns = [];
   const devices = new Map(); // id -> {address, name, transport, connected, sent: []}
   const hub = {
     selectedId: null,
     bus: {
       on: (t, fn) => { if (!handlers.has(t)) handlers.set(t, []); handlers.get(t).push(fn); },
-      onPeer: (ev, fn) => { if (ev === 'welcome') peerFns.push(fn); },
+      onPeer: (ev, fn) => { if (ev === 'welcome') peerFns.push(fn); else if (ev === 'transport') transportFns.push(fn); },
       send: (id, m) => { const d = devices.get(id); if (!d || !d.connected) return false; d.sent.push(m); return true; },
       connectedIds: () => [...devices].filter(([, d]) => d.connected).map(([id]) => id),
     },
@@ -64,6 +65,7 @@ function fakeHub() {
     facade: { snapshot: () => ({ link: { address: '' } }) },
     // test helpers
     connect(id, address) { devices.set(id, { address, name: id, transport: 'ip', connected: true, sent: [] }); for (const fn of peerFns) fn(id, {}); },
+    move(id, transport) { devices.get(id).transport = transport; for (const fn of transportFns) fn(id, {}); },
     from(id, m) { for (const fn of handlers.get(m.t) || []) fn(m, id); },
     sent: (id) => devices.get(id).sent,
     device: (id) => devices.get(id),
@@ -87,7 +89,7 @@ function fakeHub() {
   await new Promise((r) => setImmediate(r));
   assert.strictEqual(set.byId.get('C').smb.mounted.uri, 'smb://10.0.0.3/MacShare', 'C folder at C address');
   assert.strictEqual(set.mounted, null, 'the selected device (B) has no folder');
-  assert.deepStrictEqual(set.view().drives, [{ id: 'C', name: 'C', drive: 'smb://10.0.0.3/MacShare' }], 'view lists every connected folder');
+  assert.deepStrictEqual(set.view().drives, [{ id: 'C', name: 'C', drive: 'smb://10.0.0.3/MacShare', selected: false }], 'view lists every connected folder');
   hub.selectedId = 'C';
   assert.strictEqual(set.mounted.uri, 'smb://10.0.0.3/MacShare', 'getters follow the selected device');
   assert.strictEqual(set.view().macShare, 'MacShare');
@@ -116,6 +118,18 @@ function fakeHub() {
   assert.strictEqual(set.view().wifi, true, 'Open offers Wi-Fi Direct');
   await set.mountNow();
   assert.strictEqual(set.mounted.uri, 'smb://10.0.0.2/MacShare');
+
+  // A device that isn't selected moves from Bluetooth to Wi-Fi: its folder connects then by itself.
+  hub.device('C').transport = 'ble';
+  hub.from('C', { t: T.SMB_OFFER, share: 'CShare', user: 'cu', password: 'cp', port: 445 });
+  await new Promise((r) => setImmediate(r));
+  assert.notStrictEqual(hub.selectedId, 'C');
+  assert.strictEqual(set.byId.get('C').smb.mounted, null, 'waits while on Bluetooth');
+  hub.move('C', 'ble'); // a change that's still Bluetooth: nothing
+  assert.strictEqual(set.byId.get('C').smb.mounted, null);
+  hub.move('C', 'ip');
+  await new Promise((r) => setImmediate(r));
+  assert.ok(set.byId.get('C').smb.mounted && /CShare$/.test(set.byId.get('C').smb.mounted.uri), 'connected once on Wi-Fi');
 
   console.log('smb-mesh: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -502,6 +502,9 @@ function setupIpc(ctx) {
     openPcShare() {
       ctx.smb.openPc();
     },
+    openDrive(id) { // another device's folder, connected here (Files)
+      if (typeof id === 'string' && ctx.smb.openDevice) ctx.smb.openDevice(id);
+    },
     setApps(partial) {
       setGroup('apps', partial);
       ctx.apps.applySettings();

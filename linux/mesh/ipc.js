@@ -217,6 +217,7 @@ function setupIpc(ctx) {
   });
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.mounted ? smb.open() : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
+  handle('openDrive', (id) => { const u = typeof id === 'string' && smb.unitOf ? smb.unitOf(id) : null; if (u && u.mounted) u.open(); }); // another device's folder (Files)
   // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh): loaded when turned on, and only then.
   handle('setDrive', async (on) => {
     const d = on === true ? ctx.loadDrive() : ctx.getDrive();

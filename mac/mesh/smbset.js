@@ -21,6 +21,9 @@ class SmbSet extends EventEmitter {
     this._wifi = null;
     this.lead = this._make(this._broadcast());
     hub.bus.onPeer('welcome', (id) => this._welcome(id));
+    // A device that moves off Bluetooth: its folder mounts now, selected or not (mountPc waits while it's
+    // still on Bluetooth, and does nothing when it's mounted already or not offered).
+    hub.bus.onPeer('transport', (id) => { const e = this.byId.get(id); if (e && e.smb.offer) e.smb.mountPc(); });
     for (const id of hub.bus.connectedIds()) this._welcome(id);
   }
 
@@ -89,6 +92,8 @@ class SmbSet extends EventEmitter {
   get onBle() { const c = this.current; return !!c && c.onBle; }
 
   // Settings › Connect the other computer's folder: every device's.
+  openDevice(id) { const e = this.byId.get(id); if (e && e.smb.mount.path) e.smb.openPc(); } // Files › Open {device}'s shared folder
+
   mountPc() { return Promise.all([...this.byId.values()].map((e) => e.smb.mountPc())); }
   unmountPc() { return Promise.all([...this.byId.values()].map((e) => e.smb.unmountPc())); }
 
@@ -120,7 +125,7 @@ class SmbSet extends EventEmitter {
     for (const [id, e] of this.byId) {
       if (!e.smb.mount.path) continue;
       const s = this.hub.sessions.get(id);
-      drives.push({ id, name: s ? s.displayName() : '', path: e.smb.mount.path });
+      drives.push({ id, name: s ? s.displayName() : '', path: e.smb.mount.path, selected: id === this.hub.selectedId });
     }
     const pc = cv || { pcOffered: false, pcShare: null, mounted: null, mountError: null, mounting: false, wifi: false, peer: null };
     return {

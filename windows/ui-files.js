@@ -20,6 +20,18 @@ UI.tab({
     const mount = sw(I18n.t('{Name}’s folder here'), (v) => api.setFiles({ mountMac: v }));
     const openBtn = UI.button(I18n.t('Open'), () => api.openMacDrive(), 'small');
     const macDrive = UI.row(I18n.t('Open {name}’s shared folder'), '', [openBtn, mount]);
+    // Multi-device: every other device's folder connected here, each with its Open (smb view().drives).
+    const drivesBox = el('div');
+    let drivesKey = '';
+    const drawDrives = (list) => {
+      const key = JSON.stringify(list);
+      if (key === drivesKey) return;
+      drivesKey = key;
+      drivesBox.replaceChildren(...list.map((d) => {
+        const r = UI.row(I18n.t('Open {device}’s shared folder', { device: d.name }), d.drive || d.path || '', [UI.button(I18n.t('Open'), () => api.openDrive(d.id), 'small')], { literal: true });
+        return r;
+      }));
+    };
     const share = sw(I18n.t('{me}’s folder on {name}'), (v) => api.setShareOn(v));
     const chooseBtn = UI.button(I18n.t('Choose…'), () => api.chooseShareFolder(), 'small');
     const sharePill = el('span', { class: 'pill' });
@@ -27,6 +39,7 @@ UI.tab({
     const pair = UI.dirCards(
       { on: { get: (s) => s.files.acceptFromMac, set: (v) => api.setFiles({ acceptFromMac: v }) }, label: I18n.t('Take files from {name} on {me}'), rows: [
         macDrive,
+        drivesBox,
       ] },
       { on: { get: (s) => s.files.dropToMac, set: (v) => api.setFiles({ dropToMac: v }) }, label: I18n.t('Send files from {me} to {name}'), rows: [
         pcShare,
@@ -132,6 +145,7 @@ UI.tab({
       edgeRow.setHint(f.edgeDrag && f.macDrags === false ? I18n.t('Turned off on {name}') : f.edgeDrag ? I18n.t('Drag through the screen edge and drop anywhere') : '');
       mount.set(f.mountMac);
       openBtn.hidden = !m.drive && !m.wifi;
+      drawDrives(api.openDrive && Array.isArray(m.drives) ? m.drives.filter((d) => (d.drive || d.path) && !d.selected) : []);
       macDrive.setHint(m.mountMessage ? I18n.t(m.mountMessage) : (!f.mountMac ? '' : m.drive ? I18n.t('Drive {drive}', { drive: m.drive }) : m.busy === 'mount' ? I18n.t('Connecting…')
         : m.wifi ? I18n.t('Over Bluetooth: Open connects it with Wi-Fi Direct') : I18n.t('Waiting for {name} to share one')));
       share.set(f.shareOn);
