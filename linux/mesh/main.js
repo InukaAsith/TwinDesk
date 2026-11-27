@@ -250,7 +250,10 @@ function start() {
     try { new Notification({ title, body }).show(); } catch {}
   });
   const { Chats } = require('../../shared/chats.js');
-  chats = new Chats({ link, dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
+  chats = new Chats({ // every phone's conversations, each under its own id; the Messages page's phone answered (#313)
+    mesh: { bus: hub.bus, isPhone: (id) => { const s = hub.sessions.get(id); return !!s && P.isPhoneOs(s.peerOs); } },
+    who: () => (phoneLink && phoneLink.current && phoneLink.current.deviceId) || '',
+    dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
   hub.on('change', () => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected
     pushState();
@@ -260,13 +263,16 @@ function start() {
   clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard(), session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) }); // wl-clipboard where Wayland needs it (#97)
   wlClipboardMissing = require('../wlclip').missing(); // other apps' copies unseen here (#97)
   if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
+  // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
+  // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
+  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()));
   screen = new Screen({
-    link,
+    link: screenLink,
     clip,
     inputAllowed: () => !kvm || kvm.mode === 'home', // no Monitor 2 input while driving or driven
     settings,
     saveSettings,
-    onChange: pushState,
+    onChange: () => { screenLink.follow(); pushState(); }, // closed: it follows the selection again
     isQuitting: () => quitting,
   });
   // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
@@ -275,15 +281,15 @@ function start() {
     make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, onProgress: () => { screen.sendDropProgress(fillAll(fileDrop.view())); pushState(); } }),
   });
   screen.fileDrop = fileDrop;
-  // Monitor 2 shows the selected device's screen. Open and showing nothing, it follows a device that
-  // starts sharing (#256: a PC driving this one shared its Extend screen while another device was
-  // selected, and nothing came).
+  // Monitor 2 open and showing nothing follows a device that starts sharing (#256: a PC driving this one
+  // shared its Extend screen while another device was selected, and nothing came).
   hub.bus.on(P.T.SCREEN_STATE, (m, from) => {
-    if (m.on !== true || from === hub.selectedId || screen.state.state === 'on') return;
+    if (m.on !== true || from === screenLink.id || screen.state.state === 'on') return;
     const w = screen.win;
     if (!w || w.isDestroyed() || !w.isVisible()) return;
     console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
     hub.select(from);
+    screenLink.moveTo(from); // open, it doesn't follow the selection by itself
   });
   sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
@@ -442,7 +448,10 @@ function start() {
   vdd.check(); // Extend: can this desktop add a virtual monitor? (and one left on by a crash goes)
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
+  // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
+  // with the device they went to until they're back (hub.sticky; #313). Their own sender, numbered apart.
+  const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size));
+  pcApps = new PcApps({ link: appsLink, helper, sender: Object.assign(new Sender(appsLink), { counter: 2000000 }), settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
@@ -453,6 +462,7 @@ function start() {
     const wid = Number(m.moving);
     if (!wid || peerApps.returnWindow(wid)) return;
     if (!settings.pcApps.moveWindows) return;
+    if (pcApps.moved.size && to && to !== appsLink.id) return console.log('[apps] window not moved: windows are on another device now (bring them back first)'); // one device at a time
     if (!meshMoves.ready(to, (v) => { pcApps.macAccepts = v; })) return;
     pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined).then((ok) => ok || console.log(`[apps] window not moved: ${pcApps.macAccepts ? 'it can’t go (Bluetooth, gone, already there)' : 'Move windows is off on the other computer'}`));
   };

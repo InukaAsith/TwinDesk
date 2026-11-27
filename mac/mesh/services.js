@@ -84,7 +84,20 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
-  const appSend = new AppSend({ server, helper, getSettings: s }); // This Mac's apps on another Mac
+  // This Mac's apps on another Mac, and Move windows: the selected device's, except while windows are moved
+  // out: they stay with the device they went to until they're back, or it goes (#313: a pointer visit to a
+  // third device took them home, and their copies there froze).
+  let appSendRef = null;
+  let appsTo = null;
+  const appsRoute = meshHub.route((h) => {
+    const s = appsTo ? h.sessions.get(appsTo) : null;
+    const keep = !!(appSendRef && appSendRef.moved && appSendRef.moved.size && s && s.connected);
+    appsTo = keep ? appsTo : h.selectedId;
+    return appsTo;
+  });
+  const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s });
+  appSendRef = appSend;
+  appSend.on('change', () => appsRoute.refresh()); // windows back: it follows the selection again
   const wake = new Wake({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   kvm.blockEdge = () => pcView.focused || pcApps.focused; // moving inside the PC window never crosses to the PC
 

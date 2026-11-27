@@ -15,6 +15,10 @@
 // A phone without them (an older TwinDesk) never sends chat.conv: Messages then builds the chats
 // from the notifications (shared/ui-messages.js), as before.
 // link: on('welcome' | 'closed' | type, fn), send(msg), current?: {deviceId}; want(): the switch.
+// Multi-device: mesh {bus, isPhone(id)} instead of the facade's link (#313: a phone that wasn't the
+// selected device had its conversations dropped, and was never told chat.want). Every phone's
+// chat.conv is kept under its own id, each connected phone is told chat.want, and who() (the phone
+// the Messages page shows) is the one answered, as the page's texts are.
 'use strict';
 
 const fs = require('fs');
@@ -36,9 +40,10 @@ const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
 const same = (a, b) => a.me === b.me && a.text === b.text && Math.abs(a.at - b.at) < (a.local || b.local ? 5 * 60000 : 1500);
 
 class Chats {
-  constructor({ link, dir, want, who, onChange }) {
-    Object.assign(this, { link, want, onChange: onChange || (() => {}) });
-    this.who = who || (() => (link.current && link.current.deviceId) || '');
+  constructor({ link, mesh, dir, want, who, onChange }) {
+    Object.assign(this, { link, mesh: mesh || null, want, onChange: onChange || (() => {}) });
+    this.who = who || (() => (link && link.current && link.current.deviceId) || '');
+    this.up = new Map(); // mesh: phone id -> what it was told (null: nothing yet this session)
     this.file = path.join(dir, 'chats.json');
     this.phones = {}; // deviceId -> {key -> conv}
     this.sessionUp = false;
@@ -48,6 +53,16 @@ class Chats {
       const j = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       if (j && typeof j.phones === 'object') this.phones = j.phones;
     } catch {}
+    if (this.mesh) {
+      const { bus, isPhone } = this.mesh;
+      const came = (id) => { if (isPhone(id)) { this.up.set(id, null); this.sync(); } };
+      bus.onPeer('welcome', came);
+      bus.onPeer('closed', (id) => this.up.delete(id));
+      for (const id of bus.connectedIds()) came(id);
+      bus.on(T.CONV, (m, from) => isPhone(from) && this._conv(m || {}, from));
+      bus.on(T.PICD, (m, from) => isPhone(from) && this._picd(m || {}, from));
+      return;
+    }
     link.on('welcome', () => {
       this.sessionUp = true;
       this.sentWant = null;
@@ -61,18 +76,35 @@ class Chats {
     link.on(T.PICD, (m) => this._picd(m || {}));
   }
 
-  // Tell the phone whether to send them (the switch changed, or a new session).
+  // The phone shown (who()) is connected now.
+  get live() {
+    return this.mesh ? this.up.has(this.who()) : this.sessionUp;
+  }
+
+  // To the phone shown.
+  _send(m) {
+    return this.mesh ? this.mesh.bus.send(this.who(), m) : this.link.send(m);
+  }
+
+  // Tell the phone whether to send them (the switch changed, or a new session); in Multi-device, every phone.
   sync() {
     const on = !!this.want();
+    if (this.mesh) {
+      for (const [id, told] of this.up) {
+        if (told === on) continue;
+        if (this.mesh.bus.send(id, { t: T.WANT, on })) this.up.set(id, on);
+      }
+      return;
+    }
     if (!this.sessionUp || on === this.sentWant) return;
     this.sentWant = on;
     this.link.send({ t: T.WANT, on });
   }
 
-  _conv(m) {
+  _conv(m, from) {
     const app = str(m.app, 80);
     const key = str(m.key, 300);
-    const dev = this.who();
+    const dev = from || this.who();
     if (!isChatApp(app) || !key || !dev || !Array.isArray(m.items)) return;
     this.heard = true;
     const convs = (this.phones[dev] = this.phones[dev] || {});
@@ -115,8 +147,8 @@ class Chats {
     const c = (this.phones[this.who()] || {})[key];
     const t = typeof text === 'string' ? text.trim().slice(0, 5000) : '';
     if (image) return this.picture(c, t, image);
-    if (!c || !c.id || !c.reply || !t || !this.sessionUp) return false;
-    this.link.send({ t: 'notif.reply', id: c.id, text: t });
+    if (!c || !c.id || !c.reply || !t || !this.live) return false;
+    this._send({ t: 'notif.reply', id: c.id, text: t });
     c.items.push({ at: Date.now(), from: '', text: t, me: true, local: true });
     c.at = Date.now();
     this._save();
@@ -127,9 +159,9 @@ class Chats {
   // A picture (and its caption) to a conversation: shown at once as "Picture", its state after it
   // as the phone says (chat.picd): sent, or open on the phone to send there, or not sent.
   picture(c, text, image) {
-    if (!c || !c.pic || !this.sessionUp || typeof image !== 'string' || image.length > 6000000 || !PICTURE.test(image)) return false;
+    if (!c || !c.pic || !this.live || typeof image !== 'string' || image.length > 6000000 || !PICTURE.test(image)) return false;
     const ref = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    this.link.send({ t: T.PIC, ref, id: c.id || '', app: c.app, chat: c.key.slice(c.app.length + 1), image, text });
+    this._send({ t: T.PIC, ref, id: c.id || '', app: c.app, chat: c.key.slice(c.app.length + 1), image, text });
     c.items.push({ at: Date.now(), from: '', text, me: true, local: true, pic: 'sending', ref });
     c.at = Date.now();
     this._save();
@@ -137,9 +169,9 @@ class Chats {
     return true;
   }
 
-  _picd(m) {
+  _picd(m, from) {
     const ref = str(m.ref, 60);
-    for (const c of Object.values(this.phones[this.who()] || {})) {
+    for (const c of Object.values(this.phones[from || this.who()] || {})) {
       const it = c.items.find((x) => x.ref === ref);
       if (!it) continue;
       it.pic = m.ok ? (m.opened ? 'opened' : 'sent') : 'failed';
@@ -185,7 +217,7 @@ class Chats {
     const convs = this.phones[this.who()];
     if (!convs && !this.heard) return null;
     return Object.values(convs || {}).sort((a, b) => b.at - a.at).slice(0, VIEW_CONVS)
-      .map((c) => ({ key: c.key, app: c.app, appName: c.appName, name: c.name, group: c.group, reply: !!(c.reply && this.sessionUp), pic: !!(c.pic && this.sessionUp), avatar: c.avatar || '', at: c.at, items: c.items.slice(-VIEW_ITEMS) }));
+      .map((c) => ({ key: c.key, app: c.app, appName: c.appName, name: c.name, group: c.group, reply: !!(c.reply && this.live), pic: !!(c.pic && this.live), avatar: c.avatar || '', at: c.at, items: c.items.slice(-VIEW_ITEMS) }));
   }
 
   stop() {

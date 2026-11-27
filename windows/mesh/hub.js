@@ -549,6 +549,79 @@ class Hub extends EventEmitter {
     return link;
   }
 
+  // A link that follows the selection, except while hold() says it's in use: it stays with its device then
+  // (Apps › Move windows, #313: a pointer visit to a third device took the moved windows home, their copies
+  // there kept a frozen picture, and closing one couldn't bring its window back). Moving to another device
+  // is a 'closed' for the one it leaves and a 'welcome' for the next, with what that one said meanwhile
+  // (peerstate.js), as the facade's are; its device going is the scoped link's own 'closed'. follow():
+  // look again (hold() just ended). current: that device, as the facade's current.
+  sticky(hold = () => false) {
+    const hub = this;
+    const link = this.scoped(this.selectedId);
+    const fns = new Map(); // type -> [fn]: told again on a move
+    const said = new Said(); // the policies it told its device: switched off there when it leaves (GOODBYE)
+    let moves = 0;
+    const on = link.on;
+    link.on = (type, fn) => { addTo(fns, type, fn); on(type, fn); };
+    const send = link.send;
+    link.send = (obj) => {
+      const ok = send(obj);
+      if (ok) said.note(link.id, obj);
+      return ok;
+    };
+    on('closed', () => said.forget(link.id)); // its device went: nothing to switch off there
+    const tell = (id) => {
+      const s = id ? hub.sessions.get(id) : null;
+      if (!s || !s.connected) return;
+      for (const fn of fns.get('welcome') || []) fn(hub._welcomeInfo(s));
+      for (const m of hub.heard.replay(id)) for (const fn of fns.get(m.t) || []) fn(m);
+    };
+    // To another device: 'closed' here, what it told the old one switched off there, 'welcome' for the new.
+    link.moveTo = (next) => {
+      next = next || null;
+      if (next === link.id) return;
+      const was = link.id;
+      if (was) {
+        for (const fn of fns.get('closed') || []) fn({});
+        const old = hub.sessions.get(was);
+        for (const m of said.goodbyes(was)) if (old && old.connected) old.send(m);
+      }
+      link.bind(next);
+      moves++;
+      tell(next);
+    };
+    link.follow = () => { if (!hold()) link.moveTo(hub.selectedId); };
+    const view = () => {
+      const s = link.id ? hub.sessions.get(link.id) : null;
+      return s && s.connected ? s : null;
+    };
+    Object.defineProperty(link, 'current', {
+      get() {
+        const s = view();
+        if (!s) return null;
+        const hosting = s.hosting;
+        return {
+          deviceId: s.id, name: s.displayName(), os: s.peerOs, role: s.role, transport: s.transport,
+          address: hosting ? s.ctx.address : (s.link && s.link.pairing ? s.link.pairing.address : ''),
+          rttMs: s.status.rtt, lastRx: s.lastRx, ws: hosting ? s.ctx.ws : (s.link ? s.link.ws : null),
+        };
+      },
+    });
+    // The facade's snapshot() shape, of its device (Monitor 2's title reads link.macName).
+    link.snapshot = () => {
+      const s = view();
+      if (!s) return { link: hub._nothingLink(), session: null };
+      const c = link.current;
+      return { link: { state: 'connected', rtt: c.rttMs, message: '', macName: c.name, address: c.address }, session: { id: s.id, name: c.name, os: c.os } };
+    };
+    this.on('selected', () => link.follow());
+    // Made while its device is already up: its users (made right after) hear that device's 'welcome' and
+    // what it said, as if it had just come.
+    setImmediate(() => { if (!moves) tell(link.id); }); // moved meanwhile: that move told them
+    return link;
+  }
+
+
   _makeFacade() {
     const hub = this;
     const chunk = (obj) => { if (obj && obj.t === P.T.FILE_CHUNK) fx.sentChunk(); }; // Engines in use: the old way
