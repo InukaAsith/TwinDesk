@@ -2372,4 +2372,11 @@
   "Open {device}’s shared folder": "Abrir a pasta compartilhada de {device}",
   "Lock together": "Bloquear juntos",
   "This computer locks when another connected computer locks, and the other way round. On each computer": "Este computador bloqueia quando outro computador conectado bloqueia, e vice-versa. Ative em cada computador",
+  "Who shares what": "Quem compartilha o quê",
+  "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.": "Cada linha envia para cada coluna. Mude a linha deste computador (o que ele envia) ou a coluna dele (o que ele recebe); as células dos outros dispositivos são deles.",
+  "From ↓ · to →": "De ↓ · para →",
+  "{from} doesn’t send it to {to}": "{from} não envia isso para {to}",
+  "{to} doesn’t take it from {from}": "{to} não recebe isso de {from}",
+  "Not known: {who} runs an older TwinDesk": "Desconhecido: {who} usa um TwinDesk mais antigo",
+  "On, not connected now": "Ligado, sem conexão agora",
 });

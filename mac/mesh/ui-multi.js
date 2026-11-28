@@ -57,6 +57,9 @@ UI.tab({
     }
 
 
+    // ---- the matrix: who shares what, the whole mesh (shared/ui-matrix.js, docs/mesh-graph.md step 6) ----
+    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on) });
+
     const joinSw = UI.switch((v) => api.setMesh({ autoJoin: v }), { label: I18n.t('Join every device automatically') });
     const joinRow = UI.row(I18n.t('Join every device automatically'), '', [joinSw]);
     // The other devices' logs, copied into this one's log folder (shared/peerlogs.js, docs/peer-logs.md).
@@ -73,6 +76,7 @@ UI.tab({
         UI.row(I18n.t('Use several devices at once'), I18n.t('On. TwinDesk restarts when you turn it on or off'), [turnOff]),
       ]),
       UI.card(I18n.t('Layout'), [map.el, actions, reachNote, layoutHint, skipRow], { cls: 'keep-on' }),
+      UI.card(I18n.t('Who shares what'), [matrix.el]),
       UI.card(I18n.t('Joining'), [joinRow]),
       UI.card(I18n.t('Logs'), logRows),
     );
@@ -80,6 +84,7 @@ UI.tab({
     return (s) => {
       last = s;
       drawLayout(s);
+      matrix.render(s.matrix);
       const jn = !!(s.mesh && s.mesh.autoJoin === true);
       joinSw.set(jn);
       shareLogSw.set(!s.mesh || s.mesh.shareLogs !== false);

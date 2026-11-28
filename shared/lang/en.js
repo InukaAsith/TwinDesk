@@ -2373,4 +2373,11 @@
   "Open {device}’s shared folder": "Open {device}’s shared folder",
   "Lock together": "Lock together",
   "This computer locks when another connected computer locks, and the other way round. On each computer": "This computer locks when another connected computer locks, and the other way round. On each computer",
+  "Who shares what": "Who shares what",
+  "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.": "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.",
+  "From ↓ · to →": "From ↓ · to →",
+  "{from} doesn’t send it to {to}": "{from} doesn’t send it to {to}",
+  "{to} doesn’t take it from {from}": "{to} doesn’t take it from {from}",
+  "Not known: {who} runs an older TwinDesk": "Not known: {who} runs an older TwinDesk",
+  "On, not connected now": "On, not connected now",
 });

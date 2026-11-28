@@ -2372,4 +2372,11 @@
   "Open {device}’s shared folder": "Открыть общую папку {device}",
   "Lock together": "Блокировать вместе",
   "This computer locks when another connected computer locks, and the other way round. On each computer": "Этот компьютер блокируется, когда блокируется другой подключённый компьютер, и наоборот. Включите на каждом компьютере",
+  "Who shares what": "Кто чем делится",
+  "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.": "Каждая строка отправляет каждому столбцу. Переключайте строку этого компьютера (что он отправляет) или его столбец (что он принимает); ячейки других устройств — их собственные.",
+  "From ↓ · to →": "От ↓ · к →",
+  "{from} doesn’t send it to {to}": "{from} не отправляет это на {to}",
+  "{to} doesn’t take it from {from}": "{to} не принимает это от {from}",
+  "Not known: {who} runs an older TwinDesk": "Неизвестно: на {who} старая версия TwinDesk",
+  "On, not connected now": "Включено, сейчас не подключено",
 });

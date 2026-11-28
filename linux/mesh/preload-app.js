@@ -133,6 +133,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setNet: call('setNet'),
   wifiSetup: call('wifiSetup'),
   setMesh: call('setMesh'),
+  setConsent: call('setConsent'), // the matrix: one of this computer's own cells
   debugAsk: call('debugAsk'), // Debug: ask a device of the mesh (or 'self') — shared/debug-start.js
   setDebug: call('setDebug'), // Debug › This computer: who may debug it, Allow any command
   debugShow: call('debugShow'), // Debug: show a kept log or screenshot in its folder

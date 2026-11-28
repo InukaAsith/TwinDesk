@@ -151,6 +151,7 @@ let updates = null;
 let updateNote = null; // the update notification, kept so it isn't collected before a click
 let pairSync = null;
 let consent = null; // each device's own two-way switches (shared/consent.js)
+let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
 let terminal = null;
 let sshd = null;
 let apps = null;
@@ -564,7 +565,7 @@ function start() {
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
   const ipc = setupIpc({ dbg: () => dbg, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
-    devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
+    devctl: () => devctl, chats: () => chats, consent: () => consent, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
@@ -584,6 +585,15 @@ function start() {
       onPair: (pid) => consent.changed(pid),
     });
   }
+  // The whole mesh's two-way switches, every device telling the others (shared/mesh-edges.js): the
+  // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
+  edges = require('../../shared/mesh-edges.js').meshEdges({
+    bus: hub.bus, mesh, selfId: device.id, consent,
+    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+    names: (pid) => (pid === device.id ? device.name : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).name || '')),
+    os: (pid) => (pid === device.id ? P.OS.LINUX : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).os || '')),
+    connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+  });
   nativeTheme.on('updated', pushState);
   link.start();
   hub.bus.onPeer('welcome', (pid) => { // a Mac app's launcher was used while the Mac wasn't connected: a Mac connects
@@ -1180,6 +1190,7 @@ function pushState() {
       if (pcScreen) pcScreen.sendState(); // the viewer learns what we share
       if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
       if (pairSync) pairSync.check(); // tell the other computer what changed here
+      if (edges) edges.tick(); // the matrix: ours to every device when it changed
       const phase = s.pairing ? s.pairing.phase : null;
       if (phase === 'code' && lastPairPhase !== 'code') showMain(); // a code to compare: to the front
       lastPairPhase = phase;
@@ -1328,6 +1339,7 @@ function buildState() {
     peer: peerView(),
     // Every paired device (connected or not), and the mesh's selection and live links.
     peers: hub.peers({ indirect: true }),
+    matrix: edges ? edges.view() : null, // the Multi-device tab's matrix (shared/mesh-edges.js)
     mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin === true, pcBle: false, shareLogs: settings.mesh.shareLogs !== false, collectLogs: settings.mesh.collectLogs !== false },
     debug: dbg ? dbg.view() : null, // Debug tab (shared/debug-start.js)
     localApi: localApi ? localApi.view() : null, // General › Local API

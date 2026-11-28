@@ -110,6 +110,7 @@ function applyLocalApi() {
 }
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let consent = null; // each device's own two-way switches (shared/consent.js)
+let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 
@@ -249,6 +250,7 @@ function publishState() {
     state.ui = settings.ui;
     state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.mesh = settings.mesh;
+    state.matrix = edges ? edges.view() : null; // the Multi-device tab's matrix (shared/mesh-edges.js)
     state.debug = dbg ? dbg.view() : null; // Debug tab (shared/debug-start.js)
     state.localApi = localApi ? localApi.view() : null; // General › Local API
     state.app = settings.app;
@@ -305,6 +307,7 @@ function publishState() {
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
+    if (edges) edges.tick(); // the matrix: ours to every device when it changed
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
     updateTray();
@@ -1061,6 +1064,18 @@ app.whenReady().then(() => {
       onPair: (pid) => consent.changed(pid),
     });
   }
+  // The whole mesh's two-way switches, every device telling the others (shared/mesh-edges.js): the
+  // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
+  {
+    const known = (pid) => hub.peers().find((x) => x.id === pid) || mesh.known().find((x) => x.id === pid) || {};
+    edges = require('../../shared/mesh-edges.js').meshEdges({
+      bus: hub.bus, mesh, selfId: id.macId, consent,
+      features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+      names: (pid) => (pid === id.macId ? id.macName : known(pid).name || ''),
+      os: (pid) => (pid === id.macId ? P.OS.MAC : known(pid).os || ''),
+      connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+    });
+  }
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,
@@ -1078,7 +1093,9 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent,
+    syncAction: (f, dir, on) => SYNC_ACTIONS[f] && SYNC_ACTIONS[f](dir, on), // the matrix: the selected device's cell is the settings
+    state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

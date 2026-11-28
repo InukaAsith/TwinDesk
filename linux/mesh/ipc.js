@@ -412,6 +412,21 @@ function setupIpc(ctx) {
     if (ctx.pcScreen.mode !== 'off') ctx.pcScreen.setMode('off'); // Bluetooth can't carry the screen
   });
 
+  // The matrix (shared/ui-matrix.js): one of this computer's own cells, its pair with a device one way. The
+  // selected device's pair is the settings (the pages show it: pairsync-mesh.js tells it), any other's its
+  // saved pair (shared/consent.js tells it).
+  handle('setConsent', (id, feature, dir, on) => {
+    const c = ctx.consent && ctx.consent();
+    const F = require('../pairsync').FEATURES;
+    if (!c || typeof id !== 'string' || !F[feature] || !F[feature][dir] || typeof on !== 'boolean') return;
+    if (id === hub.selectedId) {
+      const [sec, key] = F[feature][dir];
+      return change(sec, { [key]: on }, AFTER[sec]);
+    }
+    c.set(id, feature, dir, on);
+    ctx.push();
+  });
+
   // pairsync.js applies a value the other computer changed, with the same side effects.
   const AFTER = {
     clipboard: () => clip.applySettings(),
