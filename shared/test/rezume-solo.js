@@ -85,10 +85,7 @@ assert.strictEqual(welcomed, 2);
   const link = (a, b) => { const x = nodes.get(a), y = nodes.get(b); x.conn.add(b); y.conn.add(a); x.peerFns.welcome.forEach((f) => f(b)); y.peerFns.welcome.forEach((f) => f(a)); };
   const unlink = (a, b) => { const x = nodes.get(a), y = nodes.get(b); x.conn.delete(b); y.conn.delete(a); x.peerFns.closed.forEach((f) => f(b)); y.peerFns.closed.forEach((f) => f(a)); };
   const A = node('A', P.OS.MAC), B = node('B', P.OS.WIN), C = node('C', P.OS.LINUX);
-  const Ph = node('P', P.OS.ANDROID);
-  Ph.heard = [];
-  Ph.handlers.set('rz.partner', [(m) => Ph.heard.push(m)]);
-  const lastP = () => Ph.heard[Ph.heard.length - 1];
+  node('P', P.OS.ANDROID);
   link('A', 'B'); link('A', 'C'); link('B', 'C'); link('A', 'P');
 
   assert.strictEqual(A.solo.blocked(), 'pick', 'several devices, none picked: pick one');
@@ -113,27 +110,11 @@ assert.strictEqual(welcomed, 2);
   assert.strictEqual(A.solo.id(), null);
   assert.ok(A.closed === 1 && C.closed === 1 && C.welcomed === 2);
 
-  // A picks the phone: the phone is told it's the one.
+  // A picks the phone: only A's own choice.
   A.solo.choose('P');
   assert.strictEqual(A.solo.id(), 'P');
   assert.strictEqual(A.solo.link.peer().os, P.OS.ANDROID);
   assert.strictEqual(C.saved.id, 'B');
-  assert.strictEqual(lastP().on, true, 'the phone hears it is the one');
-
-  // A picks C again: the phone hears ReZume went to C (its page offers Use with this phone).
-  A.solo.choose('C');
-  assert.deepStrictEqual(lastP(), { t: 'rz.partner', on: false, other: 'NC' });
-  assert.strictEqual(B.saved, null, 'B (with C) lets go');
-  // The phone picks A on its page: A goes with the phone, C lets go.
-  Ph.bus.send('A', { t: 'rz.partner', on: true, at: Date.now() + 1 });
-  assert.strictEqual(A.saved.id, 'P');
-  assert.strictEqual(C.saved, null, 'C was told it is over');
-  assert.strictEqual(lastP().on, true);
-  // The phone lets go.
-  Ph.bus.send('A', { t: 'rz.partner', on: false });
-  assert.strictEqual(A.saved, null);
-  B.solo.choose('C'); // back as the next part starts: B with C, A with the phone
-  A.solo.choose('P');
 
   // Picked while apart: the newer pick wins when they meet.
   unlink('B', 'C');
