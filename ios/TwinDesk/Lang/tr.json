@@ -963,5 +963,20 @@
   "Screenshot": "Ekran görüntüsü",
   "Couldn’t take the screenshot": "Ekran görüntüsü alınamadı",
   "Screenshot saved in Photos": "Ekran görüntüsü Fotoğraflar’a kaydedildi",
-  "Allow TwinDesk to add photos in Settings": "Ayarlar’da TwinDesk’in fotoğraf eklemesine izin verin"
+  "Allow TwinDesk to add photos in Settings": "Ayarlar’da TwinDesk’in fotoğraf eklemesine izin verin",
+  "Failed: {reason}": "Başarısız: {reason}",
+  "Getting new provisioning profiles": "Yeni hazırlama profilleri alınıyor",
+  "Not reached": "Sırası gelmedi",
+  "Refresh all": "Tümünü yenile",
+  "Refresh all finished": "Tümünü yenileme bitti",
+  "Refreshed. Valid until {date}.": "Yenilendi. {date} tarihine kadar geçerli.",
+  "Signing again: the certificate or Apple ID changed": "Yeniden imzalanıyor: sertifika veya Apple Kimliği değişti",
+  "Skipped: a free Apple ID runs 3 apps at a time.": "Atlandı: ücretsiz Apple Kimliği aynı anda 3 uygulama çalıştırır.",
+  "Skipped: it has to be signed again, and its IPA isn’t stored on {name}.": "Atlandı: yeniden imzalanması gerekiyor ve IPA dosyası {name} üzerinde saklı değil.",
+  "Skipped: no app ID left this week.": "Atlandı: bu hafta boş uygulama kimliği kalmadı.",
+  "Skipped: no app ID left this week. Apple frees one on {date}.": "Atlandı: bu hafta boş uygulama kimliği kalmadı. Apple {date} tarihinde bir tane boşaltır.",
+  "The operation failed": "İşlem başarısız oldu",
+  "Waiting": "Bekliyor",
+  "Your sideloaded apps": "Yandan yüklenmiş uygulamalarınız",
+  "{done} refreshed, {skipped} skipped, {failed} failed.": "{done} yenilendi, {skipped} atlandı, {failed} başarısız."
 }

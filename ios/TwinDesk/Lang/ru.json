@@ -963,5 +963,20 @@
   "Screenshot": "Снимок экрана",
   "Couldn’t take the screenshot": "Не удалось сделать снимок экрана",
   "Screenshot saved in Photos": "Снимок экрана сохранён в «Фото»",
-  "Allow TwinDesk to add photos in Settings": "Разрешите TwinDesk добавлять фото в «Настройках»"
+  "Allow TwinDesk to add photos in Settings": "Разрешите TwinDesk добавлять фото в «Настройках»",
+  "Failed: {reason}": "Ошибка: {reason}",
+  "Getting new provisioning profiles": "Получение новых профилей обеспечения",
+  "Not reached": "Не дошло",
+  "Refresh all": "Обновить все",
+  "Refresh all finished": "Обновление всех завершено",
+  "Refreshed. Valid until {date}.": "Обновлено. Действует до {date}.",
+  "Signing again: the certificate or Apple ID changed": "Повторная подпись: сертификат или Apple ID изменились",
+  "Skipped: a free Apple ID runs 3 apps at a time.": "Пропущено: бесплатный Apple ID допускает 3 приложения одновременно.",
+  "Skipped: it has to be signed again, and its IPA isn’t stored on {name}.": "Пропущено: его нужно подписать заново, а его IPA не сохранён на {name}.",
+  "Skipped: no app ID left this week.": "Пропущено: на этой неделе не осталось идентификаторов приложений.",
+  "Skipped: no app ID left this week. Apple frees one on {date}.": "Пропущено: на этой неделе не осталось идентификаторов приложений. Apple освободит один {date}.",
+  "The operation failed": "Операция не удалась",
+  "Waiting": "Ожидание",
+  "Your sideloaded apps": "Ваши установленные вручную приложения",
+  "{done} refreshed, {skipped} skipped, {failed} failed.": "Обновлено: {done}, пропущено: {skipped}, ошибок: {failed}."
 }

@@ -21,6 +21,11 @@
 // shows it), sign.start → sign.key → sign.box (a sealed run), sign.ev (the helper's events),
 // sign.want (time to refresh), sign.keep (the state, to keep), sign.stop.
 //
+// Refresh all (here, or sign.start {all} from the iPhone): one run for every app on the device, as
+// AltStore does it. One sign-in, every app's new profiles asked of Apple at once and installed in one
+// go; only an app that must be signed again is, TwinDesk last; what Apple's limits don't allow yet
+// (no app ID left this week, a free Apple ID's 3 apps) is skipped. Each app's progress: sign.ev {ev: 'item'}.
+//
 // Updates: the latest release is looked up (every 6 hours while this is on). When the TwinDesk on the
 // device is older, Update TwinDesk (here, or on the iPhone: sign.start {update}) signs and installs
 // the release's IPA, downloaded fresh, in place of the refresh's kept copy; the app's data stays.
@@ -252,10 +257,11 @@ class IosSign extends EventEmitter {
 
   // The iPhone's app is asked for a refresh: now (Refresh now here), or by itself (cfg.how: 'ask'
   // shows a notification there to tap; 'self' refreshes while it's unlocked, else the notification).
-  _want({ now = false, app = '', expires = 0, update = '' } = {}) {
+  _want({ now = false, app = '', expires = 0, update = '', all = false } = {}) {
     const c = this.cfg();
     const m = { t: T.WANT, ask: c.how === 'ask', name: '' };
     if (now) m.now = true;
+    if (all) m.all = true; // Refresh all
     if (update) { m.update = update; m.name = 'TwinDesk'; } // update: the version it goes to
     if (app) {
       m.app = app;
@@ -287,7 +293,7 @@ class IosSign extends EventEmitter {
       ids: this.ids || null, twindeskIpa: !!this._twindeskIpa(udid),
       update: this._update(udid), latest: this.latest, autoUpdate: c.update === true,
       ipa: this.ipa ? path.basename(this.ipa) : '',
-      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), note: r.note || '', ipa: r.ipa ? path.basename(r.ipa) : '' } : null,
+      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), note: r.note || '', ipa: r.ipa ? path.basename(r.ipa) : '', items: r.items ? r.items.map((x) => ({ ...x })) : null } : null,
       last: this.last,
     };
   }
@@ -413,6 +419,21 @@ class IosSign extends EventEmitter {
     return req;
   }
 
+  // Refresh all: every app on the device in one run (the helper's refresh_all). TwinDesk's IPA is the
+  // kept copy or the release; another app's is its kept IPA, needed only if it must be signed again.
+  // Without other-IPA installs in this build, TwinDesk is the only app.
+  _all(req, udid) {
+    const anyIpa = !!(this.info && this.info.anyIpa);
+    req.refresh_all = (this.apps[udid] || []).filter((a) => a.twindesk || anyIpa).map((a) => {
+      const one = { bundle: a.bundleId };
+      if (a.twindesk) one.twindesk = true;
+      else if (this._cached(a.bundleId)) one.ipa = this._cached(a.bundleId);
+      return one;
+    });
+    this._twinDesk(req, udid);
+    return req;
+  }
+
   // A run that installs TwinDesk itself: from the kept copy, else downloaded and then kept.
   // fresh (an update, or a kept copy older than the TwinDesk on the device would be): the latest
   // release is downloaded, and kept in place of the old copy.
@@ -460,6 +481,10 @@ class IosSign extends EventEmitter {
   _start(run, req) {
     this.last = null;
     this.run = { step: 'start', percent: 0, need: null, seen: [], ipa: req.ipa || '', ...run };
+    if (req.refresh_all) {
+      const names = new Map((this.apps[run.udid] || []).map((a) => [a.bundleId, a]));
+      this.run.items = req.refresh_all.map((a) => ({ bundleId: a.bundle, name: (names.get(a.bundle) || {}).name || a.bundle, twindesk: !!a.twindesk, status: 'wait' }));
+    }
     const r = this.run;
     let buf = '';
     let p;
@@ -507,7 +532,20 @@ class IosSign extends EventEmitter {
         this._gotState(r.udid, cleanState(ev.state));
         return;
       case 'note': r.note = str(ev.message, 300); this._changed(); return; // said on this page only
-      case 'done': r.finished = { expires: Number(ev.expires) || 0, bundleId: str(ev.bundleId), device: str(ev.device, 80), profileOnly: ev.profileOnly === true }; break;
+      case 'item': {
+        // One app of a Refresh all: profile (asked of Apple), sign, done, skip or failed.
+        const it = r.items && r.items.find((x) => x.bundleId === str(ev.bundleId));
+        const status = str(ev.status, 10);
+        if (!it || !['profile', 'sign', 'done', 'skip', 'failed'].includes(status)) return;
+        Object.assign(it, { status, expires: Number(ev.expires) || 0, kind: str(ev.kind, 20), message: str(ev.message, 300), detail: str(ev.detail, 300), until: Number(ev.until) || 0, profileOnly: ev.profileOnly === true });
+        if (status === 'done' || status === 'skip' || status === 'failed') this.tried.set(`${r.udid} ${it.bundleId}`, Date.now());
+        if (toPhone) this.link.send({ t: T.EV, ev: 'item', bundleId: it.bundleId, name: it.name, status, expires: it.expires, kind: it.kind, message: it.message, until: it.until });
+        this._changed();
+        return;
+      }
+      case 'done': r.finished = { expires: Number(ev.expires) || 0, bundleId: str(ev.bundleId), device: str(ev.device, 80), profileOnly: ev.profileOnly === true };
+        if (ev.all === true) Object.assign(r.finished, { all: true, done: Number(ev.done) || 0, skipped: Number(ev.skipped) || 0, failed: Number(ev.failed) || 0 });
+        break;
       case 'error': r.failed = { kind: str(ev.kind, 20) || 'other', code: Number.isFinite(ev.code) ? ev.code : null, message: str(ev.message, 300), detail: str(ev.detail, 300) }; break;
       default: return;
     }
@@ -554,6 +592,7 @@ class IosSign extends EventEmitter {
       if (r.from === 'phone' && cur && cur.id && this._ios() && r.udid) this.setCfg({ device: { ...(this.cfg().device || {}), [cur.id]: r.udid } });
     }
     this.last = failed ? { error: failed, from: r.from } : { done: done || {}, from: r.from, at: Date.now() };
+    if (r.items) this.last.items = r.items; // Refresh all: how each app went
     if (failed && r.from === 'phone' && failed.kind === 'gone') this.last = null;
     this._changed();
     this._look();
@@ -605,7 +644,8 @@ class IosSign extends EventEmitter {
     // An app installed from here before, by its kept IPA; TwinDesk itself too when its IPA is kept
     // (a build installed from a file stays that build), else TwinDesk's latest release.
     const again = m.app ? this._cached(str(m.app)) : '';
-    if (m.update === true && !m.app && !m.ipa) this._twinDesk(req, udid, true); // Update TwinDesk: the release, signed and installed
+    if (m.all === true) this._all(req, udid); // Refresh all, asked on the iPhone
+    else if (m.update === true && !m.app && !m.ipa) this._twinDesk(req, udid, true); // Update TwinDesk: the release, signed and installed
     else if (!m.app && !m.ipa) { this._twinDesk(req, udid); this._refreshOnly(req, udid); }
     else if (again && this.info.anyIpa) { req.ipa = again; this._refreshOnly(req, udid, str(m.app)); }
     else if (m.app && this.info.anyIpa && (this.apps[udid] || []).some((a) => a.bundleId === str(m.app))) { req.no_ipa = true; this._refreshOnly(req, udid, str(m.app)); }
@@ -668,6 +708,29 @@ class IosSign extends EventEmitter {
     }
   }
 
+  // Refresh all: this computer's copy of the session, or the iPhone's app (asked now; it starts the
+  // run with sign.start {all}). Only near over Bluetooth: invited, and asked once it's back.
+  refreshAll() {
+    const udid = this._udid();
+    if (this.run || !this.info) return;
+    if (this._hasKept(udid)) {
+      if (!this._ready((e) => { this.last = { error: e, from: 'kept' }; this.emit('change'); })) return;
+      if (!this.cfg().keptFacts) this._saveFacts();
+      const state = this.kept[udid];
+      if (!state) return;
+      this._start({ from: 'kept', udid, all: true }, this._all({ op: 'install', udid, state }, udid));
+      return;
+    }
+    if (this._ios() && this.phone && this.phone.signedIn) return this._want({ now: true, all: true });
+    if (!this._ios() && this._near().length) {
+      this.queued = { now: true, all: true };
+      this.invitedAt = 0;
+      this._invite();
+      this.last = { info: 'Waking TwinDesk on the iPhone over Bluetooth…' };
+      this.emit('change');
+    }
+  }
+
   // Update TwinDesk on the device to the latest release: this computer's copy, or the iPhone's app.
   updateTwinDesk() {
     const udid = this._udid();
@@ -702,6 +765,7 @@ class IosSign extends EventEmitter {
     else if (o.a === 'set') this.set(o);
     else if (o.a === 'signin') this.signIn(o);
     else if (o.a === 'refresh') this.refresh();
+    else if (o.a === 'all') this.refreshAll();
     else if (o.a === 'update') this.updateTwinDesk();
     else if (o.a === 'release') this._release(true);
     else if (o.a === 'answer') this.answer(o);
@@ -753,7 +817,8 @@ class IosSign extends EventEmitter {
         return this._want({ update: this.latest });
       }
     }
-    const due = apps.filter((a) => soon(a.expires) && (a.twindesk || (c.which !== 'twindesk' && this._cached(a.bundleId))) && rested(`${udid} ${a.bundleId}`))[0];
+    const dues = apps.filter((a) => soon(a.expires) && (a.twindesk || (c.which !== 'twindesk' && this._cached(a.bundleId))) && rested(`${udid} ${a.bundleId}`));
+    const due = dues[0];
     // The system doesn't see the device (no cable, no Wi-Fi sync right now), but the iPhone said
     // when its TwinDesk runs out: asked anyway, as it comes to the front for it and is seen then.
     const phoneDue = !udid && this._ios() && this.phone && soon(this.phone.expires) && rested(`phone ${this.link.current.id}`);
@@ -766,6 +831,12 @@ class IosSign extends EventEmitter {
     const viaPhone = this._ios() && this.phone && this.phone.signedIn && this.phone.auto;
     const viaCopy = !!(this._factsOf(udid) || {}).signedIn;
     if (!viaPhone && !viaCopy) return;
+    // Several due at once: one Refresh all run in place of one run each.
+    if (dues.length > 1 && this.info.anyIpa) {
+      for (const x of dues) this.tried.set(`${udid} ${x.bundleId}`, Date.now());
+      if (viaCopy) return this.refreshAll();
+      return this._want({ all: true, expires: dues[0].expires });
+    }
     if (phoneDue) {
       this.tried.set(`phone ${this.link.current.id}`, Date.now());
       return this._want({ expires: this.phone.expires });

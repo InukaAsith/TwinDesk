@@ -16,6 +16,9 @@
 //                            computer with Keep a copy on (said in sign.info), its copy
 //   sign.want {update: version}  a newer release: signed and installed over this one (Update
 //                            TwinDesk, by itself or tapped); sign.start {update: true} runs it.
+//   sign.start {all: true}   Refresh all: every app here in one run on the computer (one sign-in,
+//                            all the new profiles at once, as AltStore does); sign.ev {ev: "item"}
+//                            says how each app goes. sign.want {all: true}: the computer asks for it.
 //   sign.set    → computer   App refresh switched here {on}: the computer's TwinDesk iPhone follows.
 //                            The other way, sign.info {on, switched}: on there turns it on here;
 //                            switched off there just now turns it off here.
@@ -30,6 +33,11 @@ final class Signer: Feature {
         let id: String, name: String, expires: Double, ours: Bool
     }
     enum Need { case code(String), certs([Cert]) }
+    // One app of a Refresh all: wait, profile, sign, done, skip or failed.
+    struct Item: Identifiable {
+        let id: String
+        var name: String, status: String, expires: Double, kind: String, message: String, until: Double
+    }
 
     // What the computer said (sign.info).
     private(set) var available = false
@@ -48,6 +56,8 @@ final class Signer: Feature {
     private(set) var error: String?
     private(set) var needsSignIn = false
     private(set) var doneUntil: Date?
+    private(set) var items: [Item] = [] // Refresh all: each app, kept after the run to show how it went
+    private(set) var allDone: (done: Int, skipped: Int, failed: Int)?
 
     private var seal: SignerSeal?
     private var typed: (email: String, password: String)?
@@ -57,6 +67,7 @@ final class Signer: Feature {
     private var fresh = false // Start over: TwinDesk's certificate revoked at Apple, a new one made
     private var tapped: String? // the notification was tapped: this refresh ("" TwinDesk, "#update" an update) runs once it can
     private var updating = false // this run installs the latest release (Update TwinDesk)
+    private var all = false // this run is a Refresh all
 
     // Installed by a computer's TwinDesk (its signer marks the Info.plist; AltStore and SideStore
     // don't), or refreshed by one since. Overview's refresh card and Update TwinDesk show only then.
@@ -143,7 +154,7 @@ final class Signer: Feature {
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; fresh = false; updating = false; percent = 0; done = []
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; fresh = false; updating = false; all = false; percent = 0; done = []
         error = e
         doneUntil = until
         core.changed()
@@ -162,6 +173,16 @@ final class Signer: Feature {
     func refresh(app id: String) {
         guard !running, core.connected, available, facts.signedIn else { return }
         app = id
+        begin()
+    }
+
+    // Refresh all: every sideloaded app here, in one run on the computer.
+    func refreshAll() {
+        guard !running, core.connected, available else { return }
+        guard facts.signedIn else { needsSignIn = true; core.changed(); return }
+        all = true
+        let names = Dictionary(apps.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        items = apps.filter { $0.twindesk || anyIpa }.map { Item(id: $0.id, name: names[$0.id] ?? $0.id, status: "wait", expires: 0, kind: "", message: "", until: 0) }
         begin()
     }
 
@@ -204,13 +225,15 @@ final class Signer: Feature {
     }
 
     private func begin() {
-        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0; done = []
+        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0; done = []; allDone = nil
+        if !all { items = [] }
         step = "start"
         var m: JSON = [:]
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
         if let a = app { m["app"] = a }
         if fresh { m["fresh"] = true }
         if updating { m["update"] = true }
+        if all { m["all"] = true }
         core.send(msg("sign.start", m))
         core.changed()
     }
@@ -257,7 +280,7 @@ final class Signer: Feature {
         guard let id = tapped, on, !running, core.connected, available else { return }
         tapped = nil
         guard facts.signedIn else { needsSignIn = true; core.changed(); return }
-        if id == "#update" { update() } else if id.isEmpty { refresh() } else { refresh(app: id) }
+        if id == "#update" { update() } else if id == "#all" { refreshAll() } else if id.isEmpty { refresh() } else { refresh(app: id) }
     }
 
     // Asked by the computer while not in front (or locked): a notification to tap.
@@ -318,9 +341,11 @@ final class Signer: Feature {
             // Clicked on the computer, or TwinDesk in front: now. By itself (not Ask first) and
             // unlocked: now too, in the background. Otherwise the notification, to tap.
             if m.bool("now") && unlocked || state == .active || (!m.bool("ask") && unlocked) {
-                if id.isEmpty { refresh() } else { refresh(app: id) }
+                if m.bool("all") { refreshAll() } else if id.isEmpty { refresh() } else { refresh(app: id) }
             } else {
-                notify(m)
+                var n = m
+                if m.bool("all") { n["app"] = "#all"; n["name"] = tr("Your sideloaded apps") }
+                notify(n)
             }
         case "sign.key":
             guard step != nil, let s = SignerSeal(helperKey: m.str("pub", max: 64)),
@@ -369,7 +394,16 @@ final class Signer: Feature {
                 tell()
                 if computerKeeps { core.send(msg("sign.keep", ["state": s])) }
             }
+        case "item":
+            let id = m.str("bundleId", max: 200)
+            let st = m.str("status", max: 10)
+            guard ["profile", "sign", "done", "skip", "failed"].contains(st) else { break }
+            let it = Item(id: id, name: m.str("name", max: 100).isEmpty ? id : m.str("name", max: 100), status: st, expires: (m["expires"] as? NSNumber)?.doubleValue ?? 0,
+                          kind: m.str("kind", max: 20), message: m.str("message", max: 300), until: (m["until"] as? NSNumber)?.doubleValue ?? 0)
+            if let i = items.firstIndex(where: { $0.id == id }) { items[i] = it } else { items.append(it) }
+            if st == "done", id == Bundle.main.bundleIdentifier { core.store.setFlag("sign.mine", true) }
         case "done":
+            if m.bool("all") { allDone = (m.int("done"), m.int("skipped"), m.int("failed")) }
             if m.str("bundleId", max: 200) == Bundle.main.bundleIdentifier { core.store.setFlag("sign.mine", true) } // refreshed by a computer: ours from now on
             finish(until: Date(timeIntervalSince1970: (m["expires"] as? NSNumber)?.doubleValue ?? 0))
             return

@@ -963,5 +963,20 @@
   "Screenshot": "Captura de tela",
   "Couldn’t take the screenshot": "Não foi possível fazer a captura de tela",
   "Screenshot saved in Photos": "Captura de tela salva em Fotos",
-  "Allow TwinDesk to add photos in Settings": "Permita que o TwinDesk adicione fotos nos Ajustes"
+  "Allow TwinDesk to add photos in Settings": "Permita que o TwinDesk adicione fotos nos Ajustes",
+  "Failed: {reason}": "Falhou: {reason}",
+  "Getting new provisioning profiles": "Obtendo novos perfis de provisionamento",
+  "Not reached": "Não alcançado",
+  "Refresh all": "Atualizar todos",
+  "Refresh all finished": "Atualização de todos concluída",
+  "Refreshed. Valid until {date}.": "Atualizado. Válido até {date}.",
+  "Signing again: the certificate or Apple ID changed": "Assinando de novo: o certificado ou o Apple ID mudou",
+  "Skipped: a free Apple ID runs 3 apps at a time.": "Ignorado: um Apple ID gratuito executa 3 apps por vez.",
+  "Skipped: it has to be signed again, and its IPA isn’t stored on {name}.": "Ignorado: precisa ser assinado de novo e o IPA não está guardado em {name}.",
+  "Skipped: no app ID left this week.": "Ignorado: não há App ID livre nesta semana.",
+  "Skipped: no app ID left this week. Apple frees one on {date}.": "Ignorado: não há App ID livre nesta semana. A Apple libera um em {date}.",
+  "The operation failed": "A operação falhou",
+  "Waiting": "Aguardando",
+  "Your sideloaded apps": "Seus apps instalados por sideload",
+  "{done} refreshed, {skipped} skipped, {failed} failed.": "{done} atualizados, {skipped} ignorados, {failed} com falha."
 }

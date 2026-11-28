@@ -963,5 +963,20 @@
   "Screenshot": "屏幕截图",
   "Couldn’t take the screenshot": "无法截图",
   "Screenshot saved in Photos": "截图已保存到“照片”",
-  "Allow TwinDesk to add photos in Settings": "请在“设置”中允许 TwinDesk 添加照片"
+  "Allow TwinDesk to add photos in Settings": "请在“设置”中允许 TwinDesk 添加照片",
+  "Failed: {reason}": "失败：{reason}",
+  "Getting new provisioning profiles": "正在获取新的描述文件",
+  "Not reached": "未执行",
+  "Refresh all": "全部刷新",
+  "Refresh all finished": "全部刷新已完成",
+  "Refreshed. Valid until {date}.": "已刷新。有效期至 {date}。",
+  "Signing again: the certificate or Apple ID changed": "重新签名：证书或 Apple ID 已更改",
+  "Skipped: a free Apple ID runs 3 apps at a time.": "已跳过：免费 Apple ID 同时只能运行 3 个 App。",
+  "Skipped: it has to be signed again, and its IPA isn’t stored on {name}.": "已跳过：需要重新签名，但 {name} 上未存储其 IPA。",
+  "Skipped: no app ID left this week.": "已跳过：本周没有可用的 App ID。",
+  "Skipped: no app ID left this week. Apple frees one on {date}.": "已跳过：本周没有可用的 App ID。Apple 将于 {date} 释放一个。",
+  "The operation failed": "操作失败",
+  "Waiting": "等待中",
+  "Your sideloaded apps": "你侧载的 App",
+  "{done} refreshed, {skipped} skipped, {failed} failed.": "已刷新 {done} 个，跳过 {skipped} 个，失败 {failed} 个。"
 }

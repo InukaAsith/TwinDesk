@@ -327,6 +327,16 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .ios-result { padding: 10px 16px 12px; border-top: 1px solid var(--row-line); line-height: 1.45; }
 .ios-result.good { color: var(--good); }
 .ios-result.bad { color: var(--bad); }
+.ios-items { list-style: none; margin: 0; padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--row-line); }
+.ios-items li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 1px; align-items: center; }
+.ios-items li > svg, .ios-items li > .ios-spin { grid-row: 1 / 3; align-self: start; margin-top: 2px; }
+.ios-items svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--faint); }
+.ios-items .name { font-weight: 500; overflow-wrap: anywhere; }
+.ios-items .pct { font-variant-numeric: tabular-nums; color: var(--muted); }
+.ios-items .state { grid-column: 2 / 4; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.ios-items li.done svg { color: var(--good); }
+.ios-items li.bad svg, .ios-items li.bad .state { color: var(--bad); }
+.ios-items li.skip svg { color: var(--muted); }
 .ios-how { margin: 6px 2px 28px; max-width: 760px; }
 .ios-how > summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 6px 0; list-style: none; display: flex; align-items: center; gap: 6px; }
 .ios-how > summary::-webkit-details-marker { display: none; }

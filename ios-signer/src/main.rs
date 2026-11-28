@@ -6,7 +6,8 @@
 //   {"op":"devices"}               the iPhones and iPads usbmuxd sees
 //   {"op":"apps","udid":…}         the sideloaded apps on a device and when each expires
 //   {"op":"appids","state":{…}}    the Apple ID's app IDs, with a kept developer session (no password)
-//   {"op":"install","udid":…[,"ipa":path][,"twindesk_ipa":path][,"save_ipa":path][,"profile_only":bundleId[,"no_ipa":true]][,"new_cert":true][,"anisette":url] and either
+//   {"op":"install","udid":…[,"ipa":path][,"twindesk_ipa":path][,"save_ipa":path][,"profile_only":bundleId[,"no_ipa":true]][,"new_cert":true][,"anisette":url]
+//        [,"refresh_all":[{"bundle":…[,"ipa":path][,"twindesk":true]},…]] (every app at once: refresh_many) and either
 //        "sealed":true             the Apple ID comes from the iPhone, sealed for this run (below)
 //     or "email":…,"password":…[,"state":{…}]   typed on this computer, for this run only}
 //
@@ -65,11 +66,11 @@ use isideload::{
     auth::apple_account::{AppToken, AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse},
     dev::{
         certificates::DevelopmentCertificate, developer_session::DeveloperSession,
-        app_ids::AppIdsApi, certificates::CertificatesApi, devices::DevicesApi, teams::TeamsApi,
+        app_ids::{AppId, AppIdsApi}, certificates::CertificatesApi, devices::DevicesApi, teams::{DeveloperTeam, TeamsApi},
     },
-    sideload::{SideloaderBuilder, TeamSelection, builder::MaxCertsBehavior, install},
+    sideload::{SideloaderBuilder, TeamSelection, builder::MaxCertsBehavior, install, sideloader::Sideloader},
     util::{
-        callbacks::ExtensionsBehaviorCallbackBox, device::IdeviceInfo, storage::SideloadingStorage,
+        callbacks::{ExtensionsBehaviorCallback, ExtensionsBehaviorCallbackBox, MaxCertsCallback}, device::IdeviceInfo, storage::SideloadingStorage,
     },
 };
 use ring::{
@@ -124,6 +125,17 @@ struct Request {
     #[serde(default)]
     new_cert: bool,
     anisette: Option<String>,
+    refresh_all: Option<Vec<AllApp>>,
+}
+
+// One app of a Refresh all: the bundle id as installed, its kept IPA (for when it has to be signed
+// again), and whether it is TwinDesk (then the request's twindesk_ipa / save_ipa / download is its IPA).
+#[derive(Deserialize)]
+struct AllApp {
+    bundle: String,
+    ipa: Option<String>,
+    #[serde(default)]
+    twindesk: bool,
 }
 
 // What only the iPhone (or the person typing) knows.
@@ -403,60 +415,57 @@ async fn download(to: &Path) -> Result<(), Report> {
     Ok(())
 }
 
-// A refresh without reinstalling: Apple's current profile for the app and each of its extensions,
-// installed on the device. Some(expiry) when done; None when it can't be done that way (no profile on
-// the device, an app ID missing, or the new profiles no longer hold the certificate the app was signed
-// with: a revoked or replaced certificate needs the app signed again).
-async fn profiles_only(
-    device: &UsbmuxdProvider,
-    dev: &mut DeveloperSession,
-    team: &isideload::dev::teams::DeveloperTeam,
-    udid: &str,
-    bundle: &str,
-) -> Result<Result<u64, &'static str>, Report> {
-    let mut mis = MisagentClient::connect(device).await.map_err(SideloadError::IdeviceError)?;
-    let installed = mis.copy_all().await.map_err(SideloadError::IdeviceError)?;
-    let ours = |id: &str| id == bundle || id.strip_prefix(bundle).is_some_and(|r| r.starts_with('.'));
-    // On the device: the newest profile per app ID of this app, and the certificates in them.
-    let mut old: BTreeMap<String, (u64, Vec<Vec<u8>>)> = BTreeMap::new();
+// The device's provisioning profiles, the newest per app ID: app ID -> (expires, team, certificates).
+type OnDevice = BTreeMap<String, (u64, String, Vec<Vec<u8>>)>;
+
+fn on_device(installed: Vec<Vec<u8>>) -> OnDevice {
+    let mut old = OnDevice::new();
     for raw in installed {
         let Some(d) = profile_plist(&raw) else { continue };
-        let Some(id) = d
-            .get("Entitlements")
-            .and_then(|v| v.as_dictionary())
+        let ent = d.get("Entitlements").and_then(|v| v.as_dictionary());
+        let Some(id) = ent
             .and_then(|e| e.get("application-identifier"))
             .and_then(|v| v.as_string())
             .and_then(|s| s.split_once('.').map(|(_, b)| b.to_string()))
         else { continue };
-        if !ours(&id) {
-            continue;
-        }
+        let team = ent.and_then(|e| e.get("com.apple.developer.team-identifier")).and_then(|v| v.as_string()).unwrap_or("").to_string();
         let expires = d.get("ExpirationDate").and_then(|v| v.as_date()).map(|x| secs(&x)).unwrap_or(0);
-        let certs = certs_of(&d);
-        if old.get(&id).is_none_or(|(e, _)| *e < expires) {
-            old.insert(id, (expires, certs));
+        if old.get(&id).is_none_or(|(e, _, _)| *e < expires) {
+            old.insert(id, (expires, team, certs_of(&d)));
         }
     }
-    let Some((old_main, signed_with)) = old.get(bundle).cloned() else { return Ok(Err("Its provisioning profile isn’t on the device.")) };
+    old
+}
 
-    emit(json!({"ev": "step", "step": "profile"}));
-    let ids = dev.list_app_ids(team, None).await.context("Apple didn't list the app IDs")?;
+// Apple's current profile for the app and each of its extensions, not installed yet: Ok((the app's
+// new expiry, the profiles)), or Err(why) when a refresh can't be done that way (no profile on the
+// device, an app ID missing, or the new profiles no longer hold the certificate the app was signed
+// with: a revoked or replaced certificate needs the app signed again). A session of its own (a clone),
+// so several apps' profiles are asked for at once.
+async fn new_profiles(
+    mut dev: DeveloperSession,
+    team: &DeveloperTeam,
+    ids: &[AppId],
+    udid: &str,
+    bundle: &str,
+    old: &OnDevice,
+) -> Result<Result<(u64, Vec<Vec<u8>>), &'static str>, Report> {
+    let ours = |id: &str| id == bundle || id.strip_prefix(bundle).is_some_and(|r| r.starts_with('.'));
+    let Some((old_main, _, signed_with)) = old.get(bundle).cloned() else { return Ok(Err("Its provisioning profile isn’t on the device.")) };
     let mut fresh = Vec::new();
     let mut main = 0;
-    for id in old.keys() {
-        let Some(app_id) = ids.app_ids.iter().find(|a| &a.identifier == id) else {
+    for id in old.keys().filter(|id| ours(id)) {
+        let Some(app_id) = ids.iter().find(|a| &a.identifier == id) else {
             return Ok(Err("It was signed with another Apple ID, or its app ID was removed."));
         };
         let profile = dev.download_team_provisioning_profile(team, app_id, None).await.context("Apple didn't give the provisioning profile")?;
         let raw: Vec<u8> = profile.encoded_profile.into();
         let Some(d) = profile_plist(&raw) else { return Ok(Err("Apple’s profile couldn’t be read.")) };
         let devices = d.get("ProvisionedDevices").and_then(|v| v.as_array());
-        let has_device = devices.is_some_and(|a| a.iter().any(|v| v.as_string() == Some(udid)));
-        let has_cert = certs_of(&d).iter().any(|c| signed_with.contains(c));
-        if !has_device {
+        if !devices.is_some_and(|a| a.iter().any(|v| v.as_string() == Some(udid))) {
             return Ok(Err("Apple’s profile doesn’t include this device."));
         }
-        if !has_cert {
+        if !certs_of(&d).iter().any(|c| signed_with.contains(c)) {
             return Ok(Err("The certificate it was signed with is no longer valid."));
         }
         if id == bundle {
@@ -468,6 +477,28 @@ async fn profiles_only(
     if main <= old_main {
         return Ok(Err("Apple gave no newer profile."));
     }
+    Ok(Ok((main, fresh)))
+}
+
+// A refresh of one app without reinstalling: its new profiles, installed. Some(expiry) when done.
+async fn profiles_only(
+    device: &UsbmuxdProvider,
+    dev: &mut DeveloperSession,
+    team: &DeveloperTeam,
+    udid: &str,
+    bundle: &str,
+) -> Result<Result<u64, &'static str>, Report> {
+    let mut mis = MisagentClient::connect(device).await.map_err(SideloadError::IdeviceError)?;
+    let old = on_device(mis.copy_all().await.map_err(SideloadError::IdeviceError)?);
+    if !old.contains_key(bundle) {
+        return Ok(Err("Its provisioning profile isn’t on the device."));
+    }
+    emit(json!({"ev": "step", "step": "profile"}));
+    let ids = dev.list_app_ids(team, None).await.context("Apple didn't list the app IDs")?;
+    let (main, fresh) = match new_profiles(dev.clone(), team, &ids.app_ids, udid, bundle, &old).await? {
+        Ok(v) => v,
+        Err(why) => return Ok(Err(why)),
+    };
     emit(json!({"ev": "step", "step": "installprofile"}));
     for raw in fresh {
         mis.install(raw).await.map_err(SideloadError::IdeviceError).context("The device didn't take the profile")?;
@@ -571,11 +602,12 @@ async fn install_op(req: Request, lines: Lines, tmp: &Path) -> Result<Value, Rep
     let password = secret.password.map(Zeroizing::new);
     let email = Some(secret.email.trim().to_string()).filter(|e| !e.is_empty()).or_else(|| mem.get(KEY_EMAIL)).unwrap_or_default();
     let source = match req.ipa {
+        _ if req.refresh_all.is_some() => Source::TwinDesk { cached: req.twindesk_ipa.map(PathBuf::from), save: req.save_ipa.map(PathBuf::from) },
         Some(p) => Source::Ipa(PathBuf::from(p)),
         None if req.no_ipa => Source::Nothing,
         None => Source::TwinDesk { cached: req.twindesk_ipa.map(PathBuf::from), save: req.save_ipa.map(PathBuf::from) },
     };
-    let result = sign_and_install(&io, &mem, &email, password, &req.udid, source, if req.new_cert { None } else { req.profile_only }, req.new_cert, req.anisette, tmp).await;
+    let result = sign_and_install(&io, &mem, &email, password, &req.udid, source, if req.new_cert { None } else { req.profile_only }, req.new_cert, req.anisette, if req.new_cert { None } else { req.refresh_all }, tmp).await;
     // Whatever happened: a certificate made, or an identity Apple now knows, has to be kept.
     let state = mem.map().clone();
     if !state.is_empty() {
@@ -595,6 +627,7 @@ async fn sign_and_install(
     profile_only: Option<String>,
     new_cert: bool,
     anisette: Option<String>,
+    all: Option<Vec<AllApp>>,
     tmp: &Path,
 ) -> Result<Value, Report> {
     // Signed in before: the session kept in the state, for as long as Apple takes it. Else the password.
@@ -761,6 +794,11 @@ async fn sign_and_install(
         mem.delete(&format!("{hash}/key"))?;
     }
 
+    // Refresh all: every app at once, on this one sign-in.
+    if let Some(list) = all {
+        return refresh_many(&mut sideloader, &team, &info, &device, &declined, list, source, tmp).await;
+    }
+
     // A refresh: new profiles only, when they can be (the app keeps running as it is).
     let mut why = "";
     if let Some(bundle) = profile_only.filter(|b| !b.is_empty()) {
@@ -776,6 +814,22 @@ async fn sign_and_install(
         }
     }
 
+    sign_one(&mut sideloader, &team, &info, &device, &declined, source, why, tmp).await
+}
+
+// The app signed (TwinDesk downloaded first when it isn't kept) and installed. why: the reason a
+// refresh couldn't be new profiles only, for the error when there's no IPA to sign.
+#[allow(clippy::too_many_arguments)]
+async fn sign_one<C: MaxCertsCallback, E: ExtensionsBehaviorCallback>(
+    sideloader: &mut Sideloader<C, E>,
+    team: &DeveloperTeam,
+    info: &IdeviceInfo,
+    device: &UsbmuxdProvider,
+    declined: &std::sync::atomic::AtomicBool,
+    source: Source,
+    why: &str,
+    tmp: &Path,
+) -> Result<Value, Report> {
     let twindesk = match &source {
         Source::TwinDesk { .. } => true,
         Source::Ipa(p) => is_twindesk(p),
@@ -852,7 +906,7 @@ async fn sign_and_install(
 
     emit(json!({"ev": "step", "step": "install"}));
     let last = std::sync::atomic::AtomicU64::new(0);
-    let installed = install::install_app(&device, &signed, |p| {
+    let installed = install::install_app(device, &signed, |p| {
         if p >= last.load(std::sync::atomic::Ordering::Relaxed) + 5 {
             last.store(p, std::sync::atomic::Ordering::Relaxed);
             emit(json!({"ev": "progress", "step": "install", "percent": p}));
@@ -863,6 +917,149 @@ async fn sign_and_install(
     installed.context("The device didn't install the app")?;
 
     Ok(json!({"ev": "done", "bundleId": bundle_id, "expires": expires, "team": team.team_id, "device": info.name}))
+}
+
+// Refresh all, as AltStore does it: one sign-in, then every app's new profiles asked of Apple at once
+// (PARALLEL at a time, each on its own copy of the session) and installed on the device in one go.
+// Only an app whose profiles can't be renewed (its certificate changed, another Apple ID's) is signed
+// and installed again, one after another, TwinDesk last (installing it closes the app that asked).
+// Apple's limits are checked first, so an app that can't be done yet is skipped rather than failing:
+// no app ID left this week for an app new to this Apple ID, or a free Apple ID's 3 apps at a time.
+// Each app's progress: {"ev":"item","bundleId","status":"profile"|"sign"|"done"|"skip"|"failed",…}.
+const PARALLEL: usize = 4;
+const FREE_APPS: usize = 3;
+
+#[allow(clippy::too_many_arguments)]
+async fn refresh_many<C: MaxCertsCallback, E: ExtensionsBehaviorCallback>(
+    sideloader: &mut Sideloader<C, E>,
+    team: &DeveloperTeam,
+    info: &IdeviceInfo,
+    device: &UsbmuxdProvider,
+    declined: &std::sync::atomic::AtomicBool,
+    list: Vec<AllApp>,
+    twindesk: Source,
+    tmp: &Path,
+) -> Result<Value, Report> {
+    let mut seen = std::collections::BTreeSet::new();
+    let list: Vec<AllApp> = list
+        .into_iter()
+        .filter(|a| !a.bundle.is_empty() && a.bundle.len() <= 200 && seen.insert(a.bundle.clone()))
+        .filter(|a| cfg!(feature = "any-ipa") || a.twindesk) // without it, TwinDesk is the only app this signs
+        .take(50)
+        .collect();
+    let item = |bundle: &str, status: &str, extra: Value| {
+        let mut v = json!({"ev": "item", "bundleId": bundle, "status": status});
+        if let (Some(o), Value::Object(x)) = (v.as_object_mut(), extra) {
+            o.extend(x);
+        }
+        emit(v.clone());
+        v
+    };
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+
+    emit(json!({"ev": "step", "step": "profile"}));
+    let mut mis = MisagentClient::connect(device).await.map_err(SideloadError::IdeviceError)?;
+    let old = on_device(mis.copy_all().await.map_err(SideloadError::IdeviceError)?);
+    let ids = sideloader.get_dev_session().list_app_ids(team, None).await.context("Apple didn't list the app IDs")?;
+    for a in &list {
+        item(&a.bundle, "profile", json!({}));
+    }
+    let dev = sideloader.get_dev_session().clone();
+    let mut fetched: Vec<(usize, Result<Result<(u64, Vec<Vec<u8>>), &'static str>, Report>)> = futures_util::stream::iter(list.iter().enumerate().map(|(i, a)| {
+        let dev = dev.clone();
+        let (ids, old) = (&ids.app_ids, &old);
+        async move { (i, new_profiles(dev, team, ids, &info.udid, &a.bundle, old).await) }
+    }))
+    .buffer_unordered(PARALLEL)
+    .collect()
+    .await;
+    fetched.sort_by_key(|(i, _)| *i);
+
+    emit(json!({"ev": "step", "step": "installprofile"}));
+    let mut out: Vec<Value> = vec![Value::Null; list.len()];
+    let mut again: Vec<(usize, &'static str)> = Vec::new();
+    for (i, got) in fetched {
+        let bundle = &list[i].bundle;
+        match got {
+            Ok(Ok((expires, raws))) => {
+                let mut took = true;
+                for raw in raws {
+                    if mis.install(raw).await.is_err() {
+                        took = false;
+                        break;
+                    }
+                }
+                if took {
+                    out[i] = item(bundle, "done", json!({"expires": expires, "profileOnly": true}));
+                } else {
+                    again.push((i, "The device didn’t take the new profile."));
+                }
+            }
+            Ok(Err(why)) => again.push((i, why)),
+            Err(e) => {
+                let f = fail(&e);
+                out[i] = item(bundle, "failed", json!({"kind": f["kind"], "code": f["code"], "message": f["message"], "detail": f["detail"]}));
+            }
+        }
+    }
+    drop(mis);
+
+    // Signed again: others first, TwinDesk last.
+    again.sort_by_key(|(i, _)| list[*i].twindesk);
+    let free = ids.max_quantity.is_some_and(|m| m <= 10);
+    let mut available = ids.available_quantity;
+    let next_id = ids.app_ids.iter().filter_map(|a| a.expiration_date.as_ref().map(secs)).filter(|e| *e > now).min();
+    let mine = |b: &str| old.get(b).is_some_and(|(e, t, _)| *t == team.team_id && *e > now);
+    let mut active = list.iter().filter(|a| mine(&a.bundle)).count();
+    let mut twindesk = Some(twindesk);
+    let mut stop: Option<Value> = None;
+    for (i, why) in again {
+        let a = &list[i];
+        if let Some(s) = &stop {
+            out[i] = item(&a.bundle, "skip", json!({"kind": s["kind"], "message": s["message"]}));
+            continue;
+        }
+        let source = if a.twindesk {
+            twindesk.take().unwrap_or(Source::Nothing)
+        } else if let Some(p) = &a.ipa {
+            Source::Ipa(PathBuf::from(p))
+        } else {
+            out[i] = item(&a.bundle, "skip", json!({"kind": "needipa", "message": "Has to be signed again, and its IPA isn’t stored on this computer", "detail": why}));
+            continue;
+        };
+        // New to this Apple ID: it needs an app ID of its own, and on a free one a place among its 3 apps.
+        let new_here = !mine(&a.bundle);
+        if new_here && available.is_some_and(|n| n <= 0) {
+            out[i] = item(&a.bundle, "skip", json!({"kind": "appids", "message": "No app ID left this week", "until": next_id}));
+            continue;
+        }
+        if new_here && free && active >= FREE_APPS {
+            out[i] = item(&a.bundle, "skip", json!({"kind": "apps", "message": "A free Apple ID runs 3 apps at a time"}));
+            continue;
+        }
+        item(&a.bundle, "sign", json!({"detail": why}));
+        let r = match sign_one(sideloader, team, info, device, declined, source, why, tmp).await {
+            Ok(v) => v,
+            Err(e) => fail(&e),
+        };
+        if r["ev"] == "done" {
+            if new_here {
+                active += 1;
+                available = available.map(|n| n - 1);
+            }
+            out[i] = item(&a.bundle, "done", json!({"expires": r["expires"], "newBundleId": r["bundleId"]}));
+        } else {
+            out[i] = item(&a.bundle, "failed", json!({"kind": r["kind"], "code": r["code"], "message": r["message"], "detail": r["detail"]}));
+            // What every app after it would meet too: said once, and the rest skipped.
+            if matches!(r["kind"].as_str(), Some("certs" | "session" | "auth")) {
+                stop = Some(r);
+            }
+        }
+    }
+    let count = |s: &str| out.iter().filter(|v| v["status"] == s).count();
+    let soonest = out.iter().filter(|v| v["status"] == "done").filter_map(|v| v["expires"].as_u64()).min().unwrap_or(0);
+    Ok(json!({"ev": "done", "all": true, "items": out, "done": count("done"), "skipped": count("skip"), "failed": count("failed"),
+        "expires": soonest, "team": team.team_id, "device": info.name}))
 }
 
 // The app IDs registered for this Apple ID, read with the developer session kept in the state (only

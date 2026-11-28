@@ -35,6 +35,13 @@ const next = () => new Promise((r) => (lines.length ? r(lines.shift()) : (wait =
     out({ ev: 'step', step: 'sign' });
     out({ ev: 'state', box: 'c2VhbGVk' });
     out({ ev: 'done', expires: 99, bundleId: 'com.twindesk.ios.ABCDEF1234', device: 'An iPhone' });
+  } else if (req.refresh_all) {
+    out({ ev: 'step', step: 'profile' });
+    for (const a of req.refresh_all) out({ ev: 'item', bundleId: a.bundle, status: 'profile' });
+    out({ ev: 'item', bundleId: req.refresh_all[0].bundle, status: 'done', expires: 55, profileOnly: true });
+    for (const a of req.refresh_all.slice(1)) out({ ev: 'item', bundleId: a.bundle, status: 'skip', kind: 'appids', message: 'No app ID left this week', until: 66 });
+    out({ ev: 'state', state: req.state });
+    out({ ev: 'done', all: true, done: 1, skipped: req.refresh_all.length - 1, failed: 0, expires: 55, device: 'An iPhone' });
   } else if (req.state && req.state.xcode_token && !req.password) {
     out({ ev: 'state', state: req.state });
     out({ ev: 'done', expires: 77 });
@@ -239,6 +246,71 @@ const until = async (what, fn) => {
   assert.ok(reqs2[1].no_ipa === true && !reqs2[1].ipa && !reqs2[1].twindesk_ipa && !reqs2[1].save_ipa);
   r.sign.refreshApp('com.not.there');
   assert.strictEqual(reqs2.length, 2, 'only an app that is on the device');
+  r.sign.close();
+
+  // Refresh all: one run for every app (TwinDesk with its IPA, others with theirs when kept)
+  r = rig({ keep: true }, { cacheDir });
+  await until('the apps', () => r.sign.view.apps.length === 1);
+  r.sign.info.anyIpa = true;
+  r.sign.apps[UDID].push({ bundleId: 'com.example.Kept', name: 'Kept', expires: 1, twindesk: false }, { bundleId: 'com.example.Bare', name: 'Bare', expires: 1, twindesk: false });
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(path.join(cacheDir, 'com.example.Kept.ipa'), 'x');
+  const reqs3 = [];
+  const start0 = r.sign._start.bind(r.sign);
+  r.sign._start = (run, req) => reqs3.push({ run, req });
+  r.sign.kept[UDID] = { email: 'a@b.c', xcode_token: 't', xcode_token_expiry: String(FUTURE) };
+  r.sign.setCfg({ keptFacts: { [UDID]: stateFacts(r.sign.kept[UDID]) } });
+  r.sign.refreshAll();
+  assert.strictEqual(reqs3.length, 1, 'one run, not one per app');
+  assert.deepStrictEqual(reqs3[0].req.refresh_all, [
+    { bundle: 'com.twindesk.ios.ABCDEF1234', twindesk: true },
+    { bundle: 'com.example.Kept', ipa: path.join(cacheDir, 'com.example.Kept.ipa') },
+    { bundle: 'com.example.Bare' },
+  ]);
+  assert.ok(!reqs3[0].req.profile_only && !reqs3[0].req.ipa);
+  // Without other-IPA installs: TwinDesk only
+  r.sign.info.anyIpa = false;
+  r.sign.refreshAll();
+  assert.deepStrictEqual(reqs3[1].req.refresh_all.map((a) => a.bundle), ['com.twindesk.ios.ABCDEF1234']);
+  r.sign.info.anyIpa = true;
+  // The run itself, with the stand-in helper: each app's progress, then how it all went
+  r.sign._start = start0;
+  r.sign.refreshAll();
+  await until('the run', () => r.sign.last && r.sign.last.done);
+  assert.strictEqual(r.sign.last.done.all, true);
+  assert.strictEqual(r.sign.last.done.skipped, 2);
+  assert.deepStrictEqual(r.sign.last.items.map((x) => x.status), ['done', 'skip', 'skip']);
+  assert.strictEqual(r.sign.last.items[1].kind, 'appids');
+  assert.strictEqual(r.sign.last.items[1].until, 66);
+  assert.strictEqual(r.sign.last.items[0].profileOnly, true);
+  r.sign.close();
+
+  // Refresh all through the iPhone: asked (now), and its sign.start {all} becomes one refresh_all run
+  r = rig({}, { cacheDir });
+  await until('the apps', () => r.sign.view.apps.length === 1);
+  r.link.emit(T.STATE, { signedIn: true, email: 'a@b.c', until: FUTURE, auto: true });
+  r.sign.refreshAll();
+  assert.deepStrictEqual([r.of(T.WANT)[0].now, r.of(T.WANT)[0].all], [true, true]);
+  const reqs4 = [];
+  r.sign._start = (run, req) => reqs4.push({ run, req });
+  await r.sign._phoneStart({ all: true });
+  assert.strictEqual(reqs4[0].run.from, 'phone');
+  assert.strictEqual(reqs4[0].req.sealed, true);
+  assert.deepStrictEqual(reqs4[0].req.refresh_all.map((a) => a.bundle), ['com.twindesk.ios.ABCDEF1234']);
+  r.sign.close();
+
+  // Automatic refresh with several apps due: one Refresh all
+  r = rig({ keep: true, auto: true, days: 6 }, { cacheDir });
+  await until('the apps', () => r.sign.view.apps.length === 1);
+  const reqs5 = [];
+  r.sign._start = (run, req) => reqs5.push(req);
+  r.sign.info.anyIpa = true;
+  r.sign.apps[UDID].push({ bundleId: 'com.example.Kept', name: 'Kept', expires: Math.floor(Date.now() / 1000) + 86400, twindesk: false });
+  r.sign.kept[UDID] = { email: 'a@b.c', xcode_token: 't', xcode_token_expiry: String(FUTURE) };
+  r.sign.setCfg({ keptFacts: { [UDID]: stateFacts(r.sign.kept[UDID]) } });
+  r.sign._auto();
+  assert.strictEqual(reqs5.length, 1);
+  assert.strictEqual(reqs5[0].refresh_all.length, 2);
   r.sign.close();
 
   // The vault is opened only to use or change the copy: the window reads the facts from the settings

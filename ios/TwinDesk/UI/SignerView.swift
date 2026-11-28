@@ -131,6 +131,9 @@ struct SignerView: View {
             }
             if f.signedIn && !s.running {
                 Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
+                if s.anyIpa && s.apps.count > 1 {
+                    Button { s.refreshAll() } label: { Label(tr("Refresh all"), systemImage: "arrow.triangle.2.circlepath").frame(maxWidth: .infinity) }.secondaryButton()
+                }
                 Button(tr("Start over…")) { askStartOver = true }.secondaryButton().controlSize(.small)
             }
         }
@@ -139,10 +142,12 @@ struct SignerView: View {
 
     // The run's steps: done ones ticked, the one running with a spinner (and its percent), the ones to come dimmed.
     private static let ahead = ["register", "cert", "appid", "profile", "installprofile", "sign", "install"]
+    private static let aheadAll = ["register", "profile", "installprofile"] // Refresh all: signing only for the apps that need it
     private static let order = ["upload", "find", "cached", "download", "signin", "session", "register", "revoke", "cert", "appid", "profile", "installprofile", "sign", "install"]
 
     private var runCard: some View {
-        let steps = Self.order.filter { s.done.contains($0) || Self.ahead.contains($0) }
+        let ahead = s.items.isEmpty ? Self.ahead : Self.aheadAll
+        let steps = Self.order.filter { s.done.contains($0) || ahead.contains($0) }
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CardHeader(symbol: "signature", color: Page.signing.color, title: tr("Progress"))
@@ -163,6 +168,7 @@ struct SignerView: View {
                 }
             }
             if (s.step == "install" || s.step == "sign") && s.percent > 0 { ProgressView(value: Double(s.percent), total: 100) }
+            if !s.items.isEmpty { Divider(); itemList }
             switch s.need {
             case .code(let err):
                 Text(tr("Apple sent a code to your devices.")).font(.caption).foregroundStyle(.secondary)
@@ -191,10 +197,53 @@ struct SignerView: View {
         .glassCard()
     }
 
+    // Refresh all: each app, with what happened to it (or is happening).
+    private var itemList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(s.items) { it in
+                HStack(alignment: .top, spacing: 10) {
+                    Group {
+                        if it.status == "profile" || it.status == "sign" { ProgressView().controlSize(.small) }
+                        else {
+                            Image(systemName: it.status == "done" ? "checkmark.circle.fill" : it.status == "failed" ? "xmark.circle.fill" : it.status == "skip" ? "minus.circle" : "circle")
+                                .foregroundStyle(it.status == "done" ? TDColor.good : it.status == "failed" ? TDColor.bad : Color.secondary.opacity(0.6))
+                        }
+                    }
+                    .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(it.name).font(.subheadline)
+                        Text(itemText(it)).font(.caption).foregroundStyle(it.status == "failed" ? TDColor.bad : .secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func itemText(_ it: Signer.Item) -> String {
+        switch it.status {
+        case "wait": return s.running ? tr("Waiting") : tr("Not reached")
+        case "profile": return tr("Getting new provisioning profiles")
+        case "sign": return tr("Signing again: the certificate or Apple ID changed")
+        case "done": return tr("Refreshed. Valid until {date}.", ["date": day(it.expires)])
+        case "skip":
+            switch it.kind {
+            case "appids": return it.until > 0 ? tr("Skipped: no app ID left this week. Apple frees one on {date}.", ["date": day(it.until)]) : tr("Skipped: no app ID left this week.")
+            case "apps": return tr("Skipped: a free Apple ID runs 3 apps at a time.")
+            case "needipa": return tr("Skipped: it has to be signed again, and its IPA isn’t stored on {name}.", ["name": pc])
+            default: return it.message
+            }
+        default: return tr("Failed: {reason}", ["reason": it.message.isEmpty ? tr("The operation failed") : it.message])
+        }
+    }
+
     // How the last run ended: what went wrong (Apple's words and code), or until when it runs now.
     private var resultCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let e = s.error {
+            if let a = s.allDone {
+                Label(tr("Refresh all finished"), systemImage: a.failed > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill").font(.headline).foregroundStyle(a.failed > 0 ? TDColor.bad : TDColor.good)
+                Text(tr("{done} refreshed, {skipped} skipped, {failed} failed.", ["done": "\(a.done)", "skipped": "\(a.skipped)", "failed": "\(a.failed)"])).font(.subheadline)
+                itemList
+            } else if let e = s.error {
                 Label(tr("It didn’t work"), systemImage: "exclamationmark.triangle.fill").font(.headline).foregroundStyle(TDColor.bad)
                 Text(e).font(.subheadline).textSelection(.enabled)
             } else if let d = s.doneUntil {

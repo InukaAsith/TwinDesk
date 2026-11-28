@@ -13,6 +13,13 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **TwinDesk iPhone › Refresh all**, on the computer's Installed apps and in the iOS app's App refresh:
+  every sideloaded app on the device in one run, as AltStore does it. One sign-in, every app's new
+  provisioning profiles asked of Apple at once (four at a time) and installed together; only an app
+  that has to be signed again is (its certificate or Apple ID changed), TwinDesk last. What Apple's
+  limits don't allow yet is skipped with the reason: no app ID left this week (and the day Apple frees
+  one), a free Apple ID's 3 apps at a time, or no stored IPA. Progress per app on both sides.
+  Automatic refresh uses it too when two or more apps are due at once. Untested on a device.
 - **Multi-device, every feature per device** (#313, #256, #344 by [@icariantk](https://github.com/icariantk)): sound both ways with each
   device at once, the microphone and camera, clipboard, notifications and files by each pair's own
   choices, Wake, the Terminal's keys, Apps, Send to (an entry per computer), network folders and

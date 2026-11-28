@@ -34,6 +34,7 @@
     ['appid', 'Registering the app ID'], ['profile', 'Getting the provisioning profile'], ['installprofile', 'Installing the provisioning profiles'], ['sign', 'Signing the app'], ['install', 'Installing'],
   ];
   const AHEAD = ['register', 'cert', 'appid', 'profile', 'sign', 'install']; // always still to come until seen
+  const AHEAD_ALL = ['register', 'profile', 'installprofile']; // Refresh all: signing only for the apps that need it
 
   const SVG = 'http://www.w3.org/2000/svg';
   const svg = (d, attrs = {}) => {
@@ -56,6 +57,8 @@
   };
   const check = () => svg('M5 12.5l4.5 4.5L19 7.5');
   const dot = () => svg('M12 11.9v.2');
+  const minus = () => svg('M7 12h10');
+  const cross = () => svg(['M7 7l10 10', 'M17 7 7 17']);
 
   // The page's picture while off: a phone with TwinDesk on it and a refresh arrow going round it.
   const heroArt = () => {
@@ -138,7 +141,9 @@
       const certRow = UI.row(tr('Certificate limit reached'), tr('This Apple ID has the maximum number of development certificates. Revoke one to continue: apps signed with it stop launching until they are signed again. Nothing is revoked unless you choose it here.'), [UI.button(tr('Cancel'), () => act({ a: 'answer', abort: true }), 'small')]);
       const certList = el('div');
       const phoneAsks = UI.row(tr('Action required on the iPhone'), tr('Apple requested additional information. Respond on the iPhone to continue.'), [], { literal: true });
-      const progCard = UI.card(tr('Progress'), [steps, bar, codeRow, certRow, certList, phoneAsks, result], { actions: [stopBtn] });
+      // Refresh all: how each app is going (Apple's profiles for all of them at once, then the few signed again).
+      const items = el('ul', { class: 'ios-items' });
+      const progCard = UI.card(tr('Progress'), [steps, bar, items, codeRow, certRow, certList, phoneAsks, result], { actions: [stopBtn] });
 
       // ---- the devices ----
       const devList = el('div');
@@ -174,7 +179,9 @@
       const updateBtn = UI.button(tr('Update'), () => act({ a: 'update' }), 'primary');
       const updateRow = UI.row(tr('Update TwinDesk'), '', [updateBtn], { literalHint: true });
       const appList = el('div');
-      const refreshCard = UI.card(tr('Installed apps'), [refreshRow, updateRow, appList]);
+      // Every app at once, as AltStore does: one sign-in, all the new profiles together.
+      const allBtn = UI.button(tr('Refresh all'), () => act({ a: 'all' }), 'small');
+      const refreshCard = UI.card(tr('Installed apps'), [refreshRow, updateRow, appList], { actions: [allBtn] });
 
       // ---- automatic refresh ----
       const autoSw = UI.switch((v) => act({ a: 'set', auto: v }));
@@ -302,7 +309,8 @@
         if (shown) {
           const seen = run ? run.seen || [] : [];
           const now = run ? run.step : '';
-          const list = STEPS.filter(([k]) => seen.includes(k) || (run && AHEAD.includes(k) && !seen.includes(k)));
+          const ahead = run && run.items ? AHEAD_ALL : AHEAD;
+          const list = STEPS.filter(([k]) => seen.includes(k) || (run && ahead.includes(k) && !seen.includes(k)));
           if (!run) list.length = 0;
           steps.replaceChildren(...list.map(([k, label]) => {
             const state = k === now ? 'now' : seen.includes(k) ? 'done' : '';
@@ -313,16 +321,39 @@
           const pctNow = run && (now === 'sign' || now === 'install') ? run.percent || 0 : 0;
           bar.hidden = !run || !(now === 'sign' || now === 'install');
           bar.firstChild.style.width = `${pctNow}%`;
+          const its = (run ? run.items : last.items) || [];
+          items.hidden = !its.length;
+          items.replaceChildren(...its.map((it) => {
+            const busy = it.status === 'profile' || it.status === 'sign';
+            const bad = it.status === 'failed';
+            const until = it.expires ? new Date(it.expires * 1000).toLocaleDateString() : '';
+            const why = it.kind === 'appids' ? (it.until ? tr('Skipped: no app ID left this week. Apple frees one on {date}.', { date: new Date(it.until * 1000).toLocaleDateString() }) : tr('Skipped: no app ID left this week.'))
+              : it.kind === 'apps' ? tr('Skipped: a free Apple ID runs 3 apps at a time.')
+                : it.kind === 'needipa' ? tr('Skipped: it has to be signed again, and its IPA isn’t stored on {computer}.', { computer: here })
+                  : it.message ? tr(it.message) : '';
+            const text = it.status === 'wait' ? (run ? tr('Waiting') : tr('Not reached'))
+              : it.status === 'profile' ? tr('Getting new provisioning profiles')
+                : it.status === 'sign' ? tr('Signing again: the certificate or Apple ID changed')
+                  : it.status === 'done' ? (it.profileOnly ? tr('Refreshed. Valid until {date}.', { date: until }) : tr('Signed and installed again. Valid until {date}.', { date: until }))
+                    : it.status === 'skip' ? why : tr('Failed: {reason}', { reason: why || tr('The operation failed') });
+            const pct = it.status === 'sign' && run && (run.step === 'sign' || run.step === 'install') && run.percent ? el('span', { class: 'pct', text: `${run.percent}%` }) : null;
+            return el('li', { class: bad ? 'bad' : it.status === 'skip' ? 'skip' : it.status === 'done' ? 'done' : '' }, [
+              busy ? el('span', { class: 'ios-spin' }) : it.status === 'done' ? check() : bad ? cross() : it.status === 'skip' ? minus() : dot(),
+              el('span', { class: 'name', text: it.name || it.bundleId }), pct || el('span'),
+              el('span', { class: 'state', text: text }),
+            ]);
+          }));
           if (run) {
             result.className = 'ios-result';
             result.textContent = [run.from === 'phone' ? tr('Requested by TwinDesk on the iPhone.') : '', run.note ? tr(run.note) : ''].filter(Boolean).join(' ');
             result.hidden = !result.textContent;
           } else {
             result.hidden = false;
-            result.className = `ios-result ${last.error ? 'bad' : last.done ? 'good' : ''}`;
+            result.className = `ios-result ${last.error ? 'bad' : last.done && !last.done.failed ? 'good' : ''}`;
             const e = last.error;
             result.replaceChildren(...(e ? [el('strong', { text: tr(e.message || 'The operation failed') }),
               e.detail && e.detail !== e.message ? el('div', { text: tr(e.detail) }) : null, e.code != null ? el('div', { text: tr('Apple error code: {code}', { code: e.code }) }) : null].filter(Boolean)
+              : last.done && last.done.all ? [el('div', { text: tr('Refresh all finished on {device}: {done} refreshed, {skipped} skipped, {failed} failed.', { device: last.done.device || devName, done: last.done.done || 0, skipped: last.done.skipped || 0, failed: last.done.failed || 0 }) })]
               : last.done ? [el('div', { text: tr(last.done.profileOnly ? 'Refreshed on {device} without reinstalling. Valid until {date}.' : 'Installed on {device}. Valid until {date}.', { device: last.done.device || devName, date: new Date((last.done.expires || 0) * 1000).toLocaleString() }) })]
                 : [el('div', { text: tr(last.info) })]));
           }
@@ -347,6 +378,8 @@
         const phone = v.phone;
         const kept = v.keep && v.kept && v.kept.signedIn;
         refreshBtn.disabled = !!run || !(kept || (phone && phone.signedIn) || (!sess && near.length));
+        allBtn.hidden = !(v.anyIpa && apps.length > 1);
+        allBtn.disabled = refreshBtn.disabled;
         refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
           : !sess && near.length ? tr('Nearby over Bluetooth. Refresh now wakes TwinDesk on the device.')
             : sess && !(phone && phone.signedIn) ? tr('Not signed in. Sign in on the iPhone under TwinDesk › App refresh.') : v.udid ? tr('Not installed') : '');
