@@ -26,7 +26,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   Stop sharing.
 - **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each
   cell reads All, the number of apps, or Off; selecting one of this computer's cells opens a panel
-  (All, Some, Off, and a switch per app). Apps are filtered on the receiving computer, so phones and
+  (All, Some, Off, and a switch per app). Any other cell can be changed from any device too (All or
+  Off): the change goes to the two devices it belongs to, which take it only while their own top
+  switches for that way are on (and never for the device they have selected). Apps are filtered on the receiving computer, so phones and
   older versions need no update. **Receive all notifications** (off by default) shows every device's
   notifications here and greys the grid out. Notifications left the Multi-device grid. Untested
   between devices.

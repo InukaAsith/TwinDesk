@@ -2446,12 +2446,12 @@
   "From ↓  To →": "从 ↓  到 →",
   "Computer": "电脑",
   "1 app": "1 个应用",
-  "Set on {name}": "在 {name} 上设置",
   "Select a cell to choose apps.": "选择单元格以选择应用。",
   "Some": "部分",
   "Apps appear after their first notification": "应用在首次通知后显示",
   "Share “{name}” with": "共享“{name}”给",
   "Not connected, syncs later": "未连接，稍后同步",
   "Invitation": "邀请",
-  "Access": "访问权限"
+  "Access": "访问权限",
+  "Turned off for other devices on {name}": "{name} 上已对其他设备关闭"
 });

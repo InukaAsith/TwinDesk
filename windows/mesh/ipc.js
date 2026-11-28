@@ -434,6 +434,12 @@ function setupIpc(ctx) {
   // The matrix (shared/ui-matrix.js): one of this computer's own cells, its pair with a device one way. The
   // selected device's pair is the settings (the pages show it: pairsync-mesh.js tells it), any other's its
   // saved pair (shared/consent.js tells it).
+  // Notifications › Across devices: any cell, set where each end keeps it (shared/mesh-edges.js setCell).
+  handle('setCell', (from, to, feature, on) => {
+    const e = ctx.edges && ctx.edges();
+    if (e && typeof from === 'string' && typeof to === 'string' && typeof feature === 'string' && typeof on === 'boolean') e.setCell(from, to, feature, on);
+    ctx.push();
+  });
   handle('setConsent', (id, feature, dir, on) => {
     const c = ctx.consent && ctx.consent();
     const F = require('../pairsync').FEATURES;

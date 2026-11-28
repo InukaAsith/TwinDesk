@@ -8,7 +8,8 @@
 //   body.append(mx.el); mx.render(state.matrix)
 // Notifications are not in it: the Notifications page has their grid (MeshMatrix.notifs), where a cell
 // says All, the number of apps, or Off, and selecting one of this computer's cells opens its panel.
-//   const g = MeshMatrix.notifs({ toggle(id, dir, on), setApp(from, app, name, show), showAll(from), takeAll(on) })
+//   const g = MeshMatrix.notifs({ toggle(id, dir, on), setCell(from, to, on), setApp(from, app, name, show), showAll(from), takeAll(on) })
+// Another two devices' cell opens too when its owners accept changes (cell.edit, shared/mesh-edges.js): All or Off.
 //   body.append(g.el); g.render(state.matrix, state.notifs)
 'use strict';
 
@@ -131,9 +132,10 @@
           const shown = appsOf(u.id).length - hiddenOf(u.id);
           const text = mode === 'off' ? t('Off') : mode === 'some' ? t(shown === 1 ? '1 app' : '{count} apps', { count: shown }) : t('All');
           const key = u.id + '>' + v.id;
-          const b = UI.el(c.mine ? 'button' : 'div', { class: `ng-cell ng-${mode}${c.mine ? ' mine' : ''}${sel === key ? ' sel' : ''}`, text, attrs: { 'aria-label': `${nameOf(u.id)} → ${nameOf(v.id)}: ${text}` } });
-          b.title = c.mine ? '' : t('Set on {name}', { name: nameOf(c.mine === 'out' ? v.id : u.id) });
-          if (c.mine) b.onclick = () => { sel = key; draw(); };
+          const open = c.mine || c.edit;
+          const b = UI.el(open ? 'button' : 'div', { class: `ng-cell ng-${mode}${open ? ' mine' : ''}${sel === key ? ' sel' : ''}`, text, attrs: { 'aria-label': `${nameOf(u.id)} → ${nameOf(v.id)}: ${text}` } });
+          b.title = open ? '' : t('Turned off for other devices on {name}', { name: nameOf(v.id) });
+          if (open) b.onclick = () => { sel = key; draw(); };
           grid.append(b);
         }
       }
@@ -143,6 +145,12 @@
       panel.textContent = '';
       const [from, to] = sel ? sel.split('>') : [];
       const c = sel && cellOf(from, to);
+      if (c && !c.mine && c.edit) {
+        const seg = UI.segmented([{ value: 'all', label: t('All') }, { value: 'off', label: t('Off') }], (v) => opts.setCell(from, to, v === 'all'));
+        seg.set(c.on ? 'all' : 'off');
+        panel.append(UI.el('h3', { text: `${nameOf(from)} → ${nameOf(to)}`, attrs: { 'data-literal': '' } }), seg.el);
+        return;
+      }
       if (!c || !c.mine) { panel.append(UI.el('div', { class: 'hint', text: t('Select a cell to choose apps.') })); return; }
       const mode = modeOf(from, to, c);
       const takes = c.mine === 'in';

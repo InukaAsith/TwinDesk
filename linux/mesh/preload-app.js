@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setNet: call('setNet'),
   wifiSetup: call('wifiSetup'),
   setMesh: call('setMesh'),
+  setCell: call('setCell'), // Notifications › Across devices: any cell
   setConsent: call('setConsent'), // the matrix: one of this computer's own cells
   setManage: call('setManage'), // Multi-device › Phones (shared/mesh-manage.js)
   debugAsk: call('debugAsk'), // Debug: ask a device of the mesh (or 'self') — shared/debug-start.js

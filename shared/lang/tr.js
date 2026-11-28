@@ -2445,12 +2445,12 @@
   "From ↓  To →": "Kimden ↓  Kime →",
   "Computer": "Bilgisayar",
   "1 app": "1 uygulama",
-  "Set on {name}": "{name} üzerinde ayarlanır",
   "Select a cell to choose apps.": "Uygulama seçmek için bir hücre seçin.",
   "Some": "Bazıları",
   "Apps appear after their first notification": "Uygulamalar ilk bildirimden sonra görünür",
   "Share “{name}” with": "“{name}” paylaşılacak cihazlar",
   "Not connected, syncs later": "Bağlı değil, sonra eşitlenir",
   "Invitation": "Davet",
-  "Access": "Erişim"
+  "Access": "Erişim",
+  "Turned off for other devices on {name}": "{name} üzerinde diğer cihazlara kapalı"
 });

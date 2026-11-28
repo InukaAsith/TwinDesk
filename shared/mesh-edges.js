@@ -15,12 +15,21 @@
 //               ways it has a switch (a way without one is always on: the Mac takes files with a switch,
 //               sends them without)
 //     tick()     with every state push: publish ours if it changed (and every minute anyway)
-//     view()     { features, devices: [{id, name, os, self, said}], cells: {feature: [{from, to, on, live, why, mine}]} }
+//     view()     { features, devices: [{id, name, os, self, said}], cells: {feature: [{from, to, on, live, why, mine, edit}]} }
+//     setCell(from, to, feature, on)  any cell, from any device (REMOTE features): each end's side set where
+//                its owner keeps it, ours here, another device's by 'mesh.cell' to that device
+//
+// A cell between two other devices can be changed here (edit) when both owners accept it: an owner
+// accepts changes to its side while its own switch for that way is on (the feature's page's top two
+// cards, consent.flat), and never to its pair with the device it has selected (those cards are it).
+// Each device says which of its sides are open (`open` in mesh.edges).
 'use strict';
 
 const { Pool } = require('./mesh.js');
 
 const TYPE = 'mesh.edges';
+const CELL = 'mesh.cell';
+const REMOTE = ['notifs']; // the features whose cells any device may change (Notifications › Across devices)
 const REPUBLISH_MS = 60000;
 const MAX_PEERS = 32;
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
@@ -33,6 +42,7 @@ class MeshEdges {
     this.sentKey = '';
     this.sentAt = 0;
     this.bus.on(TYPE, (m, from) => this._heard(m, from));
+    this.bus.on(CELL, (m, from) => this._cell(m, from));
     this.bus.onPeer('welcome', () => { this.sentKey = ''; this.tick(); }); // a device came: it hears ours
   }
 
@@ -54,7 +64,53 @@ class MeshEdges {
       pairs[id] = {};
       for (const f of this.features) pairs[id][f.key] = { out: this._mine(id, f.key, 'out'), in: this._mine(id, f.key, 'in') };
     }
-    return { pairs, up: this.bus.connectedIds().slice(0, MAX_PEERS) };
+    return { pairs, up: this.bus.connectedIds().slice(0, MAX_PEERS), open: this._open(), selected: (this.consent.selectedId && this.consent.selectedId()) || '' };
+  }
+
+  // Our sides other devices may change: a REMOTE feature's way whose own switch is on here.
+  _open() {
+    const out = {};
+    for (const key of REMOTE) {
+      if (!this.features.some((f) => f.key === key) || !this.consent.flat) continue;
+      out[key] = { out: this.consent.flat(key, 'out') === true, in: this.consent.flat(key, 'in') === true };
+    }
+    return out;
+  }
+
+  // Another device changes our side of our pair with `peer` (it asked from its grid).
+  _cell(m, from) {
+    if (!m || typeof m !== 'object' || !REMOTE.includes(m.key) || (m.dir !== 'out' && m.dir !== 'in') || typeof m.on !== 'boolean') return;
+    if (typeof m.peer !== 'string' || !m.peer || m.peer.length > 64 || m.peer === this.selfId) return;
+    if (!this.bus.connectedIds().includes(from)) return;
+    if (this.consent.selectedId && m.peer === this.consent.selectedId()) return; // that pair is the top cards
+    if (!(this._open()[m.key] || {})[m.dir]) return; // our switch for that way is off: closed to others
+    this.consent.set(m.peer, m.key, m.dir, m.on);
+    this.sentKey = '';
+    this.tick();
+  }
+
+  // Whether u's `dir` side of its pair with v can be set from here.
+  _canSet(u, v, key, dir) {
+    if (u === this.selfId) return !(this.consent.selectedId && v === this.consent.selectedId()) && !!this.features.find((f) => f.key === key);
+    const said = this.by.get(u);
+    return !!(said && said.open && said.open[key] && said.open[key][dir]) && this.connected(u)
+      && !(said.selected && said.selected === v);
+  }
+
+  setCell(from, to, key, on) {
+    if (!REMOTE.includes(key) || typeof on !== 'boolean' || from === to) return false;
+    const sides = [[from, to, 'out'], [to, from, 'in']];
+    // On needs both sides on; off needs one side off (each that can be is).
+    const can = sides.filter(([u, v, dir]) => this._canSet(u, v, key, dir));
+    if (on ? !sides.every((x) => can.includes(x) || this._side(x[0], x[1], key, x[2]) === true) : !can.length) return false;
+    for (const [u, v, dir] of can) {
+      if (this._side(u, v, key, dir) === on) continue;
+      if (u === this.selfId) this.consent.set(v, key, dir, on);
+      else this.bus.send(u, { t: CELL, peer: v, key, dir, on });
+    }
+    this.sentKey = '';
+    this.tick();
+    return true;
   }
 
   tick() {
@@ -82,7 +138,13 @@ class MeshEdges {
       }
     }
     const up = Array.isArray(m.up) ? m.up.filter((x) => typeof x === 'string').slice(0, MAX_PEERS) : [];
-    this.by.set(r.msg.o, { pairs, up, at: Date.now() });
+    const open = {};
+    for (const key of REMOTE) {
+      const o = m.open && m.open[key];
+      if (o && typeof o === 'object') open[key] = { out: o.out === true, in: o.in === true };
+    }
+    const selected = typeof m.selected === 'string' ? m.selected.slice(0, 64) : '';
+    this.by.set(r.msg.o, { pairs, up, open, selected, at: Date.now() });
   }
 
   // u's side of its pair with v for a feature and way: ours, else what u said, else what v said of the
@@ -123,7 +185,10 @@ class MeshEdges {
           const why = out === false ? { key: '{from} doesn’t send it to {to}' } : inn === false ? { key: '{to} doesn’t take it from {from}' }
             : out === undefined || inn === undefined ? { key: 'Not known: {who} runs an older TwinDesk', who: out === undefined ? u : v }
               : !linked ? { key: 'On, not connected now' } : null;
-          cells[f.key].push({ from: u, to: v, on, live: on && linked, why, mine: u === this.selfId ? 'out' : v === this.selfId ? 'in' : '' });
+          const mine = u === this.selfId ? 'out' : v === this.selfId ? 'in' : '';
+          const sides = [[u, v, 'out'], [v, u, 'in']].map(([a, b, d]) => this._canSet(a, b, f.key, d));
+          const edit = !mine && REMOTE.includes(f.key) && (on ? sides.some(Boolean) : sides.every((ok, i) => ok || (i ? inn : out) === true));
+          cells[f.key].push({ from: u, to: v, on, live: on && linked, why, mine, ...(REMOTE.includes(f.key) ? { edit } : {}) });
         }
       }
     }

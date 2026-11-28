@@ -35,6 +35,7 @@ UI.tab({
     // Multi-device: who shows whose notifications, per app (shared/ui-matrix.js; hidden one-to-one).
     const across = window.MeshMatrix && MeshMatrix.notifs ? MeshMatrix.notifs({
       toggle: (id, dir, on) => api.setConsent(id, 'notifs', dir, on),
+      setCell: (from, to, on) => api.setCell && api.setCell(from, to, 'notifs', on),
       setApp: (from, app, name, show) => api.setNotifs({ fromApp: { from, app, name, hide: !show } }),
       showAll: (from) => api.setNotifs({ fromApp: { from, all: true } }),
       takeAll: (on) => api.setNotifs({ takeAll: on }),

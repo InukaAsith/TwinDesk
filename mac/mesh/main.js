@@ -1255,7 +1255,7 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent, manage: () => manage,
+  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent, edges: () => edges, manage: () => manage,
     syncAction: (f, dir, on) => SYNC_ACTIONS[f] && SYNC_ACTIONS[f](dir, on), // the matrix: the selected device's cell is the settings
     state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it

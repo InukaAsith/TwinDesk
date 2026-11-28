@@ -2445,12 +2445,12 @@
   "From ↓  To →": "От ↓  Кому →",
   "Computer": "Компьютер",
   "1 app": "1 приложение",
-  "Set on {name}": "Задаётся на {name}",
   "Select a cell to choose apps.": "Выберите ячейку, чтобы выбрать приложения.",
   "Some": "Некоторые",
   "Apps appear after their first notification": "Приложения появляются после первого уведомления",
   "Share “{name}” with": "Поделиться «{name}» с",
   "Not connected, syncs later": "Не подключено, синхронизируется позже",
   "Invitation": "Приглашение",
-  "Access": "Доступ"
+  "Access": "Доступ",
+  "Turned off for other devices on {name}": "Отключено для других устройств на {name}"
 });

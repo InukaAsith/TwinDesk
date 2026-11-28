@@ -2446,12 +2446,12 @@
   "From ↓  To →": "From ↓  To →",
   "Computer": "Computer",
   "1 app": "1 app",
-  "Set on {name}": "Set on {name}",
   "Select a cell to choose apps.": "Select a cell to choose apps.",
   "Some": "Some",
   "Apps appear after their first notification": "Apps appear after their first notification",
   "Share “{name}” with": "Share “{name}” with",
   "Not connected, syncs later": "Not connected, syncs later",
   "Invitation": "Invitation",
-  "Access": "Access"
+  "Access": "Access",
+  "Turned off for other devices on {name}": "Turned off for other devices on {name}"
 });

@@ -2445,12 +2445,12 @@
   "From ↓  To →": "De ↓  Para →",
   "Computer": "Computador",
   "1 app": "1 app",
-  "Set on {name}": "Definido em {name}",
   "Select a cell to choose apps.": "Selecione uma célula para escolher apps.",
   "Some": "Alguns",
   "Apps appear after their first notification": "Os apps aparecem após a primeira notificação",
   "Share “{name}” with": "Compartilhar “{name}” com",
   "Not connected, syncs later": "Desconectado, sincroniza depois",
   "Invitation": "Convite",
-  "Access": "Acesso"
+  "Access": "Acesso",
+  "Turned off for other devices on {name}": "Desativado para outros dispositivos em {name}"
 });
