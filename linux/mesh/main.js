@@ -600,7 +600,7 @@ function start() {
   folders = require('../../shared/folders-host.js').foldersHost({
     settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,
     phoneShare: () => { const h = phoneHub || (phoneLink ? loadHub() : null); return h && h.share; },
-    devices: () => (hub ? hub.peers({ indirect: true }) : []).map((d) => ({ id: d.id, name: d.name, os: d.os })),
+    devices: () => (hub ? hub.peers({ indirect: true }) : []).map((d) => ({ id: d.id, name: d.name, os: d.os, connected: d.state === 'connected' })),
     pick: async () => { const r = await require('electron').dialog.showOpenDialog(mainWin, { properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0] || ''; },
     show: () => goTab('files'),
     open: (f) => require('electron').shell.openPath(f),

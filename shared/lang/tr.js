@@ -2422,7 +2422,6 @@
   "Accept": "Kabul et",
   "No paired devices": "Eşleştirilmiş cihaz yok",
   "With {device}": "{device} ile",
-  "Share “{name}”": "“{name}” paylaş",
   "One folder, synced across your devices": "Cihazlarınız arasında eşitlenen tek klasör",
   "Scanning…": "Taranıyor…",
   "Up to date · {count} files, {size}": "Güncel · {count} dosya, {size}",
@@ -2449,5 +2448,8 @@
   "Set on {name}": "{name} üzerinde ayarlanır",
   "Select a cell to choose apps.": "Uygulama seçmek için bir hücre seçin.",
   "Some": "Bazıları",
-  "Apps appear after their first notification": "Uygulamalar ilk bildirimden sonra görünür"
+  "Apps appear after their first notification": "Uygulamalar ilk bildirimden sonra görünür",
+  "Share “{name}” with": "“{name}” paylaşılacak cihazlar",
+  "Not connected, syncs later": "Bağlı değil, sonra eşitlenir",
+  "Invitation": "Davet"
 });

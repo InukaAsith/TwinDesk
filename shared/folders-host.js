@@ -129,7 +129,7 @@ function foldersHost({ settings, save, push, getDrive, loadDrive, phoneShare = (
         max: DF.MAX,
         list: DF.cleanFolders(c.folders).map((f) => ({ ...(live.get(f.id) || {}), id: f.id, name: f.name, path: DF.pathOf(f), devices: f.devices })),
         offers: ((dv && dv.offers) || []).filter((o) => !(Array.isArray(c.declined) && c.declined.includes(o.f))),
-        devices: devices().slice(0, 32).map((d) => ({ id: d.id, name: d.name || d.id.slice(0, 8), os: d.os || '' })),
+        devices: devices().slice(0, 32).map((d) => ({ id: d.id, name: d.name || d.id.slice(0, 8), os: d.os || '', ...(typeof d.connected === 'boolean' ? { connected: d.connected } : {}) })),
         sheet: sheet ? { ...sheet, shared: (c.folders.find((f) => DF.pathOf(f) === sheet.path) || {}).devices || null } : null,
       };
     },

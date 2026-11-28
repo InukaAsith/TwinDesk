@@ -19,7 +19,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   appear under Shared with you, to Accept or Decline. Phones need no update: their folders appear in
   the phone's Files app. Folders shared only with phones don't load the sync engine. One-to-one and
   Multi-device, on the Mac, Windows and Linux. Tested here; not yet between devices.
-- **File Sharing in four tabs**: File Sharing, TwinDesk Drive, Shared folders and Settings.
+- **File Sharing in four tabs**: File Sharing, TwinDesk Drive, Shared folders and Settings. Shared
+  folders are a list (folder, path, a chip per device, sync state, Edit); invitations sit in the same
+  list with Accept and Decline. Share a folder, Edit and the file manager's Share folder all open one
+  centred pop-up: All devices or a tick per device (with its system, or Not connected), Save or Share,
+  Stop sharing.
 - **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each
   cell reads All, the number of apps, or Off; selecting one of this computer's cells opens a panel
   (All, Some, Off, and a switch per app). Apps are filtered on the receiving computer, so phones and

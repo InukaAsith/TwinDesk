@@ -27,110 +27,148 @@
     const note = UI.note('warn', '', { literal: true });
     const card = UI.card(t('TwinDesk Drive'), [mainRow, folderRow, note], { cls: 'keep-on' });
 
-    // ---- Shared folders ----
-    const addBtn = UI.button(t('Add folder…'), () => api.folderAdd && api.folderAdd(), 'small');
-    const box = UI.el('div');
-    const folders = UI.card(t('Shared folders'), [box], { actions: [addBtn], cls: 'keep-on' });
+    // ---- Shared folders: the list; Edit, Share a folder and the file manager's Share folder open a pop-up ----
+    const OSNAME = { mac: 'macOS', win: 'Windows', windows: 'Windows', linux: 'Linux', android: 'Android', ios: 'iOS', ipados: 'iPadOS' };
+    const addBtn = UI.button(t('Share a folder'), () => api.folderAdd && api.folderAdd(), 'small primary');
+    const box = UI.el('div', { class: 'sf-list' });
+    const listCard = UI.card(t('Shared folders'), [box], { actions: [addBtn], cls: 'keep-on' });
+    const folders = UI.el('div', { class: 'sf-wrap' }, [listCard]);
     folders.hidden = true;
-    // Invitations: folders other computers share with this one.
-    const inviteBox = UI.el('div');
-    const invites = UI.card(t('Shared with you'), [inviteBox], { cls: 'keep-on' });
+    const invites = UI.el('div'); // kept for the pages' layout; invitations are in the list now
     invites.hidden = true;
-    const open = new Set(); // folders whose device list is shown
+    let editing = null; // {id?, path, name, sel}: the folder open in the side panel
     let foldersKey = '';
+    let last = null;
 
-    // Device switches: All, then each device. sel: 'all' or [ids]; onPick(next).
-    function ticks(devs, sel, onPick) {
-      const all = !Array.isArray(sel);
-      const wrap = UI.el('div', { class: 'sf-ticks' });
-      const allSw = UI.switch((v) => onPick(v ? 'all' : devs.map((d) => d.id)), { label: t('All devices') });
-      allSw.set(all);
-      wrap.append(UI.row(t('All devices'), t('Includes devices added later'), [allSw]));
-      if (all) return wrap; // each device only once All is off
-      for (const d of devs) {
-        const one = UI.switch((v) => {
-          const cur = all ? devs.map((x) => x.id) : sel.slice();
-          onPick(v ? [...new Set([...cur, d.id])] : cur.filter((x) => x !== d.id));
-        }, { label: d.name });
-        one.set(all || sel.includes(d.id));
-        wrap.append(UI.row(d.name, '', [UI.osIcon(d.os), one], { literal: true }));
-      }
-      return wrap;
-    }
-    const devLabel = (fv, sel) => {
-      if (!Array.isArray(sel)) return t('All devices');
-      if (!sel.length) return t('No devices');
-      return sel.map((id) => ((fv.devices || []).find((d) => d.id === id) || { name: id.slice(0, 8) }).name).join(', ');
-    };
+    const devLabel = (fv, id) => ((fv.devices || []).find((d) => d.id === id) || { name: id.slice(0, 8) }).name;
     const folderState = (f) => (f.error ? t('Error: {error}', { error: f.error })
       : f.moving ? t(f.moving === 1 ? 'Syncing {count} file' : 'Syncing {count} files', { count: f.moving })
         : f.connected ? t('Up to date') : '');
+    const chip = (text, cls = '') => UI.el('span', { class: 'sf-chip' + (cls ? ' ' + cls : ''), text });
+
+    // The editor: All devices, or a tick per device; buttons by what it's for.
+    // o: {title, path, sel, existing, onSave(sel), onCancel(), onStop()}
+    function editor(fv, o) {
+      const devs = fv.devices || [];
+      let sel = o.sel;
+      const wrap = UI.el('div', { class: 'sf-editor', attrs: { 'data-literal': '' } });
+      const listBox = UI.el('div', { class: 'sf-devs' });
+      const box2 = (checked, onChange, label) => {
+        const c = UI.el('input', { type: 'checkbox', attrs: { 'aria-label': label } });
+        c.checked = checked;
+        c.onchange = () => onChange(c.checked);
+        return c;
+      };
+      const all = Array.isArray(sel) ? false : true;
+      const allRow = UI.el('label', { class: 'sf-all' }, [
+        box2(all, (v) => { sel = v ? 'all' : devs.map((d) => d.id); draw(); }, t('All devices')),
+        UI.el('span', {}, [UI.el('b', { text: t('All devices') }), UI.el('small', { text: t('Includes devices added later') })]),
+      ]);
+      const saveBtn = UI.button(o.existing ? t('Save') : t('Share'), () => o.onSave(sel), 'primary');
+      function draw() {
+        listBox.textContent = '';
+        allRow.querySelector('input').checked = !Array.isArray(sel);
+        if (Array.isArray(sel)) {
+          for (const d of devs) {
+            const side2 = d.connected === false ? t('Not connected, syncs later') : (OSNAME[d.os] || '');
+            listBox.append(UI.el('label', { class: 'sf-dev' }, [
+              box2(sel.includes(d.id), (v) => { sel = v ? [...new Set([...sel, d.id])] : sel.filter((x) => x !== d.id); draw(); }, d.name),
+              UI.el('span', { class: 'sf-dev-name', text: d.name }),
+              UI.el('span', { class: 'sf-dev-os', text: side2 }),
+            ]));
+          }
+        }
+        saveBtn.disabled = !devs.length || (Array.isArray(sel) && !sel.length);
+      }
+      draw();
+      wrap.append(UI.el('h2', { text: o.title }), UI.el('div', { class: 'sf-where', text: tilde(o.path) }));
+      if (!devs.length) wrap.append(UI.note('info', t('No paired devices')));
+      else wrap.append(allRow, listBox);
+      wrap.append(UI.el('div', { class: 'sf-foot' }, [
+        ...(o.onStop ? [UI.button(t('Stop sharing'), o.onStop, 'danger')] : []),
+        UI.el('span', { class: 'sf-grow' }),
+        UI.button(t('Cancel'), o.onCancel),
+        saveBtn,
+      ]));
+      return wrap;
+    }
+
+    let shade = null, shadeKey = '';
+    function drawPopup(fv) {
+      const key = editing ? JSON.stringify([editing.path, editing.id || '', fv.devices]) : '';
+      if (key === shadeKey) return;
+      shadeKey = key;
+      if (shade) { if (shade.open) shade.close(); shade.remove(); shade = null; }
+      if (!editing) return;
+      const e = editing;
+      const done = () => { editing = null; if (e.fromSheet) api.folderSheet(null); foldersKey = ''; drawFolders(fv); };
+      const panel = UI.el('div', { class: 'sf-sheet', attrs: { role: 'dialog', 'aria-modal': 'true' } }, [editor(fv, {
+        title: t('Share “{name}” with', { name: e.name }), path: e.path, sel: e.sel, existing: !!e.id,
+        onSave: (sel) => { if (e.id) api.folderDevices({ id: e.id, devices: sel }); else api.folderShare({ path: e.path, devices: sel }); editing = null; foldersKey = ''; drawFolders(fv); },
+        onCancel: done,
+        onStop: e.id ? () => { api.folderRemove(e.id); editing = null; foldersKey = ''; drawFolders(fv); } : null,
+      })]);
+      // The browser's modal dialog: drawn above the whole page (top layer), Esc closes it.
+      shade = UI.el('dialog', { class: 'sf-dialog' }, [panel]);
+      shade.addEventListener('cancel', (ev) => { ev.preventDefault(); done(); });
+      shade.addEventListener('click', (ev) => { if (ev.target === shade) done(); });
+      document.body.append(shade);
+      shade.showModal();
+    }
 
     function drawFolders(fv) {
-      const key = JSON.stringify([fv.list, fv.offers, fv.devices, [...open]]);
+      const key = JSON.stringify([fv.list, fv.offers, fv.devices, editing && editing.path]);
       if (key === foldersKey) return;
       foldersKey = key;
       box.textContent = '';
       const list = fv.list || [];
-      if (!list.length) box.append(UI.row(t('No shared folders'), '', []));
+      const offers = fv.offers || [];
+      if (!list.length && !offers.length) box.append(UI.el('div', { class: 'sf-empty', text: t('No shared folders') }));
       for (const f of list) {
-        const shown = open.has(f.id);
-        box.append(UI.row(f.name, [devLabel(fv, f.devices), tilde(f.path), folderState(f)].filter(Boolean).join(', '), [
-          UI.button(shown ? t('Done') : t('Devices'), () => { shown ? open.delete(f.id) : open.add(f.id); foldersKey = ''; drawFolders(fv); }, 'small'),
+        const chips = Array.isArray(f.devices) ? (f.devices.length ? f.devices.map((id) => chip(devLabel(fv, id))) : [chip(t('No devices'), 'muted')]) : [chip(t('All devices'))];
+        const st = folderState(f);
+        const item = UI.el('div', { class: 'sf-item' + (editing && editing.id === f.id ? ' sel' : ''), attrs: { 'data-literal': '' } }, [
+          UI.el('div', { class: 'sf-tile' }, [UI.icon('folder')]),
+          UI.el('div', { class: 'sf-text' }, [
+            UI.el('div', { class: 'sf-title' }, [UI.el('b', { text: f.name }), UI.el('span', { class: 'sf-path', text: tilde(f.path) })]),
+            UI.el('div', { class: 'sf-chips' }, [...chips, ...(st ? [UI.el('span', { class: 'sf-state', text: st })] : [])]),
+          ]),
           UI.button(showLabel, () => api.folderOpen(f.id), 'small'),
-          UI.button(t('Stop sharing'), () => api.folderRemove(f.id), 'small'),
-        ], { literal: true }));
-        if (shown) box.append(ticks(fv.devices || [], f.devices, (next) => api.folderDevices({ id: f.id, devices: next })));
+          UI.button(t('Edit'), () => { editing = { id: f.id, path: f.path, name: f.name, sel: f.devices }; foldersKey = ''; drawFolders(fv); }, 'small'),
+        ]);
+        box.append(item);
       }
-      inviteBox.textContent = '';
-      invites.hidden = !(fv.offers || []).length;
-      for (const o of fv.offers || []) {
-        inviteBox.append(UI.row(o.name, t('Shared by {devices}', { devices: (o.from || []).join(', ') }), [
+      for (const o of offers) {
+        box.append(UI.el('div', { class: 'sf-item offer', attrs: { 'data-literal': '' } }, [
+          UI.el('div', { class: 'sf-tile' }, [UI.icon('folder')]),
+          UI.el('div', { class: 'sf-text' }, [
+            UI.el('div', { class: 'sf-title' }, [UI.el('b', { text: o.name })]),
+            UI.el('div', { class: 'sf-chips' }, [chip(t('Invitation'), 'invite'), UI.el('span', { class: 'sf-state', text: t('Shared by {devices}', { devices: (o.from || []).join(', ') }) })]),
+          ]),
           UI.button(t('Decline'), () => api.folderDecline(o.f), 'small'),
           UI.button(t('Accept'), () => api.folderAccept(o.f), 'small primary'),
-        ], { literal: true }));
+        ]));
       }
       addBtn.disabled = list.length >= (fv.max || 10);
+      drawPopup(fv);
     }
 
-    // ---- the pop-up: Share <folder> (the file manager's Share folder) ----
-    let shade = null, sheetKey = '';
+    // ---- a sheet from the app (Share a folder's picker, or the file manager's Share folder) ----
+    let sheetKey = '';
     function drawSheet(fv) {
       const sh = fv && fv.sheet;
-      const key = sh ? JSON.stringify([sh, fv.devices]) : '';
+      const key = sh ? JSON.stringify(sh) : '';
       if (key === sheetKey) return;
       sheetKey = key;
-      if (shade) { shade.remove(); shade = null; }
-      if (!sh) return;
-      const devs = fv.devices || [];
-      let sel = sh.shared || (devs.length === 1 ? [devs[0].id] : 'all');
-      const close = () => api.folderSheet(null);
-      const inner = UI.el('div');
-      const draw = () => {
-        inner.textContent = '';
-        if (!devs.length) inner.append(UI.note('info', t('No paired devices')));
-        else if (devs.length === 1) inner.append(UI.row(t('With {device}', { device: devs[0].name }), '', [UI.osIcon(devs[0].os)], { literal: true }));
-        else inner.append(ticks(devs, sel, (next) => { sel = next; draw(); }));
-      };
-      draw();
-      const share = UI.button(t('Share'), () => api.folderShare({ path: sh.path, devices: sel }), 'primary');
-      share.disabled = !devs.length;
-      const panel = UI.el('div', { class: 'sf-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'data-literal': '' } }, [
-        UI.el('h2', { text: t('Share “{name}”', { name: sh.name }) }),
-        UI.el('div', { class: 'sf-where', text: tilde(sh.path) }),
-        inner,
-        UI.el('div', { class: 'sf-foot' }, [UI.button(t('Cancel'), close), share]),
-      ]);
-      shade = UI.el('div', { class: 'sf-shade' }, [panel]);
-      shade.addEventListener('click', (e) => { if (e.target === shade) close(); });
-      document.body.append(shade);
+      if (!sh) { if (editing && editing.fromSheet) { editing = null; foldersKey = ''; } return; }
+      editing = { path: sh.path, name: sh.name, sel: sh.shared || ((fv.devices || []).length === 1 ? [fv.devices[0].id] : 'all'), fromSheet: true };
+      foldersKey = '';
     }
     // Its look: .sf-* in shared/ui-look.css (the pages' policy allows no inline style sheet).
 
     const update = (s) => {
       folders.hidden = !s.folders;
-      if (!s.folders) invites.hidden = true;
-      if (s.folders) { drawFolders(s.folders); drawSheet(s.folders); }
+      if (s.folders) { last = s.folders; drawSheet(s.folders); drawFolders(s.folders); }
       const d = s.drive;
       card.hidden = !d;
       if (!d) return;

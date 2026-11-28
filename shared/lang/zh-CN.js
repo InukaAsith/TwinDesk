@@ -2423,7 +2423,6 @@
   "Accept": "接受",
   "No paired devices": "没有已配对的设备",
   "With {device}": "与 {device}",
-  "Share “{name}”": "共享“{name}”",
   "One folder, synced across your devices": "在你的设备间同步的一个文件夹",
   "Scanning…": "正在扫描…",
   "Up to date · {count} files, {size}": "已是最新 · {count} 个文件，{size}",
@@ -2450,5 +2449,8 @@
   "Set on {name}": "在 {name} 上设置",
   "Select a cell to choose apps.": "选择单元格以选择应用。",
   "Some": "部分",
-  "Apps appear after their first notification": "应用在首次通知后显示"
+  "Apps appear after their first notification": "应用在首次通知后显示",
+  "Share “{name}” with": "共享“{name}”给",
+  "Not connected, syncs later": "未连接，稍后同步",
+  "Invitation": "邀请"
 });

@@ -38,10 +38,35 @@
 .mod-restart { color: var(--bad); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
 
 /* Share <folder>: the pop-up the file manager's Share folder opens (shared/ui-drive.js) */
-.sf-shade { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.42); display: flex; align-items: center; justify-content: center; padding: 24px; }
-.sf-sheet { width: min(460px, 100%); max-height: 100%; overflow: auto; border-radius: 14px; background: #fff; color: var(--text); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--line); padding: 18px 18px 14px; }
-@media (prefers-color-scheme: dark) { .sf-sheet { background: #252527; } }
-.sf-sheet h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
-.sf-where { color: var(--muted); font-size: 12px; margin-bottom: 10px; word-break: break-all; }
-.sf-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-.sf-ticks { padding-left: 12px; }
+.sf-dialog { padding: 0; border: 0; background: transparent; max-width: calc(100vw - 32px); overflow: visible; }
+.sf-dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+.sf-sheet { width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-radius: 14px; padding: 20px; background: #ffffff; color: #1d1d1f; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
+@media (prefers-color-scheme: dark) { .sf-sheet { background: #2a2a2c; color: #f5f5f7; } }
+.sf-list { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px 12px; }
+.sf-empty { color: var(--muted, #888); padding: 10px 4px; }
+.sf-item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(127, 127, 127, 0.07); border: 1px solid transparent; }
+.sf-item.sel { border-color: var(--accent, #0a84ff); }
+.sf-tile { width: 44px; height: 36px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center; background: #6ac4f5; color: #fff; }
+.sf-tile svg { width: 22px; height: 22px; }
+.sf-tile svg, .sf-tile svg * { fill: #fff; stroke: none; }
+.sf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sf-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sf-title b { font-weight: 600; white-space: nowrap; }
+.sf-path { color: var(--muted, #888); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sf-chip { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft, rgba(10, 132, 255, 0.15)); color: var(--accent, #0a84ff); }
+.sf-chip.muted { background: rgba(127, 127, 127, 0.15); color: var(--muted, #888); }
+.sf-chip.invite { background: rgba(255, 159, 10, 0.18); color: #ff9f0a; }
+.sf-state { font-size: 12px; color: var(--muted, #888); }
+.sf-editor h2 { margin: 0 0 4px; font-size: 17px; }
+.sf-where { color: var(--muted, #888); font-size: 12px; margin-bottom: 14px; word-break: break-all; }
+.sf-all { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(127, 127, 127, 0.1); cursor: pointer; }
+.sf-all span { display: flex; flex-direction: column; }
+.sf-all small { color: var(--muted, #888); font-size: 11px; }
+.sf-devs { display: flex; flex-direction: column; margin: 6px 0 4px; }
+.sf-dev { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer; }
+.sf-dev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-dev-os { color: var(--muted, #888); font-size: 12px; }
+.sf-editor input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent, #0a84ff); margin: 0; flex: none; }
+.sf-foot { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(127, 127, 127, 0.2); }
+.sf-grow { flex: 1; }

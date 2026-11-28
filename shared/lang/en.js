@@ -2423,7 +2423,6 @@
   "Accept": "Accept",
   "No paired devices": "No paired devices",
   "With {device}": "With {device}",
-  "Share “{name}”": "Share “{name}”",
   "One folder, synced across your devices": "One folder, synced across your devices",
   "Scanning…": "Scanning…",
   "Up to date · {count} files, {size}": "Up to date ({count} files, {size})",
@@ -2450,5 +2449,8 @@
   "Set on {name}": "Set on {name}",
   "Select a cell to choose apps.": "Select a cell to choose apps.",
   "Some": "Some",
-  "Apps appear after their first notification": "Apps appear after their first notification"
+  "Apps appear after their first notification": "Apps appear after their first notification",
+  "Share “{name}” with": "Share “{name}” with",
+  "Not connected, syncs later": "Not connected, syncs later",
+  "Invitation": "Invitation"
 });

@@ -2422,7 +2422,6 @@
   "Accept": "Aceitar",
   "No paired devices": "Nenhum dispositivo pareado",
   "With {device}": "Com {device}",
-  "Share “{name}”": "Compartilhar “{name}”",
   "One folder, synced across your devices": "Uma pasta sincronizada entre seus dispositivos",
   "Scanning…": "Verificando…",
   "Up to date · {count} files, {size}": "Atualizado · {count} arquivos, {size}",
@@ -2449,5 +2448,8 @@
   "Set on {name}": "Definido em {name}",
   "Select a cell to choose apps.": "Selecione uma célula para escolher apps.",
   "Some": "Alguns",
-  "Apps appear after their first notification": "Os apps aparecem após a primeira notificação"
+  "Apps appear after their first notification": "Os apps aparecem após a primeira notificação",
+  "Share “{name}” with": "Compartilhar “{name}” com",
+  "Not connected, syncs later": "Desconectado, sincroniza depois",
+  "Invitation": "Convite"
 });

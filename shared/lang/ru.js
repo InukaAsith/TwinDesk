@@ -2422,7 +2422,6 @@
   "Accept": "Принять",
   "No paired devices": "Нет сопряжённых устройств",
   "With {device}": "С {device}",
-  "Share “{name}”": "Поделиться «{name}»",
   "One folder, synced across your devices": "Одна папка, синхронизированная на ваших устройствах",
   "Scanning…": "Проверка…",
   "Up to date · {count} files, {size}": "Актуально · файлов: {count}, {size}",
@@ -2449,5 +2448,8 @@
   "Set on {name}": "Задаётся на {name}",
   "Select a cell to choose apps.": "Выберите ячейку, чтобы выбрать приложения.",
   "Some": "Некоторые",
-  "Apps appear after their first notification": "Приложения появляются после первого уведомления"
+  "Apps appear after their first notification": "Приложения появляются после первого уведомления",
+  "Share “{name}” with": "Поделиться «{name}» с",
+  "Not connected, syncs later": "Не подключено, синхронизируется позже",
+  "Invitation": "Приглашение"
 });
