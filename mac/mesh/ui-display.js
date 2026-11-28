@@ -8,9 +8,9 @@ UI.tab({
   group: 'Display',
   order: 10,
   title: I18n.t('Share screen'),
-  heading: I18n.t('{me} on {name}'),
+  heading: I18n.t('Share screen'),
   icon: 'display',
-  desc: I18n.t('Use {me} as a second screen for {name}.'),
+  desc: I18n.t('Show {me}’s screens on your other devices.'),
   color: 'linear-gradient(#5ac8fa, #0a84ff)',
   master: { get: (s) => s.sharing && s.sharing.on, set: (v) => UI.api.setSharing(v) },
   badge: (s) => (s.sharing && s.sharing.on ? 'on' : ''),
@@ -127,10 +127,16 @@ UI.tab({
         targetsBox.append(UI.row(t.name, '', [sel], { literal: true }));
       }
     };
+    // Multi-device: the sharing map (shared/ui-sharemap.js), drag a screen onto a device.
+    const shareMap = window.ShareMap ? ShareMap.create({
+      assign: (id, c) => api.setStreamTarget(id, c.mode === 'off' ? { mode: 'none' } : c.mode === 'extend' ? { mode: 'virtual' } : { mode: 'mirror', displayId: c.displayId }),
+      wake: (id) => api.wakePeer(id),
+    }) : null;
     const screens = UI.card(I18n.t('Displays'), [map, targetsBox]);
 
     body.append(
       helperNote,
+      ...(shareMap ? [shareMap.el] : []),
       screens,
       UI.card(I18n.t('Screen'), [modeRow, displayRow]),
       UI.card(I18n.t('Virtual display'), [virtRow, sizeRow]),
@@ -154,6 +160,20 @@ UI.tab({
         drawMap(sd, s.stream.targets || []);
         targetsBox.hidden = !s.stream.targets || s.stream.targets.length < 2; // one device: the cards below do it all
         if (!targetsBox.hidden) drawTargets(s.stream);
+      }
+      if (shareMap) {
+        const st = s.stream || {};
+        // A target on 'default' follows the shared settings: sharing on shows the chosen display (none = virtual).
+        const dflt = sh.on ? (sh.displayId == null ? 'extend' : 'mirror') : 'off';
+        const targets = (st.targets || []).map((x) => ({ id: x.id, name: x.name, os: ((s.peers || []).find((y) => y.id === x.id) || {}).os || '',
+          mode: x.mode === 'default' ? dflt : x.mode === 'none' ? 'off' : x.mode === 'virtual' ? 'extend' : 'mirror',
+          displayId: x.mode === 'default' ? String(sh.displayId) : x.displayId, status: x.status }));
+        const extendTo = targets.find((x) => x.mode === 'extend');
+        shareMap.render(sd && sd.length && st.targets ? {
+          displays: sd, virtual: { can: !extendTo, why: extendTo ? I18n.t('In use on {name}', { name: extendTo.name }) : '' }, targets,
+          offline: (s.peers || []).filter((x) => !x.connected && x.state !== 'connected' && !targets.some((y) => y.id === x.id)).map((x) => ({ id: x.id, name: x.name, os: x.os })),
+        } : null);
+        if (st.targets) screens.hidden = true; // the map has it all
       }
       mode.set(s.displayMode);
       modeRow.setHint({ extend: I18n.t('Shows the TwinDesk virtual display'), mirror: I18n.t('Shows {me}’s main screen'), custom: '' }[s.displayMode]);

@@ -32,6 +32,7 @@ const api = {
 };
 for (const name of ACTIONS) api[name] = (arg) => ipcRenderer.send(name, arg);
 api.phoneCamera = (open, opts) => ipcRenderer.send('phoneCamera', { open, opts }); // Camera › Start and Window: {facing, show}, sent as one
+api.setStreamTarget = (id, choice) => ipcRenderer.send('setStreamTarget', { id, choice }); // two values, sent as one (the loop above sends one)
 api.setReZume = api.setRezume; // the shared ReZume page (shared/ui-rezume.js) says it the PC's way
 api.setCell = (from, to, feature, on) => ipcRenderer.send('setCell', { from, to, feature, on }); // Notifications › Across devices: any cell
 api.setConsent = (id, feature, dir, on) => ipcRenderer.send('setConsent', { id, feature, dir, on }); // the matrix: one of this Mac's own cells

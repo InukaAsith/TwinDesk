@@ -24,6 +24,12 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   section, Shared with you, with Accept and Decline. Share a folder, Edit and the file manager's Share folder all open one
   centred pop-up: All devices or a tick per device (with its system, or Not connected), Save or Share,
   Stop sharing.
+- **Share screen map** (Multi-device, Mac, Windows and Linux): this computer's screens on the left,
+  every device on the right. Drag a screen onto a device (or select a screen, then the device) and its
+  window opens there: a real screen is mirrored, TwinDesk Virtual Display extends (one device at a
+  time). Each device shows what it gets, with Stop sharing here; devices not connected show Wake; the
+  Sharing now bar lists every share, with Stop all. Fixed on the Mac: a per-device screen choice sent
+  only the device, so it never applied. Untested between devices.
 - **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each
   cell reads All, the number of apps, or Off; selecting one of this computer's cells opens a panel
   (All, Some, Off, and a switch per app). Any other cell can be changed from any device too (All or

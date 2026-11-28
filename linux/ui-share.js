@@ -10,10 +10,10 @@ UI.tab({
   group: 'Display',
   order: 11,
   title: 'Share screen',
-  heading: '{me}’s screen on {name}',
+  heading: /\/mesh\//.test(location.pathname) ? 'Share screen' : '{me}’s screen on {name}', // Multi-device: every device, not one
   icon: 'display',
   color: 'linear-gradient(#5ac8fa, #0a84ff)',
-  desc: 'See {me} in a window on the other computer.',
+  desc: /\/mesh\//.test(location.pathname) ? 'Show {me}’s screens on your other devices.' : 'See {me} in a window on the other computer.',
   master: { get: (s) => s.pcScreen.mode !== 'off', set: (v) => UI.api.setPcScreenMode(v ? 'last' : 'off') },
   badge: (s) => (s.pcScreen.mode !== 'off' ? 'on' : ''), // sharing on, as the Mac's (watched or not)
   build(body) {
@@ -121,9 +121,12 @@ UI.tab({
         targetsBox.append(UI.row(target.name, t(target.error || ''), [seg, sel], { literal: true }));
       }
     };
+    // Multi-device: the sharing map (shared/ui-sharemap.js), drag a screen onto a device.
+    const shareMap = window.ShareMap ? ShareMap.create({ assign: (id, c) => api.setPcScreenTarget(id, c), wake: (id) => api.wakePeer(id) }) : null;
     const screens = UI.card(t('Displays'), [map, targetsBox]);
 
     body.append(
+      ...(shareMap ? [shareMap.el] : []),
       screens,
       UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow]),
       UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow, codecRow], { cls: 'keep-on' }),
@@ -142,6 +145,18 @@ UI.tab({
       if (!screens.hidden) drawMap(p.displays, p.targets || []);
       targetsBox.hidden = !p.targets || p.targets.length < 2; // one device: the Screen card below does it all
       if (!targetsBox.hidden) drawTargets(p);
+      if (shareMap) {
+        const peers = s.peers || [];
+        const on = p.targets && p.targets.length ? p.targets : null;
+        const extendTo = on && on.find((x) => x.mode === 'extend');
+        shareMap.render(p.targets ? {
+          displays: p.displays || [],
+          virtual: { can: !!(p.vdd && p.vdd.installed) && !extendTo, why: !(p.vdd && p.vdd.installed) ? t('Needs the display driver') : extendTo ? t('In use on {name}', { name: extendTo.name }) : '' },
+          targets: p.targets.map((x) => ({ id: x.id, name: x.name, os: x.os, mode: x.mode, displayId: x.monitor, status: x.status, error: x.error })),
+          offline: peers.filter((x) => x.state !== 'connected' && !p.targets.some((y) => y.id === x.id)).map((x) => ({ id: x.id, name: x.name, os: x.os })),
+        } : null);
+        if (p.targets) screens.hidden = true; // the map has it all
+      }
       mode.set(p.mode);
       const v = p.vdd;
       mode.el.querySelectorAll('button').forEach((b, i) => { b.disabled = p.busy || (i === 1 && !v.installed); });

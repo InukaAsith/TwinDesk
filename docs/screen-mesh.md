@@ -67,6 +67,15 @@ the Mac gets display 2, the phone gets a new virtual display, a tablet gets noth
 - (d) Mac: `mac/displays.js` reports the same model and `mac/stream.js` honours `screen.want`.
 - (e) Android: receiving side only (it shows a stream per source device); no display model needed.
 
+## The sharing map (Share screen page, Multi-device)
+
+`shared/ui-sharemap.js`: this computer's screens (from the display model) and TwinDesk Virtual Display
+on the left, one card per connected device on the right, plus paired devices that aren't connected
+(Wake). Dropping a screen on a card, or selecting a screen and then a card, sets that device's entry in
+the stream table (Windows and Linux `setPcScreenTarget`, the Mac `setStreamTarget`): a real screen is
+`mirror`, the virtual display `virtual` (taken while another device has it). The bar lists every
+active share and stops them all. Each page maps its own state into the map's model.
+
 ## Out of scope for this change
 
 More than one virtual display per computer (needs one adapter per display), the phone as a monitor,
