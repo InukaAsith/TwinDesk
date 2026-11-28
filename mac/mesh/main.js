@@ -110,6 +110,7 @@ function applyLocalApi() {
   localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
 }
 let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
+let drop = null; // Drop: one conversation with every device (shared/drop-host.js)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let consent = null; // each device's own two-way switches (shared/consent.js)
 let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
@@ -310,6 +311,7 @@ function publishState() {
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     state.folders = folders ? folders.view() : null; // File Sharing › Shared folders, and the Share folder sheet
+    state.drop = drop ? drop.state() : null; // Drop (shared/drop-host.js): the page asks for the room when rev changes
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
     if (edges) edges.tick(); // the matrix: ours to every device when it changed
@@ -1231,6 +1233,8 @@ app.whenReady().then(() => {
       os: (pid) => (pid === id.macId ? P.OS.MAC : known(pid).os || ''),
       connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
     });
+    // Drop (shared/drop.js): one conversation with every TwinDesk device, through this app's links.
+    drop = require('../../shared/drop-host.js').start({ selfId: id.macId, name: () => id.macName, os: P.OS.MAC, settings: () => settings, save: () => store.saveSettings(settings), push: pushState, hub }, () => win);
     // The phones' mesh manager (shared/mesh-manage.js): a phone on any computer of the mesh wakes, locks,
     // restarts… this Mac, answers its pairings and arranges the layout; Multi-device › Phones may refuse.
     manage = require('../../shared/mesh-manage.js').onHub({

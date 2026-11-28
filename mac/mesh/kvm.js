@@ -26,6 +26,10 @@ const store = require('./store');
 // Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
 // and the emergency return (#178).
 const Crossing = require('../../shared/crossing.js');
+// Cursor portals (shared/cursor-portals.js): an edge range of one of our displays that leads to a range of a
+// display on another computer (never a phone), opt-in (kvm.portalsOn), saved per device (kvm.portalsByPeer).
+const Portals = require('../../shared/cursor-portals.js');
+const PORTAL_VERSION = 3;
 
 // {them} = the other computer's name (Kvm._them).
 const REFUSED = { busy: '{them} is using this computer right now', not_allowed: '{them} doesn’t accept input from here' };
@@ -86,6 +90,10 @@ class Kvm extends EventEmitter {
     this.lockAt = 0;
     this.lockKey = new CL.LockKey(() => this.getSettings().keys.lockKeys);
     this.drivenMouse = false; // driven with the mouse too (not keyboard only): the edges are watched
+    this.helperPortalVersion = 0; // the helper's portalCapabilities (0: an older helper, no portals)
+    this.portalIds = new Map(); // the helper's portal id -> { peer, rule }
+    this.portalReturn = null; // driven, come in through a portal: { target } (the way back is its range)
+    this.pendingPortal = null;
 
     // Message types -> handler(m, fromId). The bus delivers them; onPartnerMessage() replays a phone bridge's.
     const K = [P.T.K_MOVE, P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP];
@@ -136,9 +144,15 @@ class Kvm extends EventEmitter {
     this.hub.on('selected', (id) => this._onSelected(id));
 
     setInterval(() => this._tick(), 250);
-    helper.on('ready', () => { meshNative(helper); setTimeout(() => this.config(), 150); }); // each device's own helper lane (#273)
-    if (helper.running) meshNative(helper);
+    const checkPortals = () => this.helper.request('portalCapabilities', {}, 1000).then((r) => {
+      this.helperPortalVersion = r && r.version === PORTAL_VERSION ? PORTAL_VERSION : 0;
+      this.config();
+      this.emit('change');
+    }, () => { this.helperPortalVersion = 0; });
+    helper.on('ready', () => { meshNative(helper); checkPortals(); setTimeout(() => this.config(), 150); }); // each device's own helper lane (#273)
+    if (helper.running) { meshNative(helper); checkPortals(); }
     helper.on('exit', () => {
+      this.helperPortalVersion = 0;
       if (this.mode === 'driving') this.goHome('The helper stopped');
       else if (this.mode === 'driven') this._drivenHome('The helper stopped');
     });
@@ -222,7 +236,113 @@ class Kvm extends EventEmitter {
   }
 
   get view() {
-    return { where: this.mode, message: this.message, tapError: this.tapError, paused: this.paused, locked: this.locked };
+    return { where: this.mode, message: this.message, tapError: this.tapError, paused: this.paused, locked: this.locked, portals: this.portalView() };
+  }
+
+  // ---- cursor portals ----
+
+  _myDisplays() {
+    return (this.layoutSync.allDisplays && this.layoutSync.allDisplays()[this.layoutSync.selfId]) || [];
+  }
+
+  _theirDisplays(id) {
+    return (this.layoutSync.allDisplays && this.layoutSync.allDisplays()[id]) || [];
+  }
+
+  // The computers a portal may lead to: connected, not a phone.
+  _portalPeers() {
+    return this.hub.bus.connectedIds().filter((id) => !P.isPhoneOs(this._peerOs(id)));
+  }
+
+  rulesFor(id) {
+    const byPeer = this.cfg.portalsByPeer || {};
+    return (byPeer[id] !== undefined && Portals.normalize(byPeer[id])) || [];
+  }
+
+  // What the helper watches: every usable rule towards a computer we may drive now. A rule whose source range
+  // overlaps one already taken (another computer's on the same edge) is left out.
+  _portalList() {
+    this.portalIds = new Map();
+    const k = this.cfg;
+    if (!k.portalsOn || this.helperPortalVersion !== PORTAL_VERSION || !k.mouse || (this.locked && this.mode === 'home')) return [];
+    const mine = this._myDisplays();
+    const out = [];
+    for (const id of this._portalPeers()) {
+      if (!this._canDriveTo(id)) continue;
+      const theirs = this._theirDisplays(id);
+      for (const r of this.rulesFor(id)) {
+        if (!Portals.usableSource(mine, r) || !Portals.usableTarget(theirs, r.target)) continue;
+        if (out.some((o) => o.source.display === r.source.display && o.source.side === r.source.side &&
+          Math.max(o.source.from, r.source.from) < Math.min(o.source.to, r.source.to))) continue;
+        const hid = `${out.length}-${r.id}`;
+        this.portalIds.set(hid, { peer: id, rule: r });
+        out.push({ ...r, id: hid });
+      }
+    }
+    return out;
+  }
+
+  portalView() {
+    return {
+      supported: this.helperPortalVersion === PORTAL_VERSION,
+      on: !!this.cfg.portalsOn,
+      mine: this._myDisplays(),
+      peers: this._portalPeers().map((id) => {
+        const sess = this._session(id);
+        return { id, name: (sess && sess.displayName && sess.displayName()) || id, os: this._peerOs(id), displays: this._theirDisplays(id), rules: this.rulesFor(id) };
+      }),
+    };
+  }
+
+  // The page saved a computer's portals (ipc setPortals): checked against both sides' displays.
+  setPortals(value, id) {
+    const rules = Portals.normalize(value);
+    if (!rules || typeof id !== 'string' || !this._portalPeers().includes(id) || this.mode !== 'home') return false;
+    const mine = this._myDisplays(), theirs = this._theirDisplays(id);
+    const previous = this.rulesFor(id);
+    if (rules.some((r) => (!Portals.usableSource(mine, r) || !Portals.usableTarget(theirs, r.target)) &&
+      !previous.some((p) => JSON.stringify(p) === JSON.stringify(r)))) return false;
+    this.cfg.portalsByPeer = { ...(this.cfg.portalsByPeer || {}), [id]: rules };
+    return true;
+  }
+
+  // The helper crossed a portal: take the computer behind it, the pointer placed on the portal's far range.
+  _onPortal(ev) {
+    const hit = this.portalIds.get(ev.id);
+    const r = hit && hit.rule;
+    const id = hit && hit.peer;
+    const before = this.hub.selectedId;
+    const theirs = id ? this._theirDisplays(id) : [];
+    if (!hit || this.mode !== 'home' || this.locked || !this.cfg.mouse || !this.cfg.portalsOn || !this._canDriveTo(id) ||
+        !Number.isFinite(ev.offset) || ev.offset < r.source.from || ev.offset > r.source.to ||
+        !Portals.usableTarget(theirs, r.target) || (this.blockEdge && this.blockEdge()) || !this.hub.select(id)) {
+      this.helper.send('capture', { on: false });
+      return;
+    }
+    const offset = Portals.mapOffset(r, ev.offset);
+    // side + offset: where a computer without portals (or an older app) places the pointer instead
+    const along = Portals.desktopOffset(theirs, r.target, offset);
+    this._take({ where: { portal: { target: r.target, offset }, side: r.target.side, offset: along === null ? 0.5 : along } }, id, before);
+  }
+
+  // Driven, a take through a portal: the helper places the pointer on that display's range first.
+  _onPortalTake(m, from, done) {
+    const target = Portals.endpoint(m.portal && m.portal.target);
+    const offset = m.portal && m.portal.offset;
+    const mine = this._myDisplays();
+    if (this.helperPortalVersion !== PORTAL_VERSION || this.pendingPortal || !target || !Number.isFinite(offset) ||
+        offset < target.from || offset > target.to || !Portals.usableTarget(mine, target)) return done(false);
+    const pending = { from, route: m.route };
+    this.pendingPortal = pending;
+    this.helper.request('placePortal', { display: target.display, side: target.side, offset, deadlineMs: Date.now() + 700 }, 750).then(() => {
+      if (this.pendingPortal !== pending) return;
+      this.pendingPortal = null;
+      done(Portals.usableTarget(this._myDisplays(), target) ? target : false);
+    }, () => {
+      if (this.pendingPortal !== pending) return;
+      this.pendingPortal = null;
+      done(false);
+    });
   }
 
   // Cursor lock: at home no edge crosses, driven the edges aren't watched (neither the way back nor on
@@ -347,12 +467,14 @@ class Kvm extends EventEmitter {
     const k = this.cfg;
     const edge = this._edgeConfig();
     const sides = edge.sides;
+    const portals = this._portalList();
     this.helper
       .request('kvmConfig', {
         side: sides[0] || null, sides, zones: edge.zones, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
-        driveOther: sides.length > 0,
+        driveOther: sides.length > 0 || portals.length > 0,
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
-        crossingModifier: Crossing.modifier(k.crossingModifier),
+        crossingModifier: Crossing.modifier(k.portalsOn ? '' : k.crossingModifier), // portals have their own keys
+        portals,
         emergencyKeys: Crossing.emergency(this.getSettings().keys.emergencyKeys),
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,
@@ -654,6 +776,9 @@ class Kvm extends EventEmitter {
       case 'edge':
         this._onEdge(ev);
         break;
+      case 'portal':
+        this._onPortal(ev);
+        break;
       // Double-tap: switches mouse and keyboard sharing off (everything home)
       // and on again. In keyboard-only mode (Cursor off + "Switch the keyboard with the hotkey") it
       // moves the keyboard over and back instead.
@@ -751,6 +876,14 @@ class Kvm extends EventEmitter {
     if (!this._beDrivenFor(from) || !this._linkedFor(from) || this._pausedFor(from)) return refuse(P.REFUSE.NOT_ALLOWED);
     if (this.mode === 'driven' && !(m.route > this.peerRoute)) return;
     const first = this.mode !== 'driven';
+    if (m.portal && m.mouse !== false && !m._portal) {
+      // Through a portal: placed on its range, else as an ordinary crossing (side, offset)
+      return this._onPortalTake(m, from, (target) => {
+        if (this.mode === 'driving' || (this.mode === 'driven' && from !== this.partner)) return refuse(P.REFUSE.BUSY);
+        this._onTake({ ...m, _portal: target || 'none' }, from);
+      });
+    }
+    this.portalReturn = m._portal && m._portal !== 'none' ? { target: m._portal } : null;
     this.partner = from;
     this.peerRoute = m.route;
     if (m.drag) console.log(`[drag] in: the PC crossed with a drag of ${m.drag.count} item(s)`);
@@ -761,7 +894,8 @@ class Kvm extends EventEmitter {
     if (first) this.input.releaseAll();
     this.drivenMouse = m.mouse !== false;
     if (m.mouse !== false) {
-      if (typeof m.side === 'string') this.helper.send('place', { side: m.side, offset: Number(m.offset) || 0.5 });
+      if (this.portalReturn) { /* placed by placePortal */ }
+      else if (typeof m.side === 'string') this.helper.send('place', { side: m.side, offset: Number(m.offset) || 0.5 });
       else if (first) this.helper.send('place', { center: true });
       if (!this.locked) this._armReturn();
     }
@@ -775,6 +909,19 @@ class Kvm extends EventEmitter {
   }
 
   _armReturn() {
+    const pr = this.portalReturn;
+    if (pr) {
+      // the way back is the portal's range only (the helper's portalReturn)
+      const mine = this._myDisplays();
+      const from = Portals.desktopOffset(mine, pr.target, pr.target.from);
+      const to = Portals.desktopOffset(mine, pr.target, pr.target.to);
+      if (from !== null && to !== null) {
+        this.returnSide = pr.target.side;
+        this.helper.send('armReturn', { on: true, side: pr.target.side, sides: [pr.target.side], zones: `${from.toFixed(6)}-${to.toFixed(6)}`, portal: pr.target, resistancePx: this.cfg.resistancePx });
+        return;
+      }
+      this.portalReturn = null;
+    }
     const { sides, zones } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
     this.returnSide = sides[0] || null;
@@ -786,6 +933,11 @@ class Kvm extends EventEmitter {
   // that side: ignored. The watch is armed again unless we went home, so a driver that did not take the
   // device leaves the edge live.
   _onReturn(msg) {
+    // Come in through a portal: back to the driver, the pointer where it left (its pin there)
+    if (this.portalReturn) {
+      if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner);
+      return this._sendHome(undefined, '');
+    }
     // An older (one-side) helper names none: it watches the first side we armed. Its offset is ours along that
     // side and still needs mapping; sent as it was, the driver read it along its own edge (another monitor).
     const side = E.SIDES.includes(msg.side) ? msg.side : this.returnSide || null;
@@ -947,6 +1099,7 @@ class Kvm extends EventEmitter {
     this.drop.dragIn.cancel(); // before releaseAll: the held button must not drop the files
     this.helper.send('releaseAll');
     this.helper.send('armReturn', { on: false });
+    this.portalReturn = null;
     this._setMode('home', message);
     this.clipboard.sendIfChanged('switch');
   }

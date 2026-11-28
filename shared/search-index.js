@@ -35,6 +35,7 @@ const PAGES = {
   clipboard: { desk: 'clipboard', android: 'Clipboard', ios: 'clipboard' },
   notifications: { desk: 'notifications', android: 'Notifications', ios: 'notifications' },
   files: { desk: 'files', android: 'Files', ios: 'files' },
+  drop: { desk: 'drop', android: 'Drop', ios: 'drop' },
   rezume: { desk: 'rezume', android: 'Rezume' },
   audio: { desk: 'audio', android: 'Sound', ios: 'audio' },
   camera: { desk: 'camera', android: 'Camera', ios: 'camera' },
@@ -64,6 +65,7 @@ const ENTRIES = [
   { t: 'Apps from the other computer', page: 'apps', on: 'desk', k: 'open app, other computer apps, window, run app remotely' },
   // Input
   { t: 'One mouse and keyboard for both computers', page: 'cursor', on: 'desk', k: 'share mouse, cursor, pointer, move between computers, edges, kvm, synergy, barrier' },
+  { t: 'Cursor portals', page: 'cursor', on: 'desk', k: 'portal, edge, jump, teleport, monitor edge, display edge, cross to other computer, hold key' },
   { t: 'Type on the other computer', page: 'keyboard', k: 'keyboard, type, typing, keys, layout' },
   { t: 'Use the phone as a touchpad', page: 'remote', dir: 'p2c', k: 'phone as mouse, trackpad, touchpad, remote control, pointer, air mouse' },
   { t: 'Air mouse', page: 'remote', dir: 'p2c', k: 'gyro, point phone, motion, wave, laser, pointer' },
@@ -81,6 +83,7 @@ const ENTRIES = [
   { t: 'Notification history', page: 'notifications', k: 'past notifications, missed, old alerts, history' },
   { t: 'Send files', page: 'files', k: 'send file, transfer, share file, airdrop, drag and drop, upload, photos to pc' },
   { t: 'Received files', page: 'files', k: 'downloads, where are files, received folder, save to' },
+  { t: 'Message all your devices', page: 'drop', k: 'drop, chat, group chat, message, send text, send link, note to self, pictures, conversation, every device' },
   { t: 'Browse the phone’s storage', page: 'phonefiles', dir: 'p2c', k: 'phone files, file manager, storage, copy from phone, sd card' },
   { t: 'The phone as a drive', page: 'mount', dir: 'p2c', k: 'mount phone, finder, explorer, drive, disk' },
   { t: 'Phone photos on the computer', page: 'photos', dir: 'p2c', k: 'gallery, pictures, videos, copy photos' },

@@ -29,6 +29,7 @@ enum SearchIndex {
         Entry(en: "Notification history", title: { tr("Notification history") }, k: "past notifications, missed, old alerts, history", page: "notifications", dir: ""),
         Entry(en: "Send files", title: { tr("Send files") }, k: "send file, transfer, share file, airdrop, drag and drop, upload, photos to pc", page: "files", dir: ""),
         Entry(en: "Received files", title: { tr("Received files") }, k: "downloads, where are files, received folder, save to", page: "files", dir: ""),
+        Entry(en: "Message all your devices", title: { tr("Message all your devices") }, k: "drop, chat, group chat, message, send text, send link, note to self, pictures, conversation, every device", page: "drop", dir: ""),
         Entry(en: "Phone photos on the computer", title: { tr("Phone photos on the computer") }, k: "gallery, pictures, videos, copy photos", page: "photos", dir: "p2c"),
         Entry(en: "Use the phone as a webcam", title: { tr("Use the phone as a webcam") }, k: "phone camera on pc, webcam, video call, zoom, share camera, virtual camera", page: "camera", dir: "p2c"),
         Entry(en: "Use the computer’s camera on the phone", title: { tr("Use the computer’s camera on the phone") }, k: "pc camera on phone, webcam", page: "camera", dir: "c2p"),

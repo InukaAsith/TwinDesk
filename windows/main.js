@@ -154,6 +154,7 @@ let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
 let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
+let drop = null; // Drop: one conversation with every device (shared/drop-host.js)
 let screen = null;
 let clip = null;
 let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
@@ -271,6 +272,8 @@ function start() {
   awake = require('../shared/keepawake.js').keepAwake(() => settings.app.keepAwake !== false && link && link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os)));
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   if (settings.drive.on || (settings.drive.folders || []).length) loadDrive(); // Drive, or shared folders
+  // Drop (shared/drop.js): one conversation with every TwinDesk device, through this app's links.
+  drop = require('../shared/drop-host.js').start({ selfId: device.id, name: () => device.name, os: P.OS.WIN, settings: () => settings, save: saveSettings, push: pushState, link }, () => mainWin);
   // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet the file manager's Share folder opens.
   folders = require('../shared/folders-host.js').foldersHost({
     settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,
@@ -1381,6 +1384,7 @@ function buildState() {
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder },
     folders: folders ? folders.view() : null, // File Sharing › Shared folders, and the Share folder sheet
+    drop: drop ? drop.state() : null, // Drop (shared/drop-host.js): the page asks for the room when rev changes
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), relay: { ...require('../shared/relay.js').clean(settings.net.relay), ...require('../shared/relay.js').view() }, ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

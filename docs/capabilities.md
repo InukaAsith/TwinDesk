@@ -83,6 +83,9 @@ and start only when the other side answers.
 | `audio.route {outs?, sync?}` (sender to receiver) | Audio › the mixer: the sender's pick of the receiver's speakers, and Keep speakers in sync (ms) | an older receiver ignores it |
 | `mesh.ask` (phone to computer) | Manage the mesh from the phone (`shared/mesh-manage.js`, `MeshMgr.kt`) | an older computer ignores it, so the phone shows no Multi-device card; a computer with it off refuses each action (`mesh.done {why: off}`) |
 | `tether.state {can: true}` (phone to computer, as its session starts) | Internet over USB (`shared/tether.js`, `Tether.kt`) | an older phone never sends it, so the computer shows no Internet over USB card and never sends `tether`; an older computer ignores it |
+| `drop.hi {ids, gone, since?}` (either way, as a link comes up) | Drop (`shared/drop.js`, `Drop.kt`, `Drop.swift`): each side lists the messages it has; the other sends what's missing (`drop.msgs`), then new ones as `drop.msg` and deletions as `drop.del` | an older app ignores it, so no Drop messages go to or come from it |
+| `drop.who` (phone to computer; the computer answers `{members}`) | Drop's To picker on a phone: the devices in the conversation, the computer first | an older computer never answers: the phone offers Everyone only |
+| `kvm.take {portal: {target, offset}}` (with `side` and `offset` too) | Cursor portals (`shared/cursor-portals.js`): the Mac places the pointer on the portal's range and arms the way back there (`portalCapabilities` 3 in its helper) | an app without portals places the pointer by `side` and `offset`, as an ordinary crossing |
 
 ## Screen sharing to a phone (offer and screen.state fields)
 

@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('macshare', {
   relaunch: call('relaunch'),
   setAudio: call('setAudio'),
   camera: call('camera'),
+  drop: call('drop'), // Drop (shared/drop-host.js)
   soundRoute: call('soundRoute'), soundVolume: call('soundVolume'), // Audio › the mixer
   deckSave: call('deckSave'), deckTry: call('deckTry'), deckApps: call('deckApps'), deckState: call('deckState'), deckRun: call('deckRun'), deckPick: call('deckPick'), // the Deck page
   iosSign: call('iosSign'), iosSignIpa: call('iosSignIpa'), // TwinDesk iPhone (shared/iossign.js)

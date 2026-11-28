@@ -32,6 +32,7 @@ UI.tab({
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => `${v} px` }, (v) => api.setKvm({ resistancePx: v }));
     // Hold a key to cross (#230; in Multi-device, this Mac's own mouse and trackpad at its edges) and
     // the emergency return (#178).
+    const portals = window.CursorPortalsUI ? CursorPortalsUI.create() : null; // Cursor portals (module cursor)
     const crossingModifier = UI.select([
       { value: '', label: I18n.t('None') },
       { value: 'Command', label: '⌘ Command' },
@@ -78,6 +79,7 @@ UI.tab({
     const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: I18n.t('Accessibility') }], (v) => api.setPhone({ input: v, inputPicked: true }));
     const viaRow = UI.row(I18n.t('Through'), I18n.t('ADB: full control. Accessibility: TwinDesk on the phone taps and types itself, over Wi-Fi, Wi-Fi Direct or Bluetooth, no developer options'), [via.el]);
     let driven2 = null;
+    let crossingModifierRow = null;
     body.append(
       status,
       UI.pair(
@@ -89,7 +91,7 @@ UI.tab({
       UI.note('info', I18n.t('Which device each edge of the screen leads to: Multi-device › Layout.')),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
-        UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when this Mac’s own mouse or trackpad leaves it at an edge.'), [crossingModifier.el]),
+        crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when this Mac’s own mouse or trackpad leaves it at an edge.'), [crossingModifier.el]),
         UI.row(I18n.t('Pointer speed here'), I18n.t('Another computer’s mouse on this Mac, and this Mac’s on a phone'), [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
         UI.row(I18n.t('Scrolling speed here'), I18n.t('Another computer’s mouse wheel on this Mac'), [scrollSpeed]),
@@ -99,6 +101,7 @@ UI.tab({
       ]),
       UI.card(I18n.t('Not on the same network'), [bleRow]),
       UI.card(I18n.t('Crowded Wi-Fi'), [bleInputRow]),
+      portals && portals.el, // at the very bottom
     );
 
     return (s) => {
@@ -119,6 +122,10 @@ UI.tab({
       driven.set(k.beDriven);
       resistance.set(k.resistancePx);
       crossingModifier.set(k.crossingModifier || '');
+      // Portals have their own keys: Hold key to switch steps aside while they're on.
+      crossingModifier.el.disabled = !!k.portalsOn;
+      crossingModifierRow.setHint(k.portalsOn ? I18n.t('Off while cursor portals are on: each portal has its own key to hold.') : I18n.t('Hold this key when this Mac’s own mouse or trackpad leaves it at an edge.'));
+      if (portals) portals.update(s);
       emergencyKey.set((s.keys && s.keys.emergencyKeys) || 'Control+Alt+Command+Escape');
       speed.set(k.speed);
       reverse.set(k.reverseScroll);

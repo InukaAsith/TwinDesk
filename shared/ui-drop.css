@@ -1,0 +1,19 @@
+/* Drop (shared/ui-drop.js): the conversation card as TwinDesk Web's (ui-web.css .web-drop), with a To picker. */
+.drop-room .hub-conv { height: var(--drop-h, calc(100vh - 190px)); min-height: 360px; }
+.drop-gear { width: 30px; height: 30px; border-radius: 8px; border: 0; padding: 5px; background: transparent; color: var(--muted); cursor: pointer; flex: none; }
+.drop-gear:hover, .drop-gear.on { background: var(--track-off); color: var(--text); }
+.drop-gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.drop-settings .hub-conv-scroll { padding: 0 14px; }
+.drop-dev-list { border-bottom: 1px solid var(--line); }
+.drop-to-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.drop-to { max-width: 260px; }
+.drop-note { padding: 6px 14px; border-top: 1px solid var(--line); }
+.drop-note[hidden] { display: none; }
+.drop-acts { display: flex; align-items: center; gap: 2px; max-height: 0; overflow: hidden; opacity: 0; transition: opacity .15s; margin: 0 -4px -2px; }
+.hub-bubble:hover .drop-acts, .hub-bubble:focus-within .drop-acts { max-height: 40px; opacity: 1; }
+.drop-time { font-size: 11px; opacity: .75; margin: 0 6px 0 4px; }
+.drop-act { width: 26px; height: 26px; border: 0; padding: 4px; border-radius: 7px; background: none; color: inherit; cursor: pointer; opacity: .8; }
+.drop-act:hover { opacity: 1; background: rgba(127, 127, 127, .22); }
+.drop-act svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.hub-bubble.out .drop-acts { justify-content: flex-end; }
+.hub-conv.hub-drop { outline: 2px dashed var(--accent); outline-offset: -4px; }

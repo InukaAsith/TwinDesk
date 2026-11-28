@@ -157,6 +157,7 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     Notifications("Notifications", Ico.bell, grad(0xFFFF6961, 0xFFFF3B30), "Share"),
     Files("Files", Ico.files, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
     Rezume("ReZume", Ico.rezume, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
+    Drop("Drop", Ico.message, grad(0xFFFFCC00, 0xFFFF9500), "Share"), // one conversation with every device (Drop.kt)
     Sound("Sound", Ico.audio, grad(0xFFFF6482, 0xFFFF2D55), "More"),
     Media("Media", Ico.media, grad(0xFFFF6482, 0xFFBF5AF2), "More"),
     Camera("Camera", Ico.camera, grad(0xFFBF5AF2, 0xFF8944AB), "More"),
@@ -221,6 +222,7 @@ private fun isOnPc(core: Core, t: Tab): Boolean = when (t) {
     Tab.Media -> core.pcMedia.now?.playing == true
     Tab.Camera -> core.adb.camera.on
     Tab.Rezume -> core.rezume.on
+    Tab.Drop -> core.drop.on
     Tab.Calls -> core.hub.callsOn
     Tab.Messages -> core.hub.messagesOn
     Tab.Photos -> core.hub.mediaOn
@@ -528,6 +530,11 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
 @Composable
 private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
+    // Drop: the conversation fills the page, which doesn't scroll (its messages do).
+    if (tab == Tab.Drop && !peerMode(core)) {
+        Column(modifier.fillMaxHeight().padding(horizontal = 24.dp, vertical = 20.dp)) { Column(Modifier.widthIn(max = 820.dp).weight(1f)) { DropPage(core, v) } }
+        return
+    }
     Column(modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         Column(Modifier.widthIn(max = 820.dp)) {
             if (peerMode(core) && tab != Tab.Connection && tab != Tab.General && tab != Tab.About) PeerPage(core, v, tab.name)
@@ -547,6 +554,7 @@ private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier)
                 Tab.Notifications -> NotificationsPage(core, v + resumed)
                 Tab.Files -> FilesPage(core, v)
                 Tab.Rezume -> RezumePage(core, v)
+                Tab.Drop -> Unit // above
                 Tab.Sound -> SoundPage(core, v)
                 Tab.Media -> MediaPage(core, v)
                 Tab.Camera -> CameraPage(core, v)

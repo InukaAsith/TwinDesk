@@ -17,6 +17,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         static let invite = "invite"
         static let screen = "screen"
         static let sign = "sign"
+        static let drop = "drop"
     }
 
     func setUp() {
@@ -77,6 +78,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("screen", tr("{name} is sharing its screen", ["name": name]), tr("Tap to view."), cat: Cat.screen, sound: true)
     }
 
+    // A Drop message while TwinDesk isn't on screen; tapping it opens Drop.
+    func drop(_ from: String, _ text: String, count: Int) {
+        post("drop", from.isEmpty ? tr("Drop") : from, String(text.prefix(300)), cat: Cat.drop, sound: true, thread: "drop")
+    }
+
     func cancel(_ id: String) { c.removeDeliveredNotifications(withIdentifiers: [id]) }
 
     // Anything else (a one-off line from a feature).
@@ -132,6 +138,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case (Cat.screen, _):
             core.screen.autoOpen = true
             core.changed()
+        case (Cat.drop, _):
+            DispatchQueue.main.async { AppUI.shared.open(.drop) }
         case (Cat.sign, _):
             core.signer.tappedNotification(app: info["app"] as? String)
         case (Cat.invite, _):

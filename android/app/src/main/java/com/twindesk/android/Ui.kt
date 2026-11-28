@@ -155,7 +155,7 @@ fun Theme(content: @Composable () -> Unit) {
 
 // ---- icons: mac/control.js ICONS, the same 20×20 line drawings ----
 
-private fun lineIcon(name: String, d: String): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 20f, 20f).apply {
+internal fun lineIcon(name: String, d: String): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 20f, 20f).apply {
     addPath(
         pathData = PathParser().parsePathString(d).toNodes(), fill = null, stroke = SolidColor(Color.Black),
         strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,

@@ -39,7 +39,7 @@ const SCHEMA = {
   virtual: { enabled: bool, width: (v) => Math.round(clamp(640, 3840, 1920)(v)), height: (v) => Math.round(clamp(480, 2160, 1080)(v)), hiDPI: bool, hz: oneOf([30, 60], 60) },
   kvm: {
     pcSide: oneOf(P.SIDES, 'right'), mouse: bool, keyboard: bool, driveOther: bool, beDriven: bool,
-    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: oneOf(['', 'Command', 'Control', 'Alt', 'Shift'], ''), speed: clamp(0.25, 4, 1), scrollSpeed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
+    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: oneOf(['', 'Command', 'Control', 'Alt', 'Shift'], ''), speed: clamp(0.25, 4, 1), scrollSpeed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool, portalsOn: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: emergencyShortcut.valid },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool, lockTogether: bool },
@@ -341,7 +341,8 @@ function setupIpc(ctx) {
     identifyDisplays() {
       ctx.kvm.map.identify();
     },
-    setPortals(value) {
+    setPortals(arg) { // [rules], or {rules, peer} as the shared editor sends it (the one peer here)
+      const value = Array.isArray(arg) ? arg : arg && arg.rules;
       const peer = ctx.server.current;
       const rules = Portals.normalize(value);
       if (!peer || !rules || ctx.kvm.mode !== 'home') return;

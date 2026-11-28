@@ -27,7 +27,7 @@ if (process.argv[2] === 'peer') {
     request(cmd, args) { this.commands.push({ cmd, args }); return Promise.resolve({ ok: true }); },
   });
   const settings = { kvm: { pcSide: 'top', along: 0, mouse: true, keyboard: true, driveOther: true,
-    beDriven: true, linked: true, linkedBy: {}, portalsByPeer: {}, resistancePx: 10, speed: 1, ble: true },
+    beDriven: true, linked: true, linkedBy: {}, portalsOn: true, portalsByPeer: {}, resistancePx: 10, speed: 1, ble: true },
   keys: { hotkey: 'AltRight', lockKeys: 'F14' } };
   const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null });
   const drop = { dragIn: { dragging: false, onDriven() {}, cancel() {} }, cancelDrag() {} };

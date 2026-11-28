@@ -60,4 +60,6 @@ issue when there is one.
 - **Mouse and keyboard over Bluetooth** works between Macs and Windows PCs. A session the Mac dialled
   has no Bluetooth path, and Linux joins other computers over the network only.
 - **TwinDesk iPhone** signs one iPhone at a time.
+- **Drop** reaches only devices with Drop on, and a computer with it off doesn't pass messages on. A
+  phone joins through the computer it's connected to; files in Drop are 5 MB at most (File Sharing has no limit).
 - With only two devices, keep Multi-device off: one-to-one has everything, with less to set up.

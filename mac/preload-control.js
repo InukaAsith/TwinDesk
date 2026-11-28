@@ -35,7 +35,8 @@ const api = {
   pathsOf: (files) => [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean), // dropped files -> paths
 };
 for (const name of ACTIONS) api[name] = (arg) => ipcRenderer.send(name, arg);
-api.qrPair = () => ipcRenderer.invoke('qrPair'); // Connection: pair a phone with a QR code (its link)
+api.qrPair = () => ipcRenderer.invoke('qrPair');
+api.drop = (o) => ipcRenderer.invoke('drop', o); // Drop (shared/drop-host.js) // Connection: pair a phone with a QR code (its link)
 api.setReZume = api.setRezume; // the shared ReZume page (shared/ui-rezume.js) says it the PC's way
 // The one action with two arguments (Camera › Start and Window: {facing, show}): sent as one.
 api.phoneCamera = (open, opts) => ipcRenderer.send('phoneCamera', { open, opts });

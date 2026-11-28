@@ -120,6 +120,7 @@ let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
 let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
+let drop = null; // Drop: one conversation with every device (shared/drop-host.js)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is the Mac's sound capture (audiohub.js)
 
 const state = {
@@ -277,6 +278,7 @@ function pushState() {
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || path.join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     state.folders = folders ? folders.view() : null; // File Sharing › Shared folders, and the Share folder sheet
+    state.drop = drop ? drop.state() : null; // Drop (shared/drop-host.js): the page asks for the room when rev changes
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
@@ -833,6 +835,8 @@ app.whenReady().then(() => {
   }));
   svc.getDrive = () => svc.drive || null;
   if (settings.drive.on || (settings.drive.folders || []).length) svc.loadDrive(); // Drive, or shared folders
+  // Drop (shared/drop.js): one conversation with every TwinDesk device, through this app's links.
+  drop = require('../shared/drop-host.js').start({ selfId: id.macId, name: () => id.macName, os: P.OS.MAC, settings: () => settings, save: () => store.saveSettings(settings), push: pushState, link: { on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)), send: (m) => peer.sendToClient(m), get current() { return peer.current; } } }, () => win);
   // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet Finder's Share folder opens.
   folders = require('../shared/folders-host.js').foldersHost({
     settings: () => settings, save: () => store.saveSettings(settings), push: pushState, getDrive: () => svc.getDrive(), loadDrive: () => svc.loadDrive(),

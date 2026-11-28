@@ -88,6 +88,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val shots = Screenshots(this) // screenshots both ways, onto the other clipboard
     val nowPlaying = NowPlaying(this) // what plays here, for the computer's media controls
     val rezume = Rezume(this) // ReZume: go on with what's in use on the other device (off until turned on)
+    val drop = Drop(this) // Drop: one conversation with every device (shared/drop.js)
     val mesh = MeshMgr(this) // the whole mesh's computers on Overview (shared/mesh-manage.js): asks only while shown
     val dev = DevCtl(this) // this phone's controls on the computer's Overview, the computer's on the Computer page
     val appList = AppList(this) // the phone's apps, for the pages that pick some (Notifications, Banking apps)
@@ -100,12 +101,13 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // shown and its features hear nothing from the computer.
     val modulesAtStart: Set<String> = Modules.off(store)
     fun moduleOn(id: String) = id in Modules.FIXED || id !in modulesAtStart
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, mesh, pcMedia, deck, tether)
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, mesh, pcMedia, deck, tether, drop)
         .filter { f ->
             when (f) {
                 clip, fclip -> moduleOn("clipboard")
                 notifs -> moduleOn("notifications")
                 rezume -> moduleOn("rezume")
+                drop -> moduleOn("drop")
                 remote -> moduleOn("remote")
                 pcMedia, nowPlaying -> moduleOn("media")
                 sound, macSound -> moduleOn("sound")

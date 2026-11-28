@@ -1,0 +1,40 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The Cursor portals card (ui-cursor-portals.js). Uses each app's colour tokens. */
+.cp-note:empty { display: none; }
+.cp-note { padding: 8px 14px; color: var(--warn, #ff9f0a); font-size: 12px; }
+.cp-editor { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; border-top: 1px solid var(--row-line, rgba(127,127,127,.2)); }
+.cp-peers { align-self: flex-start; }
+.cp-stage { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-panel { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cp-panel-title { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; }
+.cp-arrow { color: var(--muted); font-size: 18px; flex: none; }
+.cp-svg { width: 100%; height: auto; aspect-ratio: 300 / 180; display: block; touch-action: none; user-select: none; background: var(--control, rgba(127,127,127,.08)); border-radius: 10px; }
+.cp-disp { fill: #8e8e93; stroke: var(--card); stroke-width: 1.5; }
+.cp-mine .cp-disp { fill: #0a84ff; }
+.cp-disp-n { fill: #fff; font: 600 13px -apple-system, system-ui, sans-serif; pointer-events: none; }
+.cp-empty { fill: var(--muted); font: 12px -apple-system, system-ui, sans-serif; }
+.cp-edge { stroke: transparent; stroke-width: 11; stroke-linecap: round; cursor: pointer; outline: none; }
+.cp-edge:hover, .cp-edge:focus-visible { stroke: rgba(255,255,255,.35); }
+.cp-edge-on { stroke: rgba(255,255,255,.45); stroke-width: 3; pointer-events: none; }
+.cp-range { stroke: #bf5af2; stroke-width: 6; stroke-linecap: round; pointer-events: none; filter: drop-shadow(0 0 4px #bf5af2); }
+.cp-saved { stroke-width: 4; stroke-linecap: round; opacity: .85; pointer-events: none; }
+.cp-handle { fill: #fff; stroke: #bf5af2; stroke-width: 3; cursor: grab; outline: none; }
+.cp-handle:focus-visible { stroke-width: 5; }
+.cp-portal { fill: rgba(191,90,242,.35); stroke: #e0a8ff; stroke-width: 2; opacity: 0; pointer-events: none; filter: drop-shadow(0 0 6px #bf5af2); }
+.cp-cursor { fill: #fff; stroke: #000; stroke-width: 1; pointer-events: none; opacity: 0; }
+.cp-hint { font-size: 12px; color: var(--muted); }
+.cp-chips { display: flex; gap: 4px; }
+.cp-chip { width: 30px; height: 28px; border-radius: 7px; border: 1px solid var(--control-line, rgba(127,127,127,.3)); background: var(--control, transparent); color: var(--text); font-size: 15px; cursor: pointer; }
+.cp-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cp-add { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.cp-status { flex: 1; font-size: 12px; color: var(--muted); }
+.cp-list { display: flex; flex-direction: column; gap: 6px; }
+.cp-list:empty { display: none; }
+.cp-rule { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--control, rgba(127,127,127,.08)); font-size: 12.5px; }
+.cp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.cp-rule-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cp-keys { color: var(--muted); font-size: 13px; flex: none; }
+.cp-remove { width: 26px; height: 26px; border: none; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; flex: none; }
+.cp-remove:hover { background: var(--nav-hover, rgba(127,127,127,.15)); color: var(--bad, #ff453a); }
+.cp-remove svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (prefers-reduced-motion: reduce) { .cp-cursor, .cp-portal { transition: none; } }

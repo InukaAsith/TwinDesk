@@ -201,6 +201,7 @@ function normalize(s) {
       remote: bool(pcs.remote, true), // The viewer may start/stop and switch it (screen.ctl)
     },
     pairSync: pairSync(s.pairSync), // {deviceId: {feature: {out, in}}} (pairsync.js)
+    drop: require('../shared/drop.js').normalize(s.drop), // Drop: on, and the devices blocked there (shared/drop.js)
     wake: { peers: wakePeers(wk.peers) }, // {deviceId: {name, os, macs, address, at}} from wol.info
     // moveWindows: the move key held, a window clicked and dragged past the shared edge goes to the
     // other computer (shared/movewin.js), off until switched on; moveKey: which key.

@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, receive, share, remote, deck, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
+    case overview, connection, receive, share, remote, deck, clipboard, notifications, files, drop, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
     var id: String { rawValue }
 
     var title: String {
@@ -21,6 +21,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .clipboard: return tr("Clipboard")
         case .notifications: return tr("Notifications")
         case .files: return tr("File Sharing")
+        case .drop: return tr("Drop")
         case .photos: return tr("Photos")
         case .messages: return tr("Messages")
         case .audio: return tr("Audio")
@@ -45,6 +46,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .clipboard: return "doc.on.clipboard.fill"
         case .notifications: return "bell.fill"
         case .files: return "folder.fill"
+        case .drop: return "bubble.left.and.bubble.right.fill"
         case .photos: return "photo.fill.on.rectangle.fill"
         case .messages: return "message.fill"
         case .audio: return "speaker.wave.2.fill"
@@ -72,6 +74,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .camera: return Color(red: 0.69, green: 0.32, blue: 0.87)
         case .media: return Color(red: 0.98, green: 0.24, blue: 0.5)
         case .airplay: return Color(red: 1, green: 0.8, blue: 0.0)
+        case .drop: return Color(red: 1, green: 0.62, blue: 0.04)
         case .shortcuts: return Color(red: 0.37, green: 0.36, blue: 0.9)
         case .signing: return Color(red: 0.25, green: 0.52, blue: 0.56)
         case .general: return Color(white: 0.5)
@@ -84,7 +87,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
     static let defaultGroups: [[Page]] = [
         [.overview, .connection],
         [.receive, .share, .remote, .deck],
-        [.clipboard, .notifications, .files, .photos, .messages],
+        [.clipboard, .notifications, .files, .drop, .photos, .messages],
         [.audio, .camera, .media],
         [.airplay, .shortcuts, .signing],
         [.general, .about],
@@ -562,6 +565,7 @@ struct Sidebar: View {
         case .clipboard: return core.sync.get("clipboard", "in") || core.sync.get("clipboard", "out")
         case .notifications: return core.sync.get("notifs", "in")
         case .files: return core.files.batches.contains { !$0.finished }
+        case .drop: return core.drop.unread() > 0
         case .photos: return core.hub.mediaOn || core.hub.filesOn
         case .audio: return core.sound.playing
         case .camera: return core.camera.on
@@ -593,6 +597,7 @@ struct PageView: View {
         case .clipboard: ClipboardView()
         case .notifications: NotificationsView()
         case .files: FilesView()
+        case .drop: DropView()
         case .photos: PhotosView()
         case .messages: PeerThreadsView() // only a phone's (the sidebar hides it otherwise)
         case .audio: AudioView()

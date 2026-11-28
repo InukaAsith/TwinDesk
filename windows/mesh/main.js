@@ -151,6 +151,7 @@ let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
 let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
+let drop = null; // Drop: one conversation with every device (shared/drop-host.js)
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let viewers = null; // Monitor 2 per device (shared/screen-viewers.js, #256)
@@ -677,6 +678,8 @@ function start() {
   });
   // The phones' mesh manager (shared/mesh-manage.js): a phone on any computer of the mesh wakes, locks,
   // restarts… this one, answers its pairings and arranges the layout; Multi-device › Phones may refuse.
+  // Drop (shared/drop.js): one conversation with every TwinDesk device, through this app's links.
+  drop = require('../../shared/drop-host.js').start({ selfId: device.id, name: () => device.name, os: P.OS.WIN, settings: () => settings, save: saveSettings, push: pushState, hub }, () => mainWin);
   manage = require('../../shared/mesh-manage.js').onHub({
     hub, mesh, selfId: device.id, name: () => device.name, os: P.OS.WIN, settings: () => settings, save: saveSettings,
     devLocal: devctl.local, wake: () => wake, layout: () => layoutSync, onChange: pushState,
@@ -1460,6 +1463,7 @@ function buildState() {
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder }, // File Sharing › TwinDesk Drive
     folders: folders ? folders.view() : null, // File Sharing › Shared folders, and the Share folder sheet
+    drop: drop ? drop.state() : null, // Drop (shared/drop-host.js): the page asks for the room when rev changes
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: phoneHub ? phoneHub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS = {
     scrollSpeed: 1, // Scrolling speed here: another computer's wheel on this Mac (shared/wheelscale.js, #315)
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
     linkedBy: {}, // The last `linked` per paired device id, restored on connect
+    portalsOn: false, // Cursor portals (Mouse › Cursor portals): off by default; on, Hold key to switch steps aside
     portalsByPeer: {}, // opt-in directional display-edge portals, stored per paired device
     gestures: true, // Trackpad gestures work on the other computer (synced per pair)
     shakeHome: false, // shake this Mac's mouse while driving: the pointer comes home (the helper's Shake.swift)

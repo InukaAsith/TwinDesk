@@ -4,4 +4,6 @@
     <cache-path name="clip" path="clip/" />
     <!-- An MMS from the computer, for Android to send (MmsPdu.kt), and pictures for a chat app (Notifs). -->
     <cache-path name="mms" path="mms/" />
+    <!-- Drop's files (Drop.kt), for Open and Share. -->
+    <files-path name="drop" path="drop/" />
 </paths>

@@ -95,7 +95,6 @@ UI.tab({
       lock.el,
       UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Return shortcut'), I18n.t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each Mac.'), [emergencyKey.el])]),
       UI.card(I18n.t('Where the other computer is'), [map.el]),
-      portals.el,
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
         crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'), [crossingModifier.el]),
@@ -108,6 +107,7 @@ UI.tab({
       ]),
       UI.card(I18n.t('Not on the same network'), [bleRow]),
       UI.card(I18n.t('Crowded Wi-Fi'), [bleInputRow]),
+      portals.el, // at the very bottom
     );
 
     return (s) => {
@@ -134,6 +134,9 @@ UI.tab({
       resistance.set(k.resistancePx);
       crossingModifierRow.hidden = !!s.mesh;
       crossingModifier.set(k.crossingModifier || '');
+      // Portals have their own keys: Hold key to switch steps aside while they're on.
+      crossingModifier.el.disabled = !!k.portalsOn;
+      crossingModifierRow.setHint(k.portalsOn ? I18n.t('Off while cursor portals are on: each portal has its own key to hold.') : I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'));
       speed.set(k.speed);
       // A computer's mouse here is sped up by it; with a phone, it's this Mac's pointer there (phone-bridge.js).
       speedRow.label.dataset.peer = UI.isPhone(s) ? I18n.t('Pointer speed on {name}') : I18n.t('Pointer speed here');

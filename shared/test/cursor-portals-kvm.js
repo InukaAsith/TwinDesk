@@ -28,7 +28,7 @@ const display = (id, x, y, width, height) => ({ id, bounds: { x, y, width, heigh
 const localScreens = [display(1, 0, 100, 100, 100), display(2, 80, 0, 150, 100)];
 const remoteScreens = [display(3, 0, 0, 100, 100), display(4, 0, 100, 100, 100)];
 const makeSettings = () => ({ kvm: { pcSide: 'top', along: 0, mouse: true, keyboard: true, driveOther: true,
-  beDriven: true, linked: true, linkedBy: {}, portalsByPeer: {}, resistancePx: 10, speed: 1, ble: true },
+  beDriven: true, linked: true, linkedBy: {}, portalsOn: true, portalsByPeer: {}, resistancePx: 10, speed: 1, ble: true },
   keys: { hotkey: 'AltRight', lockKeys: 'F14' } });
 function node(name, screens) {
   electron = { screen: screen(screens) };

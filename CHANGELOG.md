@@ -12,6 +12,14 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 ## Next (unreleased)
 
 ### New
+- **Drop** (Share › Drop, Mac, Windows, Linux, Android, iPhone and iPad, one-to-one and Multi-device): one
+  conversation with every TwinDesk device. Send text, links, pictures and files (up to 5 MB) to
+  everyone or to one device. No server: the mesh passes each message on, and each device keeps a
+  history (500 messages on a computer, 300 on a phone). A device that was away catches up when it
+  connects, in the same order everywhere. Delete for me, Delete for everyone (your own messages),
+  Block a device, Clear All, an unread badge, and a notification while TwinDesk isn't in front. Off
+  on a new install: turn it on on each device that takes part. TwinDesk Web keeps its own Drop. Tested with
+  simulated devices; not yet between real ones.
 - **Audio mixer** (Audio, Mac, Windows and Linux, Multi-device and one-to-one): From this computer, tick
   the computers that play its sound, and on each one the speakers, several at once, with a volume per
   speaker; To this computer, the same for each computer's sound here. Each computer shows Playing and
@@ -198,6 +206,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 - **Cursor portals** (Mac): a stretch of one display's edge leads to a chosen stretch of the other
   computer's screen, and the pointer comes back through it (#177 by [@pengusto](https://github.com/pengusto)).
+  Now at the bottom of Mouse with its own switch (off by default), drawn instead of typed: click an
+  edge on each side's displays and drag the handles; a preview shows the portal opening as the
+  pointer comes close and goes through. While portals are on, Hold key to switch steps aside (each
+  portal has its own key). Multi-device too, a portal per computer; never towards a phone. Untested
+  on real displays.
 - **Share screen › Capture** (Windows): Original (Chromium, the default), Automatic, Desktop
   Duplication or Windows Graphics Capture; the pointer is shared at its real size, an enlarged
   accessibility pointer too (#235 by MOVE).
