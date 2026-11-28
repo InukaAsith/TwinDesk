@@ -97,8 +97,11 @@
 .sm-card.sharing { border-color: var(--accent, #0a84ff); }
 .sm-card.over, .sm-card.target { border-color: var(--accent, #0a84ff); border-style: dashed; }
 .sm-card.offline { opacity: 0.6; }
-.sm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.sm-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sm-card-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-card-head .sm-os { margin-left: auto; }
+.sm-badge { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent, #0a84ff); color: #fff; white-space: nowrap; }
+.sm-card.current { box-shadow: 0 0 0 1px var(--accent-soft, rgba(10, 132, 255, 0.3)), 0 6px 20px rgba(10, 132, 255, 0.12); }
 .sm-os { font-size: 12px; color: var(--muted, #888); white-space: nowrap; }
 .sm-os.on { color: var(--good, #30d158); }
 .sm-os.on::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: 1px; }

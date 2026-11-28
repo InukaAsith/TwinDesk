@@ -170,6 +170,7 @@ UI.tab({
           displayId: x.mode === 'default' ? String(sh.displayId) : x.displayId, status: x.status }));
         const extendTo = targets.find((x) => x.mode === 'extend');
         shareMap.render(sd && sd.length && st.targets ? {
+          selected: ((s.peers || []).find((x) => x.selected) || {}).id || '',
           displays: sd, virtual: { can: !extendTo, why: extendTo ? I18n.t('In use on {name}', { name: extendTo.name }) : '' }, targets,
           offline: (s.peers || []).filter((x) => !x.connected && x.state !== 'connected' && !targets.some((y) => y.id === x.id)).map((x) => ({ id: x.id, name: x.name, os: x.os })),
         } : null);

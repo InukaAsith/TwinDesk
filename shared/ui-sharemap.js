@@ -9,7 +9,8 @@
 //   const m = ShareMap.create({ assign(id, {mode: 'off'|'mirror'|'extend', displayId}), wake(id) })
 //   body.append(m.el)
 //   m.render({ displays: [{id, name, w, h, primary}], virtual: {can, why},
-//              targets: [{id, name, os, mode, displayId, status}], offline: [{id, name, os}] })
+//              targets: [{id, name, os, mode, displayId, status}], offline: [{id, name, os}], selected: id })
+// The selected device (the one in use: where the pointer is, Multi-device's selection) comes first, marked.
 'use strict';
 
 (function () {
@@ -74,8 +75,13 @@
       const pick = () => { if (picked && picked !== now) give(x.id, picked); };
       drop.onclick = pick;
       drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
-      const c = UI.el('div', { class: 'sm-card' + (now ? ' sharing' : '') + (picked ? ' target' : ''), attrs: { 'data-literal': '' } }, [
-        UI.el('div', { class: 'sm-card-head' }, [UI.el('b', { text: x.name }), UI.el('span', { class: 'sm-os on', text: OSNAME[x.os] || t('Connected') })]),
+      const current = x.id === m.selected;
+      const c = UI.el('div', { class: 'sm-card' + (now ? ' sharing' : '') + (picked ? ' target' : '') + (current ? ' current' : ''), attrs: { 'data-literal': '' } }, [
+        UI.el('div', { class: 'sm-card-head' }, [
+          UI.el('b', { text: x.name }),
+          ...(current ? [UI.el('span', { class: 'sm-badge', text: t('In use') })] : []),
+          UI.el('span', { class: 'sm-os on', text: OSNAME[x.os] || t('Connected') }),
+        ]),
         drop,
         ...(x.error ? [UI.el('div', { class: 'sm-err', text: t(x.error) })] : []),
         ...(now ? [UI.button(t('Stop sharing here'), () => opts.assign(x.id, { mode: 'off' }), 'small danger')] : []),
@@ -93,7 +99,7 @@
     }
 
     function draw() {
-      const targets = m.targets || [];
+      const targets = (m.targets || []).slice().sort((a, b) => (b.id === m.selected) - (a.id === m.selected));
       const sharedTo = (screen) => targets.filter((x) => gets(x) === screen).map((x) => x.name);
       side.textContent = '';
       side.append(UI.el('div', { class: 'sm-side-title', text: t('Screens on this computer') }), UI.el('div', { class: 'sm-tip', text: t('Drag a screen onto a device.') }));

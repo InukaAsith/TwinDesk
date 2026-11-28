@@ -28,7 +28,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   every device on the right. Drag a screen onto a device (or select a screen, then the device) and its
   window opens there: a real screen is mirrored, TwinDesk Virtual Display extends (one device at a
   time). Each device shows what it gets, with Stop sharing here; devices not connected show Wake; the
-  Sharing now bar lists every share, with Stop all. Fixed on the Mac: a per-device screen choice sent
+  Sharing now bar lists every share, with Stop all. The device in use (Multi-device's selected one)
+  comes first, marked In use. Fixed on the Mac: a per-device screen choice sent
   only the device, so it never applied. Untested between devices.
 - **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each
   cell reads All, the number of apps, or Off; selecting one of this computer's cells opens a panel

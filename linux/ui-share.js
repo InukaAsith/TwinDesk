@@ -153,6 +153,7 @@ UI.tab({
           displays: p.displays || [],
           virtual: { can: !!(p.vdd && p.vdd.installed) && !extendTo, why: !(p.vdd && p.vdd.installed) ? t('Needs the display driver') : extendTo ? t('In use on {name}', { name: extendTo.name }) : '' },
           targets: p.targets.map((x) => ({ id: x.id, name: x.name, os: x.os, mode: x.mode, displayId: x.monitor, status: x.status, error: x.error })),
+          selected: (peers.find((x) => x.selected) || {}).id || '',
           offline: peers.filter((x) => x.state !== 'connected' && !p.targets.some((y) => y.id === x.id)).map((x) => ({ id: x.id, name: x.name, os: x.os })),
         } : null);
         if (p.targets) screens.hidden = true; // the map has it all
