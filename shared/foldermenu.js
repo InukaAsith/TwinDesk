@@ -1,10 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Share this folder, from the file manager's right-click menu: Explorer (windows/explorer.js, and on
-// Windows 11 its first-level menu, windows-helper/shellmenu), Finder's Quick Actions (mac/finder.js),
-// and Nautilus, Caja, Nemo, Dolphin and Thunar (linux/sendto.js). The folder becomes the one this
-// computer shares with the phone (shared/foldershare.js: the phone's Files app and every app's file
-// picker see it), and sharing is switched on. Nothing else changes: the same switch on Phone Files
-// turns it off again.
+// Share folder, from the file manager's right-click menu: Explorer (windows/explorer.js, and on Windows 11
+// its first-level menu, windows-helper/shellmenu), Finder's Quick Actions (mac/finder.js), and Nautilus,
+// Caja, Nemo, Dolphin and Thunar (linux/sendto.js). TwinDesk comes up on "Share <folder> with…"
+// (shared/folders-host.js): which devices get it, computers through TwinDesk Shared folders, phones
+// through their Files app (shared/foldershare.js).
 //   Windows, Linux: TwinDesk is started with `--td share <folder>` (a running one gets it as
 //                   second-instance argv).
 //   Mac:            macshare://share-folder?h=<the path's UTF-8 bytes in hex> (open-url), hex so a
@@ -39,23 +38,4 @@ function fromUrl(url) {
   return path.isAbsolute(dir) && dir.length <= MAX_PATH && isDir(dir) ? path.resolve(dir) : '';
 }
 
-// The folder shared with the phone: through the hub when it's loaded (it serves it now), else in the
-// settings, which the hub reads when the phone connects (shareServe makes it load then).
-// o: hub() → the PhoneHub or null; settings() → the app's settings; save(); popup(kind, text, sub);
-//    goTab(tab); phoneOn() → a phone is connected.
-async function share(dir, o) {
-  if (!dir) return false;
-  const name = path.basename(dir) || dir;
-  const hub = o.hub && o.hub();
-  if (hub && hub.share) await hub.share.act('folder', { path: dir });
-  else {
-    const s = o.settings();
-    s.hub = { ...(s.hub || {}), shareFolder: dir, shareServe: true };
-    o.save();
-  }
-  if (o.goTab) o.goTab('pfiles');
-  if (o.popup) o.popup('home', { key: 'Sharing {name} with the phone', vars: { name } }, o.phoneOn && o.phoneOn() ? { key: 'It’s in the phone’s Files app' } : { key: 'The phone sees it when it connects' });
-  return true;
-}
-
-module.exports = { ARG, fromArgv, fromUrl, share };
+module.exports = { ARG, fromArgv, fromUrl };

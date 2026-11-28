@@ -18,6 +18,9 @@
 // and nothing crosses the network unencrypted.
 // settings (hub), both off until switched on: shareMount (mount the phone's folder when it shares
 // one), shareServe (share this computer's folder), shareFolder ('' = default).
+// Shared folders (shared/drive-folders.js, settings.drive.folders): the ones shared with this phone are
+// served too. Then the phone sees a top level of folders: this computer's folder (while shareServe is on)
+// and each shared folder, by name; nothing can be made, renamed or deleted at that top level.
 //
 // Events: 'change' (view).
 'use strict';
@@ -69,6 +72,30 @@ class FolderShare extends EventEmitter {
 
   get folder() {
     return this.settings.shareFolder || this.defaultFolder;
+  }
+
+  // The shared folders this phone gets ([{name, path}]): none for an older settings file.
+  _extra() {
+    const c = this.hub.phone;
+    if (!c || !c.deviceId || !this.hub.getSettings) return [];
+    return require('./drive-folders.js').forDevice(this.hub.getSettings(), c.deviceId);
+  }
+
+  // What the phone sees at its top: [{name, path}] when there are shared folders, else null (the folder itself).
+  _roots() {
+    const extra = this._extra();
+    if (!extra.length) return null;
+    const out = this.settings.shareServe ? [{ name: path.basename(this.folder) || 'Folder', path: this.folder }] : [];
+    for (const f of extra) {
+      let n = f.name, i = 2;
+      while (out.some((x) => x.name.toLowerCase() === n.toLowerCase())) n = `${f.name} ${i++}`;
+      out.push({ name: n, path: f.path });
+    }
+    return out;
+  }
+
+  get serving() {
+    return !!this.settings.shareServe || this._extra().length > 0;
   }
 
   _ctx() {
@@ -239,13 +266,15 @@ class FolderShare extends EventEmitter {
   // Tell the phone (again): on with where, or off.
   async host() {
     const ctx = this._ctx();
-    const want = !!(this.settings.shareServe && ctx);
+    const want = !!(this.serving && ctx);
     if (!want) {
       if (this.hub.phone) this.hub.server.sendToClient({ t: P.T.SHARE_HOST, on: false, serve: !!this.settings.shareServe });
       return this._serve(false);
     }
+    const roots = this._roots();
     try {
-      fs.mkdirSync(this.folder, { recursive: true });
+      if (this.settings.shareServe) fs.mkdirSync(this.folder, { recursive: true });
+      for (const r of roots || []) fs.mkdirSync(r.path, { recursive: true });
       await this._serve(true);
       let port = this.port;
       if (isLoopback(ctx.address)) { // through the cable: the phone's 127.0.0.1:<port> is ours
@@ -255,7 +284,7 @@ class FolderShare extends EventEmitter {
         port = this.port;
       }
       this.serveError = '';
-      this.hub.server.sendToClient({ t: P.T.SHARE_HOST, on: true, serve: true, port, token: this.token, name: `${path.basename(this.folder)} on ${os.hostname().replace(/\.local$/, '')}`.slice(0, 80) });
+      this.hub.server.sendToClient({ t: P.T.SHARE_HOST, on: true, serve: true, port, token: this.token, name: `${roots ? 'TwinDesk' : path.basename(this.folder)} on ${os.hostname().replace(/\.local$/, '')}`.slice(0, 80) });
     } catch (e) {
       this.serveError = String(e.message).split('\n')[0];
       this.hub.server.sendToClient({ t: P.T.SHARE_HOST, on: false, serve: true });
@@ -301,19 +330,30 @@ class FolderShare extends EventEmitter {
   // A path the phone sent, inside the folder (null when it isn't). By its real path: a link inside
   // the folder that points out of it is outside. One that doesn't exist yet (a new file or
   // folder) goes by its parent's.
+  // With shared folders (_roots): the first part is a folder's name; the top itself is {top: true}.
+  // Returns {p, root} (root: the real folder it's in) or null.
   async _local(rel) {
     const fsp = fs.promises;
-    const root = await fsp.realpath(path.resolve(this.folder)).catch(() => null);
-    if (!root) return null;
-    const parts = String(rel || '').split('/').filter((p) => p && p !== '.');
+    let parts = String(rel || '').split('/').filter((p) => p && p !== '.');
     if (parts.some((p) => p === '..' || /[\u0000-\u001f\\]/.test(p))) return null;
+    const roots = this._roots();
+    let base = this.folder;
+    if (roots) {
+      if (!parts.length) return { top: true, roots };
+      const r = roots.find((x) => x.name === parts[0]);
+      if (!r) return null;
+      base = r.path;
+      parts = parts.slice(1);
+    }
+    const root = await fsp.realpath(path.resolve(base)).catch(() => null);
+    if (!root) return null;
     const inside = (p) => p === root || p.startsWith(root + path.sep);
     const p = path.join(root, ...parts);
     const real = await fsp.realpath(p).catch((e) => (e.code === 'ENOENT' ? null : undefined));
     if (real === undefined) return null;
-    if (real) return inside(real) ? real : null;
+    if (real) return inside(real) ? { p: real, root } : null;
     const parent = await fsp.realpath(path.dirname(p)).catch(() => null);
-    return parent && inside(parent) ? path.join(parent, path.basename(p)) : null;
+    return parent && inside(parent) ? { p: path.join(parent, path.basename(p)), root } : null;
   }
 
   // /<token>/<op>?p=<path>[&name=]: list, stat, file (GET, PUT), mkdir, delete, rename.
@@ -327,12 +367,23 @@ class FolderShare extends EventEmitter {
     };
     if (!this._allowed(req.socket.remoteAddress)) return req.socket.destroy(); // kept alive from before the session moved
     const t = Buffer.from(String(token || '')), mine = Buffer.from(this.token);
-    if (t.length !== mine.length || !crypto.timingSafeEqual(t, mine) || !this.settings.shareServe) return done(404); // constant time
-    const p = await this._local(u.searchParams.get('p'));
-    if (!p) return done(400);
-    const root = await fs.promises.realpath(path.resolve(this.folder));
+    if (t.length !== mine.length || !crypto.timingSafeEqual(t, mine) || !this.serving) return done(404); // constant time
+    const at = await this._local(u.searchParams.get('p'));
+    if (!at) return done(400);
     const entry = (f, st) => ({ name: path.basename(f), dir: st.isDirectory(), size: st.isDirectory() ? 0 : st.size, mtime: Math.floor(st.mtimeMs) });
     const fsp = fs.promises;
+    if (at.top) { // the shared folders, by name: only looked at
+      const op2 = `${req.method} ${op}`;
+      if (op2 === 'GET stat') return done(200, JSON.stringify({ name: '', dir: true, size: 0, mtime: 0 }));
+      if (op2 !== 'GET list') return done(403);
+      const items = [];
+      for (const r of at.roots) {
+        const st = await fsp.stat(r.path).catch(() => null);
+        if (st && st.isDirectory()) items.push({ name: r.name, dir: true, size: 0, mtime: Math.floor(st.mtimeMs) });
+      }
+      return done(200, JSON.stringify({ items, free: 0 }));
+    }
+    const { p, root } = at;
     switch (`${req.method} ${op}`) {
       case 'GET list': {
         const names = await fsp.readdir(p).catch(() => null);

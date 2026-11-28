@@ -13,16 +13,29 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **TwinDesk Shared folders** (was TwinDesk Drive; File Sharing): besides its own folder, up to 10
+  folders of yours, each shared with the devices you choose (any of them, or All, which takes in
+  devices paired later), changed at any time with Devices…. Stop sharing leaves the files where they
+  are. A folder another computer shares with this one waits on the card with Add. Phones need no
+  update: the folders shared with a phone are top-level folders in its Files app (and every app's file
+  picker), beside this computer's own while that's on. A folder for phones only doesn't load the sync
+  engine; one with a computer switches Shared folders on. One-to-one and Multi-device alike, on the
+  Mac, Windows and Linux. Tested here with the engine and the phone server; not yet between devices.
+- **Manage the mesh from the phone** (Android, Overview › Multi-device, on unless a computer turns it
+  off): wake, lock, sleep, restart or shut down any computer of the mesh, unlock it (Full KVM),
+  approve or remove devices and move them in the layout. Unlock, restart, shut down, approve and
+  remove ask for the fingerprint first. Each computer can revoke a phone or switch it off in
+  Multi-device › Phones. Untested on devices.
 - **TwinDesk in Windows 11's first right-click menu** (not only under Show more options): Send to
-  each paired device, and Share with phone on a folder. Its own small signed package for this PC's
+  each paired device, and Share folder on a folder. Its own small signed package for this PC's
   architecture (x64 or ARM64), registered for you when TwinDesk starts and removed by the
   uninstaller; Windows 10, the Store build and the portable build keep the classic menu. Needs the
   helper built with Visual Studio's C++ tools. Untested on a PC (built by CI only).
-- **Share this folder from the file manager**: Explorer (classic and Windows 11 menus), Finder
-  (Quick Actions › Share with phone) and Nautilus, Caja, Nemo, Dolphin and Thunar on Linux. The
-  folder becomes the one this computer shares with the phone (the phone's Files app and every app's
-  file picker), and sharing is switched on; Phone Files turns it off as before. Finder's Quick Action
-  checked on a Mac with Automator; the menus on Windows and Linux untested on a desktop.
+- **Share folder from the file manager**: Explorer (classic and Windows 11 menus), Finder (Quick
+  Actions › Share folder (TwinDesk)) and Nautilus, Caja, Nemo, Dolphin and Thunar on Linux. TwinDesk
+  comes up on "Share <folder> with…": in Multi-device you tick the devices (or All); one-to-one asks
+  to share it with the other computer. Finder's Quick Action checked on a Mac with Automator; the
+  menus on Windows and Linux untested on a desktop.
 - **TwinDesk iPhone › Refresh all**, on the computer's Installed apps and in the iOS app's App refresh:
   every sideloaded app on the device in one run, as AltStore does it. One sign-in, every app's new
   provisioning profiles asked of Apple at once (four at a time) and installed together; only an app

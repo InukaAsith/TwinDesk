@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// shared/foldermenu.js: Share this folder from a file manager's menu. The argument (--td share) and the
-// Mac's link (hex path) give back only real absolute folders; sharing goes through the hub when it's
-// loaded, else into the settings; and mac/finder.js writes its Quick Action once.
+// shared/foldermenu.js: Share folder from a file manager's menu. The argument (--td share) and the
+// Mac's link (hex path) give back only real absolute folders; it opens the Share <folder> with… sheet
+// (shared/folders-host.js), whose Share adds the folder with its devices; mac/finder.js writes its
+// Quick Action once.
 'use strict';
 
 const assert = require('assert');
@@ -32,21 +33,34 @@ fs.writeFileSync(file, 'x');
   assert.strictEqual(F.fromUrl('macshare://send?p=/tmp'), null);
   assert.strictEqual(F.fromUrl('not a url'), null);
 
-  // The hub loaded: it shares the folder now
-  const acts = [];
-  const popups = [];
-  const tabs = [];
-  await F.share(dir, { hub: () => ({ phone: {}, share: { act: async (a, r) => acts.push([a, r]) } }), settings: () => ({}), save() {}, goTab: (t) => tabs.push(t), popup: (...a) => popups.push(a), phoneOn: () => true });
-  assert.deepStrictEqual(acts, [['folder', { path: dir }]]);
-  assert.deepStrictEqual(tabs, ['pfiles']);
-  assert.strictEqual(popups[0][1].vars.name, path.basename(dir));
-  // Not loaded (no phone yet): into the settings, which the hub reads when the phone connects
-  const settings = { hub: { calls: true, shareServe: false, shareFolder: '' } };
-  let saved = 0;
-  await F.share(dir, { hub: () => ({ act() {} }), settings: () => settings, save: () => saved++ });
-  assert.deepStrictEqual(settings.hub, { calls: true, shareServe: true, shareFolder: dir });
-  assert.strictEqual(saved, 1);
-  assert.strictEqual(await F.share('', { settings: () => settings, save() {} }), false);
+  // Share folder opens the sheet (shared/folders-host.js); Share adds the folder with the devices picked
+  const { foldersHost } = require('../folders-host.js');
+  const app = { drive: { on: false, folder: '' } };
+  let saved = 0, shown = 0, told = 0, loaded = 0;
+  const fh = foldersHost({
+    settings: () => app, save: () => saved++, push() {}, getDrive: () => null, loadDrive: () => { loaded++; return null; },
+    phoneShare: () => ({ host: async () => told++ }), devices: () => [{ id: 'PHONE', name: 'Pixel', os: 'android' }, { id: 'PC', name: 'Desk', os: 'windows' }],
+    show: () => shown++,
+  });
+  fh.ask(dir);
+  assert.strictEqual(shown, 1);
+  assert.deepStrictEqual(fh.view().sheet, { path: dir, name: path.basename(dir), shared: null });
+  await fh.actions.folderShare({ path: dir, devices: ['PHONE'] });
+  assert.strictEqual(fh.view().sheet, null, 'answered: the sheet goes');
+  assert.strictEqual(app.drive.folders.length, 1);
+  assert.deepStrictEqual(app.drive.folders[0].devices, ['PHONE']);
+  assert.strictEqual(app.drive.folders[0].path, dir);
+  assert.strictEqual(loaded, 0, 'phones only: the Drive engine stays unloaded');
+  assert.strictEqual(told, 1, 'the phone share is told at once');
+  await fh.actions.folderShare({ path: dir, devices: ['PHONE', 'PC'] });
+  assert.strictEqual(app.drive.folders.length, 1, 'the same folder again: its devices change');
+  assert.strictEqual(loaded, 1, 'a computer among them: the engine is loaded');
+  await fh.actions.folderShare({ path: 'relative', devices: 'all' });
+  assert.strictEqual(app.drive.folders.length, 1);
+  await fh.actions.folderRemove(app.drive.folders[0].id);
+  assert.strictEqual(app.drive.folders.length, 0, 'Stop sharing: gone from the list (the files stay)');
+  assert.ok(fs.existsSync(dir));
+  assert.ok(saved >= 3);
 
   // FolderShare's act('folder'): this folder, shared
   const { FolderShare } = require('../foldershare.js');

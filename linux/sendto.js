@@ -5,7 +5,7 @@
 // of TwinDesk hands them to this one (second-instance) and they go with the Send files flow
 // (filedrop.js, drop:'send'). The entries follow the paired computer's name and go when nothing is
 // paired; only file managers that are installed get one.
-// Share with phone (TwinDesk), on folders, in the same file managers: `twindesk --td share <folder>`,
+// Share folder (TwinDesk), on folders, in the same file managers: `twindesk --td share <folder>`,
 // which makes it the folder this computer shares with the phone (shared/foldermenu.js). Written
 // once a run, paired or not; the entries name the flag so they're recognised as ours.
 // Multi-device: one entry per paired computer, `--send-files --send-to=<id>`, and the files go to that
@@ -25,7 +25,8 @@ const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
 const UCA_ID = 'twindesk-send-files';
 const SHARE = '--td share';
-const SHARE_LABEL = 'Share with phone (TwinDesk)';
+const SHARE_LABEL = 'Share folder (TwinDesk)';
+const OLD_SHARE_LABELS = ['Share with phone (TwinDesk)']; // its name before shared folders: its scripts go
 const SHARE_UCA = 'twindesk-share-folder';
 
 // Is a program on PATH?
@@ -58,7 +59,7 @@ exec ${launcher().map(sh).join(' ')} ${ARG}${id ? ' ' + sh(TO + id) : ''} "$@"
 `;
 }
 
-// Share with phone in Nautilus' and Caja's Scripts menu: the selected folder (or the open one).
+// Share folder in Nautilus' and Caja's Scripts menu: the selected folder (or the open one).
 function shareScript() {
   return `#!/bin/sh
 # TwinDesk: share the selected folder with the phone (made by TwinDesk, ${SHARE})
@@ -131,17 +132,18 @@ class SendTo {
     }
   }
 
-  // Share with phone on folders, in each file manager that is installed (and gone from those that aren't).
+  // Share folder on folders, in each file manager that is installed (and gone from those that aren't).
   _share() {
     const exec = launcher().map(desk).join(' ') + ' ' + SHARE + ' %f';
     try {
       for (const [dir, cmd] of [[path.join(DATA, 'nautilus', 'scripts'), 'nautilus'], [path.join(CONFIG, 'caja', 'scripts'), 'caja']]) {
+        for (const n of OLD_SHARE_LABELS) this._clearShare(path.join(dir, n));
         const f = path.join(dir, SHARE_LABEL);
         if (installed(cmd)) write(f, shareScript(), 0o755);
         else this._clearShare(f);
       }
       const nemo = path.join(DATA, 'nemo', 'actions', 'twindesk-share.nemo_action');
-      if (installed('nemo')) write(nemo, `[Nemo Action]\nName=${SHARE_LABEL}\nComment=Share this folder with the phone (${SHARE})\nExec=${exec}\nIcon-Name=folder-remote\nSelection=s\nExtensions=dir;\n`, 0o644);
+      if (installed('nemo')) write(nemo, `[Nemo Action]\nName=${SHARE_LABEL}\nComment=Share this folder with your devices (${SHARE})\nExec=${exec}\nIcon-Name=folder-remote\nSelection=s\nExtensions=dir;\n`, 0o644);
       else rm(nemo);
       const service = `[Desktop Entry]\nType=Service\nMimeType=inode/directory;\nActions=twindeskShare;\nX-KDE-Priority=TopLevel\n\n[Desktop Action twindeskShare]\nName=${SHARE_LABEL}\nIcon=folder-remote\nExec=${exec}\n`;
       for (const dir of [path.join(DATA, 'kio', 'servicemenus'), path.join(DATA, 'kservices5', 'ServiceMenus')]) {
@@ -166,7 +168,7 @@ class SendTo {
     text = text.replace(new RegExp('\\s*<action>(?:(?!</action>)[\\s\\S])*<unique-id>' + SHARE_UCA + '</unique-id>[\\s\\S]*?</action>', 'g'), '');
     if (exec) {
       if (!/<\/actions>/.test(text)) text = '<?xml version="1.0" encoding="UTF-8"?>\n<actions>\n</actions>\n';
-      text = text.replace(/<\/actions>/, `\n<action>\n\t<icon>folder-remote</icon>\n\t<name>${xml(SHARE_LABEL)}</name>\n\t<unique-id>${SHARE_UCA}</unique-id>\n\t<command>${xml(exec)}</command>\n\t<description>Share this folder with the phone</description>\n\t<patterns>*</patterns>\n\t<directories/>\n</action>\n</actions>`);
+      text = text.replace(/<\/actions>/, `\n<action>\n\t<icon>folder-remote</icon>\n\t<name>${xml(SHARE_LABEL)}</name>\n\t<unique-id>${SHARE_UCA}</unique-id>\n\t<command>${xml(exec)}</command>\n\t<description>Share this folder with your devices</description>\n\t<patterns>*</patterns>\n\t<directories/>\n</action>\n</actions>`);
     }
     write(file, text, 0o644);
   }

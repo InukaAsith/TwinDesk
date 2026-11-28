@@ -44,9 +44,9 @@ try {
 
   s.sync([{ id: 'r9', name: 'Ryzen9' }, { id: 'mb', name: 'MacBook' }]);
   const scripts = fs.readdirSync(data('nautilus', 'scripts')).sort();
-  assert.deepStrictEqual(scripts, ['Send to MacBook (TwinDesk)', 'Send to Ryzen9 (TwinDesk)', 'Share with phone (TwinDesk)']);
-  // Share with phone on folders, in each file manager (shared/foldermenu.js: --td share <folder>)
-  assert.match(read(data('nautilus', 'scripts', 'Share with phone (TwinDesk)')), /exec '[^']+' --td share "\$f"/);
+  assert.deepStrictEqual(scripts, ['Send to MacBook (TwinDesk)', 'Send to Ryzen9 (TwinDesk)', 'Share folder (TwinDesk)']);
+  // Share folder on folders, in each file manager (shared/foldermenu.js: --td share <folder>)
+  assert.match(read(data('nautilus', 'scripts', 'Share folder (TwinDesk)')), /exec '[^']+' --td share "\$f"/);
   assert.match(read(data('nemo', 'actions', 'twindesk-share.nemo_action')), /Exec=\S+ --td share %f\nIcon-Name=folder-remote\nSelection=s\nExtensions=dir;/);
   assert.match(read(data('kio', 'servicemenus', 'twindesk-share.desktop')), /MimeType=inode\/directory;[\s\S]*Exec=\S+ --td share %f/);
   assert.match(read(config('Thunar', 'uca.xml')), /<unique-id>twindesk-share-folder<\/unique-id>\n\t<command>\S+ --td share %f<\/command>[\s\S]*<directories\/>\n<\/action>/);
@@ -67,10 +67,10 @@ try {
 
   // The MacBook unpaired: its entries go, Ryzen9's stay, Thunar keeps one action.
   s.sync([{ id: 'r9', name: 'Ryzen9' }]);
-  assert.deepStrictEqual(fs.readdirSync(data('nautilus', 'scripts')).sort(), ['Send to Ryzen9 (TwinDesk)', 'Share with phone (TwinDesk)']);
+  assert.deepStrictEqual(fs.readdirSync(data('nautilus', 'scripts')).sort(), ['Send to Ryzen9 (TwinDesk)', 'Share folder (TwinDesk)']);
   assert.deepStrictEqual(fs.readdirSync(data('nemo', 'actions')).sort(), ['twindesk-send.nemo_action', 'twindesk-share.nemo_action']);
   assert.strictEqual((read(config('Thunar', 'uca.xml')).match(/<unique-id>twindesk-send/g) || []).length, 1);
-  assert.strictEqual((read(config('Thunar', 'uca.xml')).match(/<unique-id>twindesk-share-folder/g) || []).length, 1, 'Share with phone kept once');
+  assert.strictEqual((read(config('Thunar', 'uca.xml')).match(/<unique-id>twindesk-share-folder/g) || []).length, 1, 'Share folder kept once');
 
   // A Send to Ryzen9 goes to Ryzen9's FileDrop, whichever device is selected.
   const file = path.join(root, 'photo.jpg');
@@ -86,9 +86,9 @@ try {
   for (const fn of welcome) fn('mb');
   assert.deepStrictEqual(sentTo.pop(), ['mb', [file]]);
 
-  // Nothing paired: every Send to goes; Share with phone (the phone's, not a computer's) stays.
+  // Nothing paired: every Send to goes; Share folder stays (phones can get folders too).
   s.sync([]);
-  assert.deepStrictEqual(fs.readdirSync(data('nautilus', 'scripts')), ['Share with phone (TwinDesk)']);
+  assert.deepStrictEqual(fs.readdirSync(data('nautilus', 'scripts')), ['Share folder (TwinDesk)']);
   assert.ok(!fs.existsSync(data('kio', 'servicemenus', 'twindesk-send.desktop')));
   assert.ok(fs.existsSync(data('kio', 'servicemenus', 'twindesk-share.desktop')));
   assert.ok(!/<unique-id>twindesk-send/.test(read(config('Thunar', 'uca.xml'))));

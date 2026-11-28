@@ -2,7 +2,7 @@
 // Windows 11's first-level right-click menu: "TwinDesk" with
 //   Send to <device>   files and folders, one per paired device (the same as Send to's shortcuts,
 //                      windows/sendto.js): TwinDesk --send-files [--send-to=<id>] <paths>
-//   Share with phone   one folder, or a folder's background: TwinDesk --td share <folder>
+//   Share folder       one folder, or a folder's background: TwinDesk --td share <folder>
 //                      (shared/foldermenu.js)
 // An IExplorerCommand, as Windows 11 wants for that menu, in TwinDesk's sparse package
 // (AppxManifest.xml: windows.fileExplorerContextMenus + a surrogate COM server). It keeps nothing and
@@ -151,14 +151,14 @@ class Command : public IExplorerCommand {
   ULONG refs_ = 1;
 };
 
-// One entry: Send to a device, or Share with phone.
+// One entry: Send to a device, or Share folder.
 class Leaf : public Command {
  public:
   Leaf(bool share, Device d) : share_(share), dev_(std::move(d)) {}
 
   IFACEMETHODIMP GetTitle(IShellItemArray*, LPWSTR* name) override {
     std::wstring t;
-    if (share_) t = label(L"ShareLabel", L"Share with phone");
+    if (share_) t = label(L"ShareLabel", L"Share folder");
     else {
       t = label(L"SendLabel", L"Send to {name}");
       size_t at = t.find(L"{name}");

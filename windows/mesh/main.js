@@ -150,6 +150,7 @@ let settings = null;
 let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
+let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let viewers = null; // Monitor 2 per device (shared/screen-viewers.js, #256)
@@ -624,6 +625,15 @@ function start() {
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
+  // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet the file manager's Share folder opens.
+  folders = require('../../shared/folders-host.js').foldersHost({
+    settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,
+    phoneShare: () => { const h = phoneHub || (phoneLink ? loadHub() : null); return h && h.share; },
+    devices: () => (hub ? hub.peers({ indirect: true }) : []).map((d) => ({ id: d.id, name: d.name, os: d.os })),
+    pick: async () => { const r = await require('electron').dialog.showOpenDialog(mainWin, { properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0] || ''; },
+    show: () => goTab('files'),
+    open: (f) => require('electron').shell.openPath(f),
+  });
   const ipc = setupIpc({ dbg: () => dbg, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, consent: () => consent, manage: () => manage, viewers: () => viewers, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
@@ -867,7 +877,7 @@ let phoneLink = null; // phone-link.js, the phone's session (startPhone)
 let callwin = null;
 function setupHub(pl) {
   phoneLink = pl;
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether || !!(settings.drive.folders || []).length; // shared folders: the phone's are served
   pl.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
@@ -884,10 +894,7 @@ function shareFolderArg(argv) {
 }
 
 function shareFolder(dir) {
-  FolderMenu.share(dir, {
-    hub: () => (phoneLink ? loadHub() : null), settings: () => settings, save: saveSettings, goTab,
-    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
-  }).catch((e) => console.warn('[share folder]', e.message));
+  if (folders) folders.ask(dir); // the sheet: which devices (shared/folders-host.js)
 }
 
 function loadHub() {
@@ -1441,6 +1448,7 @@ function buildState() {
     peerCtl: devctl && !selectedIsPhone() ? devctl.view : null, // a computer's controls on Overview
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder }, // File Sharing › TwinDesk Drive
+    folders: folders ? folders.view() : null, // File Sharing › Shared folders, and the Share folder sheet
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: phoneHub ? phoneHub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

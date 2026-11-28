@@ -109,6 +109,7 @@ function applyLocalApi() {
   if (!localApi) return;
   localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
 }
+let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let consent = null; // each device's own two-way switches (shared/consent.js)
 let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
@@ -308,6 +309,7 @@ function publishState() {
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
+    state.folders = folders ? folders.view() : null; // File Sharing › Shared folders, and the Share folder sheet
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
     if (edges) edges.tick(); // the matrix: ours to every device when it changed
@@ -900,6 +902,16 @@ app.whenReady().then(() => {
   };
   svc.getDrive = () => svc.drive || null;
   if (settings.drive.on) svc.loadDrive();
+  // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet Finder's Share folder opens.
+  folders = require('../../shared/folders-host.js').foldersHost({
+    settings: () => settings, save: () => store.saveSettings(settings), push: pushState, getDrive: () => svc.getDrive(), loadDrive: () => svc.loadDrive(),
+    phoneShare: () => { const h = phoneHub || loadHub(); return h && h.share; },
+    devices: () => (hub ? hub.peers() : []).map((d) => ({ id: d.id, name: d.name, os: d.os })),
+    pick: async () => { const r = await require('electron').dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0] || ''; },
+    show: () => goTab('files'),
+    open: (f) => require('electron').shell.openPath(f),
+  });
+  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderOpen']) require('electron').ipcMain.on(n, (_e, a) => folders && folders.actions[n](a));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
   // In Multi-device it goes to the device the pointer went to, selected first, with what that
@@ -1480,7 +1492,7 @@ const phonesLink = {
 };
 
 function setupHub() {
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether || !!(settings.drive.folders || []).length; // shared folders: the phone's are served
   phonesLink.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   phonesLink.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
@@ -1491,10 +1503,7 @@ function setupHub() {
 let callwin = null;
 // Share this folder from Finder's Quick Action (shared/foldermenu.js, mac/finder.js): macshare://share-folder?h=….
 function shareFolder(dir) {
-  FolderMenu.share(dir, {
-    hub: () => loadHub(), settings: () => settings, save: () => store.saveSettings(settings), goTab,
-    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
-  }).catch((e) => console.warn('[share folder]', e.message));
+  if (folders) folders.ask(dir); // the sheet: which devices (shared/folders-host.js)
 }
 
 function loadHub() {

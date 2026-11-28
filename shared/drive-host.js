@@ -25,79 +25,35 @@ const DRIVE_TYPES = [P.T.DRIVE_HELLO, P.T.DRIVE_INDEX, P.T.DRIVE_UPDATE, P.T.DRI
 const defaultFolder = () => path.join(os.homedir(), 'TwinDesk Drive');
 
 function create({ settings, save, me, meName, userData, trash, adapter, onChange = () => {} }) {
-  let drive = null, link = null, up = false, hooked = false, error = '';
-  const cfg = () => settings.drive || (settings.drive = { on: false, folder: '' });
-  const folder = () => cfg().folder || defaultFolder();
+  return createMesh({ settings, save, me, meName, userData, trash, onChange, mesh: soloMesh(adapter) });
+}
 
-  // The session's events go to the link while there is one (registered once: some adapters can't unregister).
-  const hook = () => {
-    if (hooked) return;
-    hooked = true;
-    for (const t of DRIVE_TYPES) adapter.on(t, (m) => link && !(m && m.f) && link.onMessage(m)); // f: a Multi-device extra folder, not ours
-    adapter.onUp(() => { up = true; if (link) link.start(); onChange(); });
-    adapter.onDown(() => { up = false; if (link) link.stop(); onChange(); });
-    adapter.onMoved(() => link && link.kick());
+// One to one: the session as a mesh of one device, so the main folder and the shared folders run on the
+// same code as in Multi-device. The main folder speaks as before; an older TwinDesk never lists a shared
+// folder, so it never gets one's messages. adapter.peerId() (optional): the other device's id, for the
+// folders shared with some devices only; adapter.isComputer() (optional, else true).
+function soloMesh(adapter) {
+  let up = !!adapter.session();
+  const id = () => (adapter.peerId && adapter.peerId()) || 'peer';
+  const fns = { welcome: [], closed: [], transport: [] };
+  let wired = false;
+  const wire = () => {
+    if (wired) return;
+    wired = true;
+    adapter.onUp(() => { up = true; for (const fn of fns.welcome) fn(id()); });
+    adapter.onDown(() => { up = false; for (const fn of fns.closed) fn(id()); });
+    adapter.onMoved(() => { for (const fn of fns.transport) fn(id()); });
   };
-
-  async function start() {
-    if (drive) return;
-    const { Drive } = require('./drive.js');
-    const { DriveLink } = require('./drive-link.js');
-    hook();
-    drive = new Drive({ me, meName, folder, indexFile: path.join(userData, 'drive-index.json'), trash });
-    drive.on('change', onChange);
-    link = new DriveLink({ drive, send: (m) => adapter.send(m), session: () => adapter.session(), peerName: () => adapter.peerName(), onChange });
-    adapter.setRequest((req, res) => link.request(req, res));
-    try {
-      await drive.start();
-      error = '';
-    } catch (e) {
-      error = e.message;
-    }
-    if (up || adapter.session()) link.start();
-    onChange();
-  }
-
-  async function stop() {
-    adapter.setRequest(null);
-    if (link) link.destroy();
-    link = null;
-    const d = drive;
-    drive = null;
-    if (d) await d.stop();
-    onChange();
-  }
-
-  const host = {
-    async setOn(on) {
-      cfg().on = !!on;
-      save();
-      if (on) await start();
-      else await stop();
-    },
-    // A new folder: the index starts again there (the old folder's files stay where they are).
-    async setFolder(f) {
-      cfg().folder = typeof f === 'string' ? f : '';
-      save();
-      if (drive) { await stop(); await start(); }
-      onChange();
-    },
-    folder,
-    view() {
-      const s = drive ? drive.status() : null;
-      const l = link ? link.status() : { connected: false, moving: 0 };
-      return {
-        on: cfg().on === true, folder: folder(), custom: !!cfg().folder,
-        state: s ? s.state : 'off', files: s ? s.files : 0, bytes: s ? s.bytes : 0,
-        skipped: s ? s.skipped : 0, conflicts: s ? s.conflicts : 0, lastSync: s ? s.lastSync : 0,
-        connected: l.connected, moving: l.moving, peer: l.connected ? adapter.peerName() : '',
-        error: error || (s && s.error) || '',
-      };
-    },
-    stop,
+  return {
+    on: (t, fn) => adapter.on(t, (m) => fn(m, id())),
+    onPeer: (ev, fn) => { wire(); fns[ev].push(fn); },
+    send: (_id, m) => adapter.send(m),
+    session: () => adapter.session(),
+    peerName: () => adapter.peerName() || 'the other computer',
+    isComputer: () => (adapter.isComputer ? !!adapter.isComputer() : true),
+    connectedIds: () => (up || adapter.session() ? [id()] : []),
+    setRequest: (fn) => adapter.setRequest(fn),
   };
-  if (cfg().on) start();
-  return host;
 }
 
 // Multi-device: the main folder and any extra folders (phase 3: shared folders per PC), each its own
@@ -111,9 +67,9 @@ function create({ settings, save, me, meName, userData, trash, adapter, onChange
 // change. A computer that hasn't the folder sees it as offered (Add); an extra folder's link opens only
 // once the other side listed it too, so an older TwinDesk never gets an f it would take as the main one.
 const FOLDERS = 'drive.folders';
-const MAX_FOLDERS = 16;
-const safeName = (n) => String(n || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/^[. ]+|[. ]+$/g, '').slice(0, 60) || 'Folder';
-const cleanDevices = (d) => (Array.isArray(d) ? d.filter((x) => typeof x === 'string' && x).slice(0, 32) : 'all');
+const DF = require('./drive-folders.js');
+const MAX_FOLDERS = DF.MAX;
+const { safeName, cleanDevices } = DF;
 
 function createMesh({ settings, save, me, meName, userData, trash, mesh, onChange = () => {} }) {
   let Drive = null, DriveLink = null, HEADER = '', PATH = '', hooked = false, running = false;
@@ -129,7 +85,7 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
   const pathOf = (f) => {
     if (!f) return folder();
     const d = def(f);
-    return (d && d.path) || path.join(os.homedir(), 'TwinDesk Folders', safeName(d && d.name));
+    return d ? DF.pathOf(d) : DF.defaultPath('');
   };
   const allows = (f, id) => { const d = def(f); return !!d && (!Array.isArray(d.devices) || d.devices.includes(id)); };
   const canLink = (f, id) => !!id && mesh.isComputer(id) && allows(f, id) && (!f || !!(theirs.get(id) && theirs.get(id).has(f)));
@@ -383,4 +339,4 @@ function offView(settings) {
   return { on: false, folder: d.folder || defaultFolder(), custom: !!d.folder, state: 'off', files: 0, bytes: 0, skipped: 0, conflicts: 0, lastSync: 0, connected: false, moving: 0, peer: '', error: '' };
 }
 
-module.exports = { create, createMesh, hubAdapter, offView, defaultFolder };
+module.exports = { create, createMesh, soloMesh, hubAdapter, offView, defaultFolder };

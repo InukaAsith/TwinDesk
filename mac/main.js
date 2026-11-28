@@ -119,6 +119,7 @@ app.on('before-quit', () => { quitting = true; });
 let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
+let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is the Mac's sound capture (audiohub.js)
 
 const state = {
@@ -275,6 +276,7 @@ function pushState() {
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || path.join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
+    state.folders = folders ? folders.view() : null; // File Sharing › Shared folders, and the Share folder sheet
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
@@ -831,6 +833,16 @@ app.whenReady().then(() => {
   }));
   svc.getDrive = () => svc.drive || null;
   if (settings.drive.on) svc.loadDrive();
+  // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet Finder's Share folder opens.
+  folders = require('../shared/folders-host.js').foldersHost({
+    settings: () => settings, save: () => store.saveSettings(settings), push: pushState, getDrive: () => svc.getDrive(), loadDrive: () => svc.loadDrive(),
+    phoneShare: () => { const h = phoneHub || loadHub(); return h && h.share; },
+    devices: () => (() => { const c = peer.current; if (c && c.deviceId) return [{ id: c.deviceId, name: c.name, os: c.os }]; return (pairing ? pairing.list() : []).slice(0, 1).map((d) => ({ id: d.id, name: d.name, os: d.os })); })(),
+    pick: async () => { const r = await require('electron').dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0] || ''; },
+    show: () => goTab('files'),
+    open: (f) => require('electron').shell.openPath(f),
+  });
+  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderOpen']) require('electron').ipcMain.on(n, (_e, a) => folders && folders.actions[n](a));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer’s window goes home there (pcapps.js); one of this Mac’s goes over
   // window by window, shared on its own (appsend.js, movewin.js), apart from how apps open.
@@ -1514,7 +1526,7 @@ function setupNet() {
 // one of them on, or the first time a page uses it. Before that none of it exists: no module, no
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
 function setupHub() {
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether || !!(settings.drive.folders || []).length; // shared folders: the phone's are served
   peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
@@ -1525,10 +1537,7 @@ function setupHub() {
 let callwin = null;
 // Share this folder from Finder's Quick Action (shared/foldermenu.js, mac/finder.js): macshare://share-folder?h=….
 function shareFolder(dir) {
-  FolderMenu.share(dir, {
-    hub: () => loadHub(), settings: () => settings, save: () => store.saveSettings(settings), goTab,
-    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
-  }).catch((e) => console.warn('[share folder]', e.message));
+  if (folders) folders.ask(dir); // the sheet: which devices (shared/folders-host.js)
 }
 
 function loadHub() {

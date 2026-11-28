@@ -1,8 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Finder's right-click › Quick Actions › Share with phone (TwinDesk), on folders: a Quick Action in
+// Finder's right-click › Quick Actions › Share folder (TwinDesk), on folders: a Quick Action in
 // ~/Library/Services (an Automator service, as macOS makes them) that opens
 // macshare://share-folder?h=<the folder's path in hex> for each folder chosen; main.js takes it
-// (open-url) and the folder becomes the one this Mac shares with the phone (shared/foldermenu.js).
+// (open-url) and opens the Share <folder> with… sheet (shared/folders-host.js): which devices get it.
 // The path goes as hex so the script needs no quoting; it runs nothing but /usr/bin/open. Written at
 // start when it isn't there or differs (the app's bundle id may change), and switched off in
 // System Settings › Keyboard › Keyboard Shortcuts › Services like any other.
@@ -12,7 +12,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const NAME = 'Share with phone (TwinDesk)';
+const NAME = 'Share folder (TwinDesk)';
+const OLD_NAMES = ['Share with phone (TwinDesk)']; // its name before shared folders: removed
 const DIR = path.join(os.homedir(), 'Library', 'Services', `${NAME}.workflow`, 'Contents');
 const UUIDS = ['8C1F0B9E-2D4A-4F3B-9A61-3E5D7C2B1A01', '8C1F0B9E-2D4A-4F3B-9A61-3E5D7C2B1A02', '8C1F0B9E-2D4A-4F3B-9A61-3E5D7C2B1A03'];
 
@@ -111,6 +112,7 @@ function workflow(cmd) {
 
 // The Quick Action in place (dir: where, for tests). True when it was written now.
 function install({ dir = DIR, cmd } = {}) {
+  if (dir === DIR) for (const n of OLD_NAMES) { try { fs.rmSync(path.join(os.homedir(), 'Library', 'Services', `${n}.workflow`), { recursive: true, force: true }); } catch {} }
   const files = { 'Info.plist': infoPlist(), 'document.wflow': workflow(cmd) };
   let wrote = false;
   try {

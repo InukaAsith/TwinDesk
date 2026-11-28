@@ -130,6 +130,7 @@ let settings = null;
 let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
+let folders = null; // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js)
 let screen = null;
 let clip = null;
 let wlClipboardMissing = false;
@@ -252,6 +253,15 @@ function start() {
   awake = require('../shared/keepawake.js').keepAwake(() => settings.app.keepAwake !== false && link && link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os)));
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   if (settings.drive.on) loadDrive();
+  // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet the file manager's Share folder opens.
+  folders = require('../shared/folders-host.js').foldersHost({
+    settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,
+    phoneShare: () => { const h = hub || (phoneLink ? loadHub() : null); return h && h.share; },
+    devices: () => (() => { const v = peerView(); return v && v.id ? [{ id: v.id, name: v.name, os: v.os }] : []; })(),
+    pick: async () => { const r = await require('electron').dialog.showOpenDialog(mainWin, { properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0] || ''; },
+    show: () => goTab('files'),
+    open: (f) => require('electron').shell.openPath(f),
+  });
   // The files engine (shared/fx2.js) stays up while another TwinDesk computer is on the network: a
   // session with it then starts without waiting for it. Alone, it isn't running at all.
   const fx2Nearby = () => { if (link.fx2) link.fx2.need('nearby', discovery.found.size > 0); };
@@ -847,7 +857,7 @@ function loadTerminal() {
 
 function setupHub(pl) {
   phoneLink = pl;
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether || !!(settings.drive.folders || []).length; // shared folders: the phone's are served
   pl.on('client', (ctx) => P.isPhoneOs(ctx.os) && !hub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !hub && loadHub().share && hub.share.onOffer(m));
@@ -864,10 +874,7 @@ function shareFolderArg(argv) {
 }
 
 function shareFolder(dir) {
-  FolderMenu.share(dir, {
-    hub: () => (phoneLink ? loadHub() : null), settings: () => settings, save: saveSettings, goTab,
-    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(hub && hub.phone),
-  }).catch((e) => console.warn('[share folder]', e.message));
+  if (folders) folders.ask(dir); // the sheet: which devices (shared/folders-host.js)
 }
 
 function loadHub() {
@@ -1391,6 +1398,7 @@ function buildState() {
     iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder },
+    folders: folders ? folders.view() : null, // File Sharing › Shared folders, and the Share folder sheet
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), relay: { ...require('../shared/relay.js').clean(settings.net.relay), ...require('../shared/relay.js').view() }, ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

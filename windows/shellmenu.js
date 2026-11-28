@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Windows 11's first-level right-click menu: "TwinDesk" › Send to <device> (one per paired device,
-// as Send to's shortcuts, sendto.js) and Share with phone (one folder, shared/foldermenu.js), where
+// as Send to's shortcuts, sendto.js) and Share folder (one folder, shared/foldermenu.js), where
 // Windows 11 otherwise puts the classic menu (explorer.js) under Show more options. Windows shows
 // only a packaged app's IExplorerCommand there, so the menu is windows-helper/shellmenu's DLL in a
 // sparse package of its own, for this PC's architecture, registered for this user (pointing at where
@@ -63,7 +63,7 @@ class ShellMenu {
     if (!this.on) return;
     this._set('Title', 'REG_SZ', 'TwinDesk');
     this._set('SendLabel', 'REG_SZ', this.t('Send to {name}', { name: '{name}' }));
-    this._set('ShareLabel', 'REG_SZ', this.t('Share with phone'));
+    this._set('ShareLabel', 'REG_SZ', this.t('Share folder'));
   }
 
   // The paired devices, as sendto.js gets them: a name (one-to-one) or [{id, name}] (Multi-device).
