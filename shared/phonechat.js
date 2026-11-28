@@ -14,6 +14,7 @@ const CHATS = {
   'com.whatsapp': 'whatsapp', 'com.whatsapp.w4b': 'whatsapp',
   'com.instagram.android': 'instagram', 'com.instagram.lite': 'instagram',
   'org.telegram.messenger': 'telegram', 'org.telegram.messenger.web': 'telegram', 'org.telegram.plus': 'telegram',
+  'com.facebook.orca': 'messenger', 'com.facebook.mlite': 'messenger', // Messenger's Enter is a new line (#331)
 };
 const KEYCODE = { TAB: 61, ENTER: 66 };
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };

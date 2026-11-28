@@ -32,7 +32,7 @@ class InputService : AccessibilityService() {
             "com.whatsapp" to listOf("send"), "com.whatsapp.w4b" to listOf("send"),
             "com.instagram.android" to listOf("row_thread_composer_button_send", "row_thread_composer_send_button_container", "button_send"),
         )
-        private val CHATS = SEND_IDS.keys + setOf("com.instagram.lite", "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.plus")
+        private val CHATS = SEND_IDS.keys + setOf("com.instagram.lite", "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.plus", "com.facebook.orca", "com.facebook.mlite")
     }
 
     override fun onServiceConnected() {
@@ -188,7 +188,7 @@ class InputService : AccessibilityService() {
     }
 
     // The computer's Enter in a chat app (phone.send): the app's own Send button, found by its id
-    // (WhatsApp, Instagram) or, in that app only, a button named Send (Telegram has no ids); else
+    // (WhatsApp, Instagram) or, in that app only, a button named Send (Telegram and Messenger have no ids we know); else
     // the keyboard's Enter action on the field (it sends where the app makes Enter send).
     fun sendMessage() {
         val root = rootInActiveWindow ?: return
