@@ -1318,5 +1318,6 @@
   "This Mac can’t change the desktop on the screen being shown": "Bu Mac, gösterilen ekranda masaüstünü değiştiremiyor",
   "Couldn’t change the desktop": "Masaüstü değiştirilemedi",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Mission Control erişilebilirlik durumu okunamıyor, bu yüzden okunana kadar uzaktan kontrol duraklatılır. Dokunuşlar gönderilmez.",
-  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control açıkken uzaktan kontrol duraklatılır; dokunuşlar ona gönderilmez."
+  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control açıkken uzaktan kontrol duraklatılır; dokunuşlar ona gönderilmez.",
+  "Don’t ask again": "Bir daha sorma"
 }

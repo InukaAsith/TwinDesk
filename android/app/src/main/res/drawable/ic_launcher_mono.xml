@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One colour, tinted by the launcher: the pointer is cut out of each window (the part of the pointer
+     inside that window) and outlined. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#73000000" android:fillType="evenOdd" android:pathData="M30,33 h36 a4,4 0 0 1 4,4 v26 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v-26 a4,4 0 0 1 4,-4 z M54,44 L54,67 L57,67 L60,64 L61.42,67 L66.25,67 L64,62.5 L70,62.5 L70,60.44 Z" />
+    <path android:fillColor="#CC000000" android:fillType="evenOdd" android:pathData="M44,47 h34 a4,4 0 0 1 4,4 v24 a4,4 0 0 1 -4,4 h-34 a4,4 0 0 1 -4,-4 v-24 a4,4 0 0 1 4,-4 z M54,47 L54,70 L60,64 L64.5,73.5 L68.5,71.5 L64,62.5 L72,62.5 L56.92,47 Z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="1.8" android:strokeLineJoin="round" android:pathData="M54,44 L54,70 L60,64 L64.5,73.5 L68.5,71.5 L64,62.5 L72,62.5 Z" />
+</vector>

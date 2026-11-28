@@ -1318,5 +1318,6 @@
   "This Mac can’t change the desktop on the screen being shown": "这台 Mac 无法切换正在显示的屏幕的桌面",
   "Couldn’t change the desktop": "无法切换桌面",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "无法读取 Mission Control 的辅助功能状态，因此在能够读取之前，远程控制保持暂停。不会发送触摸。",
-  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control 打开期间远程控制保持暂停，以免触摸被发送进去。"
+  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control 打开期间远程控制保持暂停，以免触摸被发送进去。",
+  "Don’t ask again": "不再询问"
 }

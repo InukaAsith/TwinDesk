@@ -43,6 +43,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   signer, runtime tools), and Full KVM is set in the configuration (`programs.twindesk.fullKvm`);
   the app's Full KVM tab shows it and changes nothing (#281 by
   [@ShivanshuKantPrasad](https://github.com/ShivanshuKantPrasad); the flake wasn't evaluated here).
+- **Themed icon** (Android 13 and later): with themed icons on, TwinDesk's icon takes the system's
+  colours (#345).
+- **Don't ask again** on the phone's Turn on wireless debugging prompt, for a device that can't keep
+  it on; Overview still sets it up (#345).
 - **Phone screen off while using apps** (Mac, Phone page, off): the phone's own panel stays dark
   while its app windows are open, and a minimized app window stops painting (#284 by [@alexfoxtm](https://github.com/alexfoxtm)).
 

@@ -1318,5 +1318,6 @@
   "This Mac can’t change the desktop on the screen being shown": "Este Mac não consegue mudar a área de trabalho da tela mostrada",
   "Couldn’t change the desktop": "Não foi possível mudar a área de trabalho",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Não dá para ler o estado de acessibilidade do Mission Control, então o controle remoto fica pausado até dar. Toques não são enviados.",
-  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "O controle remoto fica pausado enquanto o Mission Control está aberto, para os toques não irem para ele."
+  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "O controle remoto fica pausado enquanto o Mission Control está aberto, para os toques não irem para ele.",
+  "Don’t ask again": "Não perguntar de novo"
 }

@@ -255,10 +255,11 @@ fun App(core: Core, resumed: Int) {
         MainActivity.openTab.value = null
     }
     val wide = LocalConfiguration.current.screenWidthDp >= 600
-    // Wireless debugging went off (MIUI / HyperOS): ask once per time it happens.
+    // Wireless debugging went off (MIUI / HyperOS): ask once per time it happens. Don't ask again keeps it
+    // quiet on this device for good (a work tablet that can't keep it on, #345); Overview still sets it up.
     var adbAsked by rememberSaveable { mutableStateOf(false) }
     if (!core.adb.off) adbAsked = false
-    if (core.adb.off && !adbAsked && !core.link.ble) { // over Bluetooth it can't be used anyway
+    if (core.adb.off && !adbAsked && !core.link.ble && !core.store.flag("adb.noAsk", false)) { // over Bluetooth it can't be used anyway
         val name = them(core)
         AlertDialog(
             onDismissRequest = { adbAsked = true },
@@ -273,7 +274,12 @@ fun App(core: Core, resumed: Int) {
                 )
             },
             confirmButton = { TextButton(onClick = { adbAsked = true; core.adb.openSettings() }) { Text(tr("Open Settings"), color = pal.accent) } },
-            dismissButton = { TextButton(onClick = { adbAsked = true }) { Text(tr("Not now"), color = pal.muted) } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { adbAsked = true; core.store.setFlag("adb.noAsk", true) }) { Text(tr("Don’t ask again"), color = pal.muted) }
+                    TextButton(onClick = { adbAsked = true }) { Text(tr("Not now"), color = pal.muted) }
+                }
+            },
         )
     }
 

@@ -1318,5 +1318,6 @@
   "This Mac can’t change the desktop on the screen being shown": "Этот Mac не может сменить рабочий стол на показанном экране",
   "Couldn’t change the desktop": "Не удалось сменить рабочий стол",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Состояние доступности Mission Control прочитать не удаётся, поэтому удалённое управление на паузе, пока это не получится. Касания не отправляются.",
-  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Удалённое управление на паузе, пока Mission Control открыт, чтобы касания не попадали в него."
+  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Удалённое управление на паузе, пока Mission Control открыт, чтобы касания не попадали в него.",
+  "Don’t ask again": "Больше не спрашивать"
 }
