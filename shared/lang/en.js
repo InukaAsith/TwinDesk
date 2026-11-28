@@ -2452,5 +2452,6 @@
   "Apps appear after their first notification": "Apps appear after their first notification",
   "Share “{name}” with": "Share “{name}” with",
   "Not connected, syncs later": "Not connected, syncs later",
-  "Invitation": "Invitation"
+  "Invitation": "Invitation",
+  "Access": "Access"
 });

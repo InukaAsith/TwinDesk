@@ -2451,5 +2451,6 @@
   "Apps appear after their first notification": "Приложения появляются после первого уведомления",
   "Share “{name}” with": "Поделиться «{name}» с",
   "Not connected, syncs later": "Не подключено, синхронизируется позже",
-  "Invitation": "Приглашение"
+  "Invitation": "Приглашение",
+  "Access": "Доступ"
 });

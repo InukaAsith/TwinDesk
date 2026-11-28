@@ -2452,5 +2452,6 @@
   "Apps appear after their first notification": "应用在首次通知后显示",
   "Share “{name}” with": "共享“{name}”给",
   "Not connected, syncs later": "未连接，稍后同步",
-  "Invitation": "邀请"
+  "Invitation": "邀请",
+  "Access": "访问权限"
 });

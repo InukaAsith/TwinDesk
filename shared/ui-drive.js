@@ -34,7 +34,9 @@
     const listCard = UI.card(t('Shared folders'), [box], { actions: [addBtn], cls: 'keep-on' });
     const folders = UI.el('div', { class: 'sf-wrap' }, [listCard]);
     folders.hidden = true;
-    const invites = UI.el('div'); // kept for the pages' layout; invitations are in the list now
+    // Invitations: folders other computers share with this one, a section of their own.
+    const inviteBox = UI.el('div', { class: 'sf-list' });
+    const invites = UI.card(t('Shared with you'), [inviteBox], { cls: 'keep-on' });
     invites.hidden = true;
     let editing = null; // {id?, path, name, sel}: the folder open in the side panel
     let foldersKey = '';
@@ -123,7 +125,7 @@
       box.textContent = '';
       const list = fv.list || [];
       const offers = fv.offers || [];
-      if (!list.length && !offers.length) box.append(UI.el('div', { class: 'sf-empty', text: t('No shared folders') }));
+      if (!list.length) box.append(UI.el('div', { class: 'sf-empty', text: t('No shared folders') }));
       for (const f of list) {
         const chips = Array.isArray(f.devices) ? (f.devices.length ? f.devices.map((id) => chip(devLabel(fv, id))) : [chip(t('No devices'), 'muted')]) : [chip(t('All devices'))];
         const st = folderState(f);
@@ -131,19 +133,21 @@
           UI.el('div', { class: 'sf-tile' }, [UI.icon('folder')]),
           UI.el('div', { class: 'sf-text' }, [
             UI.el('div', { class: 'sf-title' }, [UI.el('b', { text: f.name }), UI.el('span', { class: 'sf-path', text: tilde(f.path) })]),
-            UI.el('div', { class: 'sf-chips' }, [...chips, ...(st ? [UI.el('span', { class: 'sf-state', text: st })] : [])]),
+            UI.el('div', { class: 'sf-chips' }, [UI.el('span', { class: 'sf-label', text: t('Access') }), ...chips, ...(st ? [UI.el('span', { class: 'sf-state', text: st })] : [])]),
           ]),
           UI.button(showLabel, () => api.folderOpen(f.id), 'small'),
           UI.button(t('Edit'), () => { editing = { id: f.id, path: f.path, name: f.name, sel: f.devices }; foldersKey = ''; drawFolders(fv); }, 'small'),
         ]);
         box.append(item);
       }
+      inviteBox.textContent = '';
+      invites.hidden = !offers.length;
       for (const o of offers) {
-        box.append(UI.el('div', { class: 'sf-item offer', attrs: { 'data-literal': '' } }, [
+        inviteBox.append(UI.el('div', { class: 'sf-item offer', attrs: { 'data-literal': '' } }, [
           UI.el('div', { class: 'sf-tile' }, [UI.icon('folder')]),
           UI.el('div', { class: 'sf-text' }, [
             UI.el('div', { class: 'sf-title' }, [UI.el('b', { text: o.name })]),
-            UI.el('div', { class: 'sf-chips' }, [chip(t('Invitation'), 'invite'), UI.el('span', { class: 'sf-state', text: t('Shared by {devices}', { devices: (o.from || []).join(', ') }) })]),
+            UI.el('div', { class: 'sf-chips' }, [UI.el('span', { class: 'sf-state', text: t('Shared by {devices}', { devices: (o.from || []).join(', ') }) })]),
           ]),
           UI.button(t('Decline'), () => api.folderDecline(o.f), 'small'),
           UI.button(t('Accept'), () => api.folderAccept(o.f), 'small primary'),

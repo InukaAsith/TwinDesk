@@ -2451,5 +2451,6 @@
   "Apps appear after their first notification": "Os apps aparecem após a primeira notificação",
   "Share “{name}” with": "Compartilhar “{name}” com",
   "Not connected, syncs later": "Desconectado, sincroniza depois",
-  "Invitation": "Convite"
+  "Invitation": "Convite",
+  "Access": "Acesso"
 });

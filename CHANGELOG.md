@@ -20,8 +20,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   the phone's Files app. Folders shared only with phones don't load the sync engine. One-to-one and
   Multi-device, on the Mac, Windows and Linux. Tested here; not yet between devices.
 - **File Sharing in four tabs**: File Sharing, TwinDesk Drive, Shared folders and Settings. Shared
-  folders are a list (folder, path, a chip per device, sync state, Edit); invitations sit in the same
-  list with Accept and Decline. Share a folder, Edit and the file manager's Share folder all open one
+  folders are a list (folder, path, a chip per device, sync state, Edit); invitations have their own
+  section, Shared with you, with Accept and Decline. Share a folder, Edit and the file manager's Share folder all open one
   centred pop-up: All devices or a tick per device (with its system, or Not connected), Save or Share,
   Stop sharing.
 - **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each

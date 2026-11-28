@@ -57,6 +57,7 @@
 .sf-chip { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft, rgba(10, 132, 255, 0.15)); color: var(--accent, #0a84ff); }
 .sf-chip.muted { background: rgba(127, 127, 127, 0.15); color: var(--muted, #888); }
 .sf-chip.invite { background: rgba(255, 159, 10, 0.18); color: #ff9f0a; }
+.sf-label { font-size: 12px; color: var(--muted, #888); margin-right: 2px; }
 .sf-state { font-size: 12px; color: var(--muted, #888); }
 .sf-editor h2 { margin: 0 0 4px; font-size: 17px; }
 .sf-where { color: var(--muted, #888); font-size: 12px; margin-bottom: 14px; word-break: break-all; }

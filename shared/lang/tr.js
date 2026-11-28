@@ -2451,5 +2451,6 @@
   "Apps appear after their first notification": "Uygulamalar ilk bildirimden sonra görünür",
   "Share “{name}” with": "“{name}” paylaşılacak cihazlar",
   "Not connected, syncs later": "Bağlı değil, sonra eşitlenir",
-  "Invitation": "Davet"
+  "Invitation": "Davet",
+  "Access": "Erişim"
 });
