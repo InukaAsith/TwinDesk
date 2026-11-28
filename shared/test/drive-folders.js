@@ -153,6 +153,9 @@ const wait = async (fn, ms = 8000) => {
   assert.strictEqual(A.view().folders.length, 1);
 
   await A.setOn(false);
+  assert.strictEqual(A.view().state, 'off', 'Drive off: its own folder stops');
+  assert.notStrictEqual(A.view().folders[0].state, 'off', 'the shared folders run on without Drive');
+  await A.stop();
   fguests.B.destroy(); await bd.stop();
   for (const id of ['B', 'C']) { guests[id].destroy(); await engines[id].stop(); }
   server.close();

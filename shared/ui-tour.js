@@ -36,7 +36,7 @@
       ['Camera', 'Mirror, 720p to 4K, the light, zoom and a snapshot for the phone’s camera.'],
       ['Keep on top', 'The phone’s screen and a computer’s shared screen can stay over your other windows: the pin in their toolbar.'],
       ['Deck', 'Tiles on your phone that run shortcuts, media, sound, brightness and Bluetooth on this computer, full screen, with widgets and a window space to arrange your windows.'],
-      ['TwinDesk Shared folders', 'Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.'],
+      ['TwinDesk Drive', 'One folder synced across your devices, with no cloud. Each keeps its own copy and works offline. Off by default, in File Sharing.'],
       ['Multi-device, out of beta', 'Every computer and phone at once, now with fast files, Camera, Remote, the Deck, ReZume, Drive and a tour of its own.'],
       ['The monitor map', 'In Multi-device, every device’s monitors in one picture: drag them into place and the pointer crosses where they touch.'],
       ['Air mouse and Presentation', 'Point the phone to move the pointer, or run your slides from it, with a laser pointer.'],

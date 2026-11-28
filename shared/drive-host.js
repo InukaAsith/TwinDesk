@@ -207,7 +207,7 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
     hook();
     mesh.setRequest(request);
     tellAll();
-    await Promise.all([startUnit(''), ...cfg().folders.map((d) => startUnit(d.id))]);
+    await Promise.all([...(cfg().on ? [startUnit('')] : []), ...cfg().folders.map((d) => startUnit(d.id))]); // Drive's own folder only while Drive is on
     onChange();
   }
 
@@ -220,16 +220,17 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
   }
 
   const host = {
+    // TwinDesk Drive's own folder. The engine also runs for the shared folders, a separate feature.
     async setOn(on) {
       cfg().on = !!on;
       save();
-      if (on) await start();
-      else await stop();
+      if (on) { await start(); await startUnit(''); } else { await stopUnit(''); if (!cfg().folders.length) await stop(); }
+      onChange();
     },
     async setFolder(f) {
       cfg().folder = typeof f === 'string' ? f : '';
       save();
-      if (running) { await stopUnit(''); await startUnit(''); }
+      if (running && cfg().on) { await stopUnit(''); await startUnit(''); }
       onChange();
     },
     folder,
@@ -243,8 +244,9 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
       if (!n) for (const l of theirs.values()) if (l.has(fid)) n = l.get(fid);
       c.folders.push({ id: fid, name: safeName(n), path: typeof p === 'string' ? p : '', devices: cleanDevices(devices) });
       save();
+      if (!running) await start(); // shared folders run the engine even with Drive off
+      else await startUnit(fid);
       tellAll();
-      if (running) await startUnit(fid);
       settle();
       return fid;
     },
@@ -256,6 +258,7 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
       save();
       await stopUnit(fid);
       tellAll();
+      if (!c.on && !c.folders.length) await stop(); // nothing left to run for
       onChange();
     },
     // '' for the main folder; devices: 'all' or [ids].
@@ -304,7 +307,7 @@ function createMesh({ settings, save, me, meName, userData, trash, mesh, onChang
     },
     stop,
   };
-  if (cfg().on) start();
+  if (cfg().on || cfg().folders.length) start();
   return host;
 }
 

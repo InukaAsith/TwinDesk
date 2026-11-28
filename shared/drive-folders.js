@@ -30,7 +30,7 @@ function cleanFolders(list) {
 // What settings.drive keeps of them (the sanitizers): the main folder's devices and the extra folders.
 function clean(dr) {
   const d = dr && typeof dr === 'object' ? dr : {};
-  return { devices: cleanDevices(d.devices), folders: cleanFolders(d.folders) };
+  return { devices: cleanDevices(d.devices), folders: cleanFolders(d.folders), declined: Array.isArray(d.declined) ? d.declined.filter((x) => typeof x === 'string' && ID.test(x)).slice(-64) : [] };
 }
 
 const pathOf = (f) => (f.path || defaultPath(f.name));

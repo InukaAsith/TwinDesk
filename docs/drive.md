@@ -1,17 +1,15 @@
-# TwinDesk Shared folders
-
-(It was called TwinDesk Drive; the code still says drive, and the folder is still `~/TwinDesk Drive`.)
+# TwinDesk Drive and Shared folders
 
 One folder kept the same on every device that turns it on, like a cloud drive with no cloud. Each
 device keeps a full copy, so it works offline. When two devices meet in a session, they swap what
 changed since they last met.
 
-It's in **File Sharing › TwinDesk Shared folders** on the Mac, Windows and Linux, in one-to-one mode and in
+It's in **File Sharing › TwinDesk Drive** on the Mac, Windows and Linux, in one-to-one mode and in
 Multi-device. The folder is `~/TwinDesk Drive` unless you choose another one.
 
 ## Shared folders, each with its own devices
 
-Besides the main folder, up to 10 more (`settings.drive.folders`, rules in `shared/drive-folders.js`):
+A separate feature (File Sharing › Shared folders) on the same engine. Up to 10 folders (`settings.drive.folders`, rules in `shared/drive-folders.js`):
 `{id, name, path, devices}`, where `devices` is `'all'` or a list of device ids. `path` empty means
 `~/TwinDesk Folders/<name>`. The card and the "Share <folder> with…" sheet are `shared/folders-host.js`
 (state `folders`) and `shared/ui-drive.js`; the file manager's Share folder opens the sheet.
@@ -23,8 +21,9 @@ Besides the main folder, up to 10 more (`settings.drive.folders`, rules in `shar
 - Phones: `shared/foldershare.js` serves the folders shared with the phone (`forDevice`) as a top
   level of folders by name, beside this computer's own folder while Phone Files shares it. The top
   level can be listed only, nothing made, renamed or removed there. No phone change.
-- A folder for phones only doesn't load the engine. Adding a computer to a folder switches Shared
-  folders on.
+- The engine runs while Drive is on or any shared folder exists; Drive's own folder only while Drive
+  is on. A folder for phones only doesn't load the engine.
+- Invitations from other computers can be declined (`settings.drive.declined`); the other side isn't told.
 
 ## Off means off
 

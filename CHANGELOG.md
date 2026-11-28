@@ -13,17 +13,16 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
-- **TwinDesk Shared folders** (was TwinDesk Drive; File Sharing): besides its own folder, up to 10
-  folders of yours, each shared with the devices you choose (any of them, or All, which takes in
-  devices paired later), changed at any time with Devices…. Stop sharing leaves the files where they
-  are. A folder another computer shares with this one waits on the card with Add. Phones need no
-  update: the folders shared with a phone are top-level folders in its Files app (and every app's file
-  picker), beside this computer's own while that's on. A folder for phones only doesn't load the sync
-  engine; one with a computer switches Shared folders on. One-to-one and Multi-device alike, on the
-  Mac, Windows and Linux. Tested here with the engine and the phone server; not yet between devices.
-- **ReZume asks which device** in Multi-device: turned on with none picked, the top of the ReZume
-  tab lists the connected devices to choose from (one alone is picked without asking); a computer
-  chosen chooses this one too.
+- **Shared folders** (File Sharing › Shared folders, separate from TwinDesk Drive): up to 10 folders,
+  each shared with the devices you choose (or All, which includes devices added later), changeable at
+  any time. Stop sharing leaves the files in place. Folders another computer shares with this one
+  appear under Shared with you, to Accept or Decline. Phones need no update: their folders appear in
+  the phone's Files app. Folders shared only with phones don't load the sync engine. One-to-one and
+  Multi-device, on the Mac, Windows and Linux. Tested here; not yet between devices.
+- **File Sharing in four tabs**: File Sharing, TwinDesk Drive, Shared folders and Settings.
+- **ReZume asks which device** in Multi-device: turned on with none selected, the top of the ReZume
+  tab lists the connected devices (a single device is selected automatically); a computer you select
+  also selects this one.
   Cancel leaves ReZume off. The ReZume with picker on its page still changes it later.
 - **Manage the mesh from the phone** (Android, Overview › Multi-device, on unless a computer turns it
   off): wake, lock, sleep, restart or shut down any computer of the mesh, unlock it (Full KVM),
@@ -36,9 +35,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   uninstaller; Windows 10, the Store build and the portable build keep the classic menu. Needs the
   helper built with Visual Studio's C++ tools. Untested on a PC (built by CI only).
 - **Share folder from the file manager**: Explorer (classic and Windows 11 menus), Finder (Quick
-  Actions › Share folder (TwinDesk)) and Nautilus, Caja, Nemo, Dolphin and Thunar on Linux. TwinDesk
-  comes up on "Share <folder> with…": in Multi-device you tick the devices (or All); one-to-one asks
-  to share it with the other computer. Finder's Quick Action checked on a Mac with Automator; the
+  Actions › Share folder (TwinDesk)) and Nautilus, Caja, Nemo, Dolphin and Thunar on Linux. A
+  Share "<folder>" window asks which devices (or All); one-to-one confirms the other computer. Finder's Quick Action checked on a Mac with Automator; the
   menus on Windows and Linux untested on a desktop.
 - **TwinDesk iPhone › Refresh all**, on the computer's Installed apps and in the iOS app's App refresh:
   every sideloaded app on the device in one run, as AltStore does it. One sign-in, every app's new

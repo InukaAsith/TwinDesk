@@ -90,6 +90,47 @@
     }));
   };
 
+  // A block that isn't a card (File Sharing's two direction cards) as a titled section for UI.sections.
+  UI.titled = (title, block) => UI.el('div', { class: 'card-wrap' }, [UI.el('div', { class: 'card-title' }, [UI.el('span', { text: title })]), block]);
+
+  // A page split into tabs listed beside it (File Sharing): only the chosen tab's cards show.
+  // groups: [{id, title, cards: [card | null]}]. A tab whose cards are all hidden has no link.
+  // The chosen tab is remembered on this computer (localStorage, page id + tab id).
+  UI.subtabs = (page, groups) => {
+    const key = `td.subtab.${page}`;
+    let at = '';
+    try { at = localStorage.getItem(key) || ''; } catch (_) { /* no storage: the first tab */ }
+    const list = UI.el('div', { class: 'sec-nav sub-nav', attrs: { role: 'tablist' } });
+    const col = UI.el('div', { class: 'sec-body' });
+    const wrap = UI.el('div', { class: 'sections subtabs' }, [list, col]);
+    const tabs = groups.map((g) => {
+      const cards = g.cards.filter(Boolean);
+      const box = UI.el('div', { attrs: { role: 'tabpanel' } }, cards);
+      const b = UI.el('button', { class: 'sec-link', text: g.title, attrs: { role: 'tab' } });
+      b.onclick = () => show(g.id);
+      list.append(b);
+      col.append(box);
+      return { id: g.id, b, box, cards };
+    });
+    const visible = (tb) => tb.cards.some((c) => !c.hidden);
+    function show(id) {
+      const pick = tabs.find((tb) => tb.id === id && visible(tb)) || tabs.find(visible) || tabs[0];
+      at = pick.id;
+      try { localStorage.setItem(key, at); } catch (_) { /* not kept */ }
+      for (const tb of tabs) {
+        tb.b.hidden = !visible(tb);
+        tb.b.classList.toggle('active', tb === pick);
+        tb.b.setAttribute('aria-selected', String(tb === pick));
+        tb.box.hidden = tb !== pick;
+      }
+    }
+    for (const tb of tabs) for (const c of tb.cards) new MutationObserver(() => show(at)).observe(c, { attributes: true, attributeFilter: ['hidden'] });
+    show(at);
+    wrap.show = show;
+    wrap.spy = () => {};
+    return wrap;
+  };
+
   UI.sections = (cards) => {
     // A card a page has only sometimes comes as null (General's relay card where ui-relay.js isn't
     // loaded: the Mac's Multi-device window, whose General then didn't build at all).

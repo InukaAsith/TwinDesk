@@ -1,83 +1,99 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The TwinDesk Shared folders card on the File Sharing page (Mac, Windows, Linux; docs/drive.md; it was
-// TwinDesk Drive): the main folder's switch, where it is and how it's doing, then the shared folders,
-// each with its own devices (shared/folders-host.js), the ones other computers offer, and Add folder.
-// The "Share <folder> with…" sheet (the file manager's Share folder) is here too. The app's state
-// carries `drive` (shared/drive-host.js view(), or {on: false, folder} while it isn't loaded) and
-// `folders` (folders-host.js view()); a state without them hides them.
-// api for the folders: folderShare({path, devices}), folderSheet(null), folderAdd(), folderRemove(id),
-// folderDevices({id, devices}), folderAccept(id), folderOpen(id).
-//   const drive = UI.driveCard(api, {tilde, manager: 'Finder'}); body.append(drive.card); drive.update(s);
-// api: setDrive(on), pickDriveFolder(), resetDriveFolder(), openDriveFolder().
+// File Sharing (Mac, Windows, Linux; docs/drive.md), two separate features:
+//   - TwinDesk Drive: one folder kept in sync on every device that turns it on (state `drive`:
+//     shared/drive-host.js view(), or {on: false, folder} while it isn't loaded).
+//   - Shared folders: up to 10 folders, each with the devices chosen for it (state `folders`:
+//     shared/folders-host.js view()), and the folders other computers offer.
+// The file manager's Share folder opens the "Share <folder>" pop-up (folders.sheet).
+//   const drive = UI.driveCard(api, {tilde, manager: 'Finder'});
+//   body.append(drive.card, drive.folders, drive.invites); drive.update(s);
+// api: setDrive(on), pickDriveFolder(), resetDriveFolder(), openDriveFolder(); folderShare({path, devices}),
+// folderSheet(null), folderAdd(), folderRemove(id), folderDevices({id, devices}), folderAccept(id), folderDecline(id), folderOpen(id).
 'use strict';
 
 (function () {
   UI.driveCard = (api, { tilde = (p) => p, manager = '' } = {}) => {
     const t = (k, v) => I18n.t(k, v);
     const size = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(0, Math.round(n / 1e3))} KB`);
-    const sw = UI.switch((v) => api.setDrive(v), { label: t('TwinDesk Shared folders') });
-    const mainRow = UI.row(t('Keep a folder the same on your devices'), '', [sw], { literalHint: true });
-    const openBtn = UI.button(manager ? t('Show in {app}', { app: manager }) : t('Open'), () => api.openDriveFolder(), 'small');
-    const chooseBtn = UI.button(t('Choose…'), () => api.pickDriveFolder(), 'small');
-    const resetBtn = UI.button(t('Default'), () => api.resetDriveFolder(), 'small');
-    const folderRow = UI.row(t('Folder'), '', [resetBtn, chooseBtn, openBtn], { literalHint: true });
-    const note = UI.note('info', '', { literal: true });
-    // ---- the shared folders ----
-    const box = UI.el('div', { class: 'sf-list' });
-    const addBtn = UI.button(t('Add folder…'), () => api.folderAdd && api.folderAdd(), 'small');
-    const addRow = UI.row(t('Shared folders'), t('Each folder with the devices you choose. Phones see theirs in the Files app'), [addBtn]);
-    const card = UI.card(t('TwinDesk Shared folders'), [mainRow, folderRow, addRow, box, note], { cls: 'keep-on' });
-    let foldersKey = '';
-    const openTicks = new Set(); // folders whose device ticks are shown
+    const showLabel = manager ? t('Show in {app}', { app: manager }) : t('Open');
 
-    // Ticks: All, then each device. sel: 'all' or [ids]; onPick(next).
+    // ---- TwinDesk Drive ----
+    const sw = UI.switch((v) => api.setDrive(v), { label: t('TwinDesk Drive') });
+    const mainRow = UI.row(t('TwinDesk Drive'), '', [sw], { literalHint: true });
+    const openBtn = UI.button(showLabel, () => api.openDriveFolder(), 'small');
+    const chooseBtn = UI.button(t('Change…'), () => api.pickDriveFolder(), 'small');
+    const resetBtn = UI.button(t('Default'), () => api.resetDriveFolder(), 'small');
+    const folderRow = UI.row(t('Location'), '', [resetBtn, chooseBtn, openBtn], { literalHint: true });
+    const note = UI.note('warn', '', { literal: true });
+    const card = UI.card(t('TwinDesk Drive'), [mainRow, folderRow, note], { cls: 'keep-on' });
+
+    // ---- Shared folders ----
+    const addBtn = UI.button(t('Add folder…'), () => api.folderAdd && api.folderAdd(), 'small');
+    const box = UI.el('div');
+    const folders = UI.card(t('Shared folders'), [box], { actions: [addBtn], cls: 'keep-on' });
+    folders.hidden = true;
+    // Invitations: folders other computers share with this one.
+    const inviteBox = UI.el('div');
+    const invites = UI.card(t('Shared with you'), [inviteBox], { cls: 'keep-on' });
+    invites.hidden = true;
+    const open = new Set(); // folders whose device list is shown
+    let foldersKey = '';
+
+    // Device switches: All, then each device. sel: 'all' or [ids]; onPick(next).
     function ticks(devs, sel, onPick) {
       const all = !Array.isArray(sel);
       const wrap = UI.el('div', { class: 'sf-ticks' });
       const allSw = UI.switch((v) => onPick(v ? 'all' : devs.map((d) => d.id)), { label: t('All devices') });
       allSw.set(all);
-      wrap.append(UI.row(t('All devices'), t('Devices paired later too'), [allSw]));
+      wrap.append(UI.row(t('All devices'), t('Includes devices added later'), [allSw]));
+      if (all) return wrap; // each device only once All is off
       for (const d of devs) {
         const one = UI.switch((v) => {
           const cur = all ? devs.map((x) => x.id) : sel.slice();
           onPick(v ? [...new Set([...cur, d.id])] : cur.filter((x) => x !== d.id));
         }, { label: d.name });
         one.set(all || sel.includes(d.id));
-        const r = UI.row(d.name, '', [UI.osIcon(d.os), one], { literal: true });
-        wrap.append(r);
+        wrap.append(UI.row(d.name, '', [UI.osIcon(d.os), one], { literal: true }));
       }
       return wrap;
     }
-
     const devLabel = (fv, sel) => {
       if (!Array.isArray(sel)) return t('All devices');
       if (!sel.length) return t('No devices');
       return sel.map((id) => ((fv.devices || []).find((d) => d.id === id) || { name: id.slice(0, 8) }).name).join(', ');
     };
+    const folderState = (f) => (f.error ? t('Error: {error}', { error: f.error })
+      : f.moving ? t(f.moving === 1 ? 'Syncing {count} file' : 'Syncing {count} files', { count: f.moving })
+        : f.connected ? t('Up to date') : '');
 
     function drawFolders(fv) {
-      const key = JSON.stringify([fv, [...openTicks]]);
+      const key = JSON.stringify([fv.list, fv.offers, fv.devices, [...open]]);
       if (key === foldersKey) return;
       foldersKey = key;
       box.textContent = '';
-      for (const f of fv.list || []) {
-        const st = f.moving ? t(f.moving === 1 ? 'Syncing {count} file' : 'Syncing {count} files', { count: f.moving })
-          : f.error ? t('Couldn’t use the folder: {error}', { error: f.error }) : f.connected ? t('Up to date with {device}', { device: f.peer }) : '';
-        const row = UI.row(f.name, [devLabel(fv, f.devices), tilde(f.path), st].filter(Boolean).join(' · '), [
-          UI.button(openTicks.has(f.id) ? t('Done') : t('Devices…'), () => { openTicks.has(f.id) ? openTicks.delete(f.id) : openTicks.add(f.id); foldersKey = ''; drawFolders(fv); }, 'small'),
-          UI.button(manager ? t('Show in {app}', { app: manager }) : t('Open'), () => api.folderOpen(f.id), 'small'),
+      const list = fv.list || [];
+      if (!list.length) box.append(UI.row(t('No shared folders'), '', []));
+      for (const f of list) {
+        const shown = open.has(f.id);
+        box.append(UI.row(f.name, [devLabel(fv, f.devices), tilde(f.path), folderState(f)].filter(Boolean).join(' · '), [
+          UI.button(shown ? t('Done') : t('Devices'), () => { shown ? open.delete(f.id) : open.add(f.id); foldersKey = ''; drawFolders(fv); }, 'small'),
+          UI.button(showLabel, () => api.folderOpen(f.id), 'small'),
           UI.button(t('Stop sharing'), () => api.folderRemove(f.id), 'small'),
-        ], { literal: true });
-        box.append(row);
-        if (openTicks.has(f.id)) box.append(ticks(fv.devices || [], f.devices, (next) => api.folderDevices({ id: f.id, devices: next })));
+        ], { literal: true }));
+        if (shown) box.append(ticks(fv.devices || [], f.devices, (next) => api.folderDevices({ id: f.id, devices: next })));
       }
+      inviteBox.textContent = '';
+      invites.hidden = !(fv.offers || []).length;
       for (const o of fv.offers || []) {
-        box.append(UI.row(o.name, t('{devices} shares it with this computer', { devices: (o.from || []).join(', ') }), [UI.button(t('Add'), () => api.folderAccept(o.f), 'small')], { literal: true }));
+        inviteBox.append(UI.row(o.name, t('Shared by {devices}', { devices: (o.from || []).join(', ') }), [
+          UI.button(t('Decline'), () => api.folderDecline(o.f), 'small'),
+          UI.button(t('Accept'), () => api.folderAccept(o.f), 'small primary'),
+        ], { literal: true }));
       }
-      addBtn.disabled = (fv.list || []).length >= (fv.max || 10);
+      addBtn.disabled = list.length >= (fv.max || 10);
     }
 
-    // ---- the sheet: Share <folder> with… ----
+    // ---- the pop-up: Share <folder> (the file manager's Share folder) ----
     let shade = null, sheetKey = '';
     function drawSheet(fv) {
       const sh = fv && fv.sheet;
@@ -89,60 +105,50 @@
       const devs = fv.devices || [];
       let sel = sh.shared || (devs.length === 1 ? [devs[0].id] : 'all');
       const close = () => api.folderSheet(null);
-      const panel = UI.el('div', { class: 'sf-sheet', attrs: { role: 'dialog', 'aria-modal': 'true' } });
-      const title = UI.el('h2', { text: t('Share {name} with…', { name: sh.name }), attrs: { 'data-literal': '' } });
-      const where = UI.el('div', { class: 'sf-where', text: tilde(sh.path), attrs: { 'data-literal': '' } });
-      const body2 = UI.el('div', { class: 'sf-body' });
+      const inner = UI.el('div');
       const draw = () => {
-        body2.textContent = '';
-        if (!devs.length) body2.append(UI.note('info', t('No device is paired yet. Pair one, then share the folder with it.')));
-        else if (devs.length === 1) body2.append(UI.note('info', t('Share {name} with {device}? Its files stay the same on both.', { name: sh.name, device: devs[0].name }), { literal: true }));
-        else body2.append(ticks(devs, sel, (next) => { sel = next; draw(); }));
+        inner.textContent = '';
+        if (!devs.length) inner.append(UI.note('info', t('No paired devices')));
+        else if (devs.length === 1) inner.append(UI.row(t('With {device}', { device: devs[0].name }), '', [UI.osIcon(devs[0].os)], { literal: true }));
+        else inner.append(ticks(devs, sel, (next) => { sel = next; draw(); }));
       };
       draw();
       const share = UI.button(t('Share'), () => api.folderShare({ path: sh.path, devices: sel }), 'primary');
       share.disabled = !devs.length;
-      const foot = UI.el('div', { class: 'sf-foot' }, [UI.button(t('Cancel'), close), share]);
-      panel.append(title, where, body2, foot);
+      const panel = UI.el('div', { class: 'sf-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'data-literal': '' } }, [
+        UI.el('h2', { text: t('Share “{name}”', { name: sh.name }) }),
+        UI.el('div', { class: 'sf-where', text: tilde(sh.path) }),
+        inner,
+        UI.el('div', { class: 'sf-foot' }, [UI.button(t('Cancel'), close), share]),
+      ]);
       shade = UI.el('div', { class: 'sf-shade' }, [panel]);
       shade.addEventListener('click', (e) => { if (e.target === shade) close(); });
       document.body.append(shade);
     }
-    if (!document.getElementById('sf-style')) {
-      const st = document.createElement('style');
-      st.id = 'sf-style';
-      st.textContent = '.sf-shade{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:24px}'
-        + '.sf-sheet{width:min(480px,100%);max-height:100%;overflow:auto;border-radius:14px;background:#fff;color:var(--text);box-shadow:0 24px 64px rgba(0,0,0,.35),0 0 0 1px var(--line);padding:18px 18px 14px}'
-        + '@media (prefers-color-scheme: dark){.sf-sheet{background:#252527}}'
-        + '.sf-sheet h2{margin:0 0 2px;font-size:16px;font-weight:600}.sf-where{color:var(--muted);font-size:12px;margin-bottom:12px;word-break:break-all}'
-        + '.sf-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.sf-ticks{padding-left:12px}';
-      document.head.append(st);
-    }
+    // Its look: .sf-* in shared/ui-look.css (the pages' policy allows no inline style sheet).
 
     const update = (s) => {
+      folders.hidden = !s.folders;
+      if (!s.folders) invites.hidden = true;
       if (s.folders) { drawFolders(s.folders); drawSheet(s.folders); }
       const d = s.drive;
       card.hidden = !d;
       if (!d) return;
-      const peer = d.peer || (UI.peer ? UI.peer(s).name : '');
       sw.set(d.on);
-      folderRow.setHint(tilde(d.folder) || t('TwinDesk Drive in your home folder'));
+      folderRow.setHint(tilde(d.folder));
       resetBtn.hidden = !d.custom;
       openBtn.disabled = !d.on;
       let hint;
-      if (!d.on) hint = t('One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.');
-      else if (d.error) hint = t('Couldn’t use the folder: {error}', { error: d.error });
-      else if (d.state === 'starting' || d.state === 'scanning') hint = t('Looking for changes…');
-      else if (d.connected && d.moving) hint = t(d.moving === 1 ? 'Syncing {count} file with {device}' : 'Syncing {count} files with {device}', { count: d.moving, device: peer });
-      else if (d.connected) hint = t('Up to date with {device} · {count} files, {size}', { device: peer, count: d.files, size: size(d.bytes) });
-      else hint = t('{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects', { count: d.files, size: size(d.bytes) });
+      if (!d.on) hint = t('One folder, synced across your devices');
+      else if (d.error) hint = t('Error: {error}', { error: d.error });
+      else if (d.state === 'starting' || d.state === 'scanning') hint = t('Scanning…');
+      else if (d.moving) hint = t(d.moving === 1 ? 'Syncing {count} file' : 'Syncing {count} files', { count: d.moving });
+      else if (d.connected) hint = t('Up to date · {count} files, {size}', { count: d.files, size: size(d.bytes) });
+      else hint = t('Waiting for devices · {count} files, {size}', { count: d.files, size: size(d.bytes) });
       mainRow.setHint(hint);
       mainRow.hint.classList.toggle('bad', !!(d.on && d.error));
-      const notes = [];
-      if (d.on) notes.push(t('Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.'));
-      if (d.on && d.skipped) notes.push(t(d.skipped === 1 ? '{count} file has a name this computer can’t hold: it stays on the other devices' : '{count} files have names this computer can’t hold: they stay on the other devices', { count: d.skipped }));
-      note.set(notes.join(' '));
+      note.set(d.on && d.skipped ? t(d.skipped === 1 ? '{count} file skipped: name not supported here' : '{count} files skipped: names not supported here', { count: d.skipped }) : '');
     };
-    return { card, update };
+    return { card, folders, invites, update };
   };
 })();

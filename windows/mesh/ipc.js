@@ -219,7 +219,7 @@ function setupIpc(ctx) {
   });
   handle('resetDriveFolder', () => setDriveFolder(''));
   // File Sharing › Shared folders and the Share folder sheet (shared/folders-host.js).
-  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderOpen']) handle(n, (a) => { const f = ctx.folders && ctx.folders(); return f ? f.actions[n](a) : undefined; });
+  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderDecline', 'folderOpen']) handle(n, (a) => { const f = ctx.folders && ctx.folders(); return f ? f.actions[n](a) : undefined; });
   handle('openDriveFolder', () => { const d = ctx.getDrive(); if (d) shell.openPath(d.folder()); });
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {

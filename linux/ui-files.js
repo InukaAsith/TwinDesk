@@ -73,11 +73,11 @@ UI.tab({
     window.addEventListener('drop', (e) => e.preventDefault());
 
     // Copy and paste files with shortcuts
-    const keysSw = sw(I18n.t('Copy and paste files with shortcuts'), (v) => api.setFiles({ shortcuts: v }));
+    const keysSw = sw(I18n.t('Copy and paste files'), (v) => api.setFiles({ shortcuts: v }));
     const copyRec = UI.keyRecorder((v) => api.setFiles({ copyKeys: v }));
     const pasteRec = UI.keyRecorder((v) => api.setFiles({ pasteKeys: v }));
     const keysRow = UI.row(I18n.t('Copy and paste files'), '', [keysSw], { literal: true });
-    const copyRow = UI.row(I18n.t('Copy'), I18n.t('Select files in the file manager first'), [copyRec]);
+    const copyRow = UI.row(I18n.t('Copy'), '', [copyRec]);
     const pasteRow = UI.row(I18n.t('Paste'), '', [pasteRec], { literal: true });
 
     const edgeDrag = sw(I18n.t('Drag files across the screen edge'), (v) => api.setFiles({ edgeDrag: v }));
@@ -85,28 +85,36 @@ UI.tab({
     // Unencrypted file transfers (shared/fastfile.js fxPlain): the switch is on while they're encrypted.
     const encrypt = sw(I18n.t('Encrypt file transfers'), (v) => api.setFiles({ plain: !v }));
     const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encrypt]);
-    const clipSw = sw(I18n.t('Put received files on the clipboard'), (v) => api.setFiles({ clipReceived: v }));
-    const clipRow = UI.row(I18n.t('Put received files on the clipboard'), I18n.t('Files sent here are ready to paste with Ctrl+V'), [clipSw]);
+    const clipSw = sw(I18n.t('Copy received files to clipboard'), (v) => api.setFiles({ clipReceived: v }));
+    const clipRow = UI.row(I18n.t('Copy received files to clipboard'), '', [clipSw]);
     const cancelBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small');
     const outRow = UI.row('', '', [cancelBtn], { literal: true });
     const inRow = UI.row('', '', [], { literal: true });
     // TwinDesk Drive (shared/ui-drive.js): one-to-one and Multi-device alike; hidden where the state has none.
     const drive = UI.driveCard ? UI.driveCard(api, { tilde: (p) => String(p || '').replace(/^\/home\/[^/]+/, '~'), manager: '' }) : null;
-    body.append(
-      UI.card('', [sendRow, zone], { cls: 'keep-on' }),
-      UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
-      pair.el,
-      UI.card('', [edgeRow, encryptRow, clipRow]),
-      ...(outbox ? [outbox.card] : []),
-      ...(drive ? [drive.card] : []),
-      UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
-    );
+    // Four tabs listed beside the page: File Sharing, TwinDesk Drive, Shared folders, Settings.
+    const sections = UI.subtabs('files', [
+      { id: 'share', title: I18n.t('File Sharing'), cards: [
+        UI.card(I18n.t('Send'), [sendRow, zone], { cls: 'keep-on' }),
+        UI.titled(I18n.t('Network folders'), pair.el),
+        outbox ? outbox.card : null,
+        UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
+      ] },
+      { id: 'drive', title: I18n.t('TwinDesk Drive'), cards: [drive ? drive.card : null] },
+      { id: 'folders', title: I18n.t('Shared folders'), cards: drive ? [drive.folders, drive.invites] : [] },
+      { id: 'settings', title: I18n.t('Settings'), cards: [
+        UI.card(I18n.t('Shortcuts'), [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
+        UI.card(I18n.t('Transfers'), [edgeRow, encryptRow, clipRow]),
+      ] },
+    ]);
+    body.append(sections);
     const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
     return (s) => {
       const f = s.files;
       const m = f.smb;
       const p = UI.peer(s);
       pair.update(s);
+      sections.spy();
       if (drive) drive.update(s);
       if (outbox) outbox.update(f);
       clipSw.set(!!f.clipReceived);

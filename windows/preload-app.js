@@ -81,7 +81,7 @@ contextBridge.exposeInMainWorld('macshare', {
   resetDriveFolder: call('resetDriveFolder'),
   openDriveFolder: call('openDriveFolder'),
   folderShare: call('folderShare'), folderSheet: call('folderSheet'), folderAdd: call('folderAdd'), folderRemove: call('folderRemove'), // Shared folders (shared/folders-host.js)
-  folderDevices: call('folderDevices'), folderAccept: call('folderAccept'), folderOpen: call('folderOpen'),
+  folderDevices: call('folderDevices'), folderAccept: call('folderAccept'), folderDecline: call('folderDecline'), folderOpen: call('folderOpen'),
   cancelDrop: call('cancelDrop'),
   pauseSend: call('pauseSend'),
   resumeSend: call('resumeSend'),

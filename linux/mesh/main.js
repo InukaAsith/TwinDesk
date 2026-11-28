@@ -595,7 +595,7 @@ function start() {
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
-  if (settings.drive.on) loadDrive();
+  if (settings.drive.on || (settings.drive.folders || []).length) loadDrive(); // Drive, or shared folders
   // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet the file manager's Share folder opens.
   folders = require('../../shared/folders-host.js').foldersHost({
     settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,

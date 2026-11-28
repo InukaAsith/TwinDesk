@@ -11,7 +11,7 @@
 .sec-link:hover { background: var(--nav-hover); color: var(--text); }
 .sec-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sec-link:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
-@media (max-width: 760px) { .sec-nav { display: none; } }
+@media (max-width: 760px) { .sec-nav { display: none; } .subtabs { flex-direction: column; } .subtabs .sub-nav { display: flex; flex-direction: row; flex-wrap: wrap; position: static; width: auto; padding-top: 0; } }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 400px; }
 .swatch {
@@ -36,3 +36,12 @@
 
 /* General › Modules: a module switched since TwinDesk started, beside its switch */
 .mod-restart { color: var(--bad); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+
+/* Share <folder>: the pop-up the file manager's Share folder opens (shared/ui-drive.js) */
+.sf-shade { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.42); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.sf-sheet { width: min(460px, 100%); max-height: 100%; overflow: auto; border-radius: 14px; background: #fff; color: var(--text); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--line); padding: 18px 18px 14px; }
+@media (prefers-color-scheme: dark) { .sf-sheet { background: #252527; } }
+.sf-sheet h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+.sf-where { color: var(--muted); font-size: 12px; margin-bottom: 10px; word-break: break-all; }
+.sf-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.sf-ticks { padding-left: 12px; }

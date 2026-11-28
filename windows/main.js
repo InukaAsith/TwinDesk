@@ -270,7 +270,7 @@ function start() {
   // General › Keep the display awake while a computer is connected (shared/keepawake.js, #240).
   awake = require('../shared/keepawake.js').keepAwake(() => settings.app.keepAwake !== false && link && link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os)));
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
-  if (settings.drive.on) loadDrive();
+  if (settings.drive.on || (settings.drive.folders || []).length) loadDrive(); // Drive, or shared folders
   // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet the file manager's Share folder opens.
   folders = require('../shared/folders-host.js').foldersHost({
     settings: () => settings, save: saveSettings, push: pushState, getDrive: () => drive, folders: () => folders, loadDrive,

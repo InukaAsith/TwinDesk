@@ -2,7 +2,8 @@
 // Shared folders in a computer's app (phase 3 of the 2026-11-28 plan; the rules: shared/drive-folders.js):
 // the File Sharing page's Shared folders card and the "Share <folder> with…" sheet that the file
 // manager's Share folder opens (shared/foldermenu.js). Works with Drive's engine loaded or not:
-//   - a folder shared with a computer needs the engine (TwinDesk Shared folders on: it's switched on);
+//   - a folder shared with a computer needs the sync engine (drive-host.js), loaded for it; TwinDesk
+//     Drive's own folder (a separate feature) stays as it is;
 //   - one shared with phones only is served by the phone share (shared/foldershare.js), told at once.
 // The same on Windows, Linux and the Mac, one to one and Multi-device.
 //
@@ -13,7 +14,7 @@
 //   fh.view()              state.folders: {list, offers, devices, sheet}
 //   fh.ask(dir)            the sheet for this folder (Share folder in the file manager)
 //   fh.actions             {folderShare({path, devices}), folderSheet(null), folderAdd(), folderRemove(id),
-//                           folderDevices({id, devices}), folderAccept(id), folderOpen(id)}
+//                           folderDevices({id, devices}), folderAccept(id), folderDecline(id), folderOpen(id)}
 'use strict';
 
 const path = require('path');
@@ -32,12 +33,10 @@ function foldersHost({ settings, save, push, getDrive, loadDrive, phoneShare = (
   const hasComputer = (list) => !Array.isArray(list) || list.some((id) => !isPhone(id)); // 'all': computers paired later too
   const tellPhone = () => { const f = phoneShare(); if (f) Promise.resolve(f.host()).catch(() => {}); };
 
-  // A computer among a folder's devices: the engine runs (it reads the folders when it starts).
+  // A computer among a folder's devices: the engine is loaded (it runs for the shared folders by itself).
   async function engine(list) {
     if (!hasComputer(list)) return getDrive();
-    const d = getDrive() || loadDrive();
-    if (d && !cfg().on) await d.setOn(true);
-    return d;
+    return getDrive() || loadDrive();
   }
 
   async function add({ id, name, path: p, devices: list }) {
@@ -99,6 +98,14 @@ function foldersHost({ settings, save, push, getDrive, loadDrive, phoneShare = (
       const offer = ((getDrive() && getDrive().view().offers) || []).find((o) => o.f === id);
       if (offer) await add({ id, name: offer.name, devices: 'all' });
     },
+    // An invitation not wanted: hidden from now on (settings.drive.declined; the other computer isn't told).
+    folderDecline(id) {
+      if (typeof id !== 'string' || !DF.ID.test(id)) return;
+      const c = cfg();
+      c.declined = [...new Set([...(Array.isArray(c.declined) ? c.declined : []), id])].slice(-64);
+      save();
+      push();
+    },
     folderOpen(id) {
       const f = cfg().folders.find((x) => x.id === id);
       if (f) open(DF.pathOf(f));
@@ -121,10 +128,9 @@ function foldersHost({ settings, save, push, getDrive, loadDrive, phoneShare = (
       return {
         max: DF.MAX,
         list: DF.cleanFolders(c.folders).map((f) => ({ ...(live.get(f.id) || {}), id: f.id, name: f.name, path: DF.pathOf(f), devices: f.devices })),
-        offers: (dv && dv.offers) || [],
+        offers: ((dv && dv.offers) || []).filter((o) => !(Array.isArray(c.declined) && c.declined.includes(o.f))),
         devices: devices().slice(0, 32).map((d) => ({ id: d.id, name: d.name || d.id.slice(0, 8), os: d.os || '' })),
         sheet: sheet ? { ...sheet, shared: (c.folders.find((f) => DF.pathOf(f) === sheet.path) || {}).devices || null } : null,
-        driveOn: c.on === true,
       };
     },
   };

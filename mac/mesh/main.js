@@ -901,7 +901,7 @@ app.whenReady().then(() => {
     return svc.drive;
   };
   svc.getDrive = () => svc.drive || null;
-  if (settings.drive.on) svc.loadDrive();
+  if (settings.drive.on || (settings.drive.folders || []).length) svc.loadDrive(); // Drive, or shared folders
   // Shared folders (shared/folders-host.js): the File Sharing card, and the sheet Finder's Share folder opens.
   folders = require('../../shared/folders-host.js').foldersHost({
     settings: () => settings, save: () => store.saveSettings(settings), push: pushState, getDrive: () => svc.getDrive(), loadDrive: () => svc.loadDrive(),
@@ -911,7 +911,7 @@ app.whenReady().then(() => {
     show: () => goTab('files'),
     open: (f) => require('electron').shell.openPath(f),
   });
-  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderOpen']) require('electron').ipcMain.on(n, (_e, a) => folders && folders.actions[n](a));
+  for (const n of ['folderShare', 'folderSheet', 'folderAdd', 'folderRemove', 'folderDevices', 'folderAccept', 'folderDecline', 'folderOpen']) require('electron').ipcMain.on(n, (_e, a) => folders && folders.actions[n](a));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
   // In Multi-device it goes to the device the pointer went to, selected first, with what that

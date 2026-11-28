@@ -119,7 +119,7 @@
 
       // Multi-device: which device ReZume is with (the same on both: picking here picks this one there).
       const withPick = UI.select([], (id) => api.rezumeDo({ a: 'with', id }));
-      const withRow = UI.row(tr('ReZume with'), tr('The device to go on with. It picks this computer there too, and the one either was with before lets go.'), [withPick.el], { literal: true });
+      const withRow = UI.row(tr('ReZume with'), tr('A computer you select also selects this one.'), [withPick.el], { literal: true });
       const withCard = UI.card(tr('Multi-device'), [withRow]);
       withCard.hidden = true;
       // Turned on with no device picked (askWith): the choice, at the top of the tab.
@@ -256,7 +256,7 @@
         push.disabled = !h.last;
         outRow.setHint(h.last ? h.last.title : tr('Nothing to send yet'));
         // Multi-device (shared/rezume-solo.js): with the device picked above (an older app: only a phone alone).
-        const meshWhy = h.mesh === 'pick' ? tr('Pick the device to go on with above, under ReZume with.')
+        const meshWhy = h.mesh === 'pick' ? tr('Select a device under ReZume with.')
           : h.mesh === 'computer' ? tr('ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.')
           : h.mesh === 'many' ? tr('In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.') : '';
         note.set(meshWhy || (h.on ? tr(h.why || '') : ''));

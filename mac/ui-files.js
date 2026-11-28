@@ -39,12 +39,12 @@ UI.tab({
     };
     // shared
     const dragSw = UI.switch((v) => api.setFiles({ dragEdge: v }), { label: I18n.t('Drag files across the screen edge') });
-    const dragRow = UI.row(I18n.t('Drag files between computers'), I18n.t('Drag through the screen edge and drop anywhere'), [dragSw], { literalHint: true });
+    const dragRow = UI.row(I18n.t('Drag files between computers'), '', [dragSw], { literalHint: true });
     // Unencrypted file transfers (shared/fastfile.js fxPlain): the switch is on while they're encrypted.
     const encryptSw = UI.switch((v) => api.setFiles({ plain: !v }), { label: I18n.t('Encrypt file transfers') });
     const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encryptSw], { literalHint: true });
     const reveal = UI.switch((v) => api.setFiles({ reveal: v }), { label: I18n.t('Show in Finder') });
-    const clipSw = UI.switch((v) => api.setFiles({ clipReceived: v }), { label: I18n.t('Put received files on the clipboard') });
+    const clipSw = UI.switch((v) => api.setFiles({ clipReceived: v }), { label: I18n.t('Copy to clipboard') });
     const folderRow = UI.row(I18n.t('Save to'), '', [UI.button(I18n.t('Choose…'), () => api.pickDropFolder(), 'small'), UI.button(I18n.t('Downloads'), () => api.resetDropFolder(), 'small')], { literalHint: true });
     const progress = el('div');
     const list = el('div', { class: 'history' });
@@ -55,7 +55,7 @@ UI.tab({
 
     // Send files: drop zone + Choose…
     const zoneText = el('div', { class: 'big', text: I18n.t('Drop files or folders here') });
-    const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, el('div', { class: 'hint', text: I18n.t('They go to the other computer’s Downloads') })])]);
+    const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, el('div', { class: 'hint', text: I18n.t('Saved to Downloads on the other device') })])]);
     const sendBtn = UI.button(I18n.t('Choose…'), () => api.chooseSendFiles(), 'small');
     const cancelSendBtn = UI.button(I18n.t('Cancel'), () => api.cancelSend(), 'small'); // what's on its way (not a drag)
     const sendRow = UI.row(I18n.t('Send files'), '', [cancelSendBtn, sendBtn], { literalHint: true });
@@ -76,31 +76,37 @@ UI.tab({
     window.addEventListener('drop', (e) => e.preventDefault());
 
     // Copy and paste files with shortcuts
-    const keysSw = UI.switch((v) => api.setFiles({ shortcuts: v }), { label: I18n.t('Copy and paste files with shortcuts') });
+    const keysSw = UI.switch((v) => api.setFiles({ shortcuts: v }), { label: I18n.t('Copy and paste files') });
     const copyRec = UI.keyRecorder((v) => api.setFiles({ copyKeys: v }));
     const pasteRec = UI.keyRecorder((v) => api.setFiles({ pasteKeys: v }));
     const keysRow = UI.row(I18n.t('Copy and paste files'), '', [keysSw], { literalHint: true });
-    const copyRow = UI.row(I18n.t('Copy'), I18n.t('Select files in Finder first'), [copyRec]);
+    const copyRow = UI.row(I18n.t('Copy'), '', [copyRec]);
     const pasteRow = UI.row(I18n.t('Paste'), '', [pasteRec], { literalHint: true });
 
-    body.append(
-      UI.card('', [sendRow, zone], { cls: 'keep-on' }),
-      UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
-      UI.pair(
-        UI.dir('m2w', [shareRow]),
-        UI.dir('w2m', [acceptRow, pcRow, drivesBox]),
-      ),
-      UI.card('', [dragRow, encryptRow], { cls: 'keep-on' }),
-      ...(drive ? [drive.card] : []),
-      progress,
-      ...(outbox ? [outbox.card] : []),
-      UI.card(I18n.t('Arriving files'), [
-        folderRow,
-        UI.row(I18n.t('Show in Finder'), '', [reveal]),
-        UI.row(I18n.t('Put received files on the clipboard'), I18n.t('Files sent here are ready to paste with ⌘V'), [clipSw]),
-      ]),
-      UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
-    );
+    // Four tabs listed beside the page: File Sharing, TwinDesk Drive, Shared folders, Settings.
+    const sections = UI.subtabs('files', [
+      { id: 'share', title: I18n.t('File Sharing'), cards: [
+        UI.card(I18n.t('Send'), [sendRow, zone, progress], { cls: 'keep-on' }),
+        UI.titled(I18n.t('Network folders'), UI.pair(
+          UI.dir('m2w', [shareRow]),
+          UI.dir('w2m', [acceptRow, pcRow, drivesBox]),
+        )),
+        outbox ? outbox.card : null,
+        UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
+      ] },
+      { id: 'drive', title: I18n.t('TwinDesk Drive'), cards: [drive ? drive.card : null] },
+      { id: 'folders', title: I18n.t('Shared folders'), cards: drive ? [drive.folders, drive.invites] : [] },
+      { id: 'settings', title: I18n.t('Settings'), cards: [
+        UI.card(I18n.t('Shortcuts'), [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
+        UI.card(I18n.t('Transfers'), [dragRow, encryptRow], { cls: 'keep-on' }),
+        UI.card(I18n.t('Received files'), [
+          folderRow,
+          UI.row(I18n.t('Show in Finder'), '', [reveal]),
+          UI.row(I18n.t('Copy to clipboard'), '', [clipSw]),
+        ]),
+      ] },
+    ]);
+    body.append(sections);
 
     let key = '';
     let progressKey = '';
@@ -108,6 +114,7 @@ UI.tab({
       const f = s.files;
       const m = s.smb;
       if (!f || !m) return;
+      sections.spy();
       if (drive) drive.update(s);
       if (outbox) outbox.update(f);
       const pc = UI.peer(s).name;
