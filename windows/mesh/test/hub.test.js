@@ -688,6 +688,30 @@ test('(h2) the audio route gets the audio.policy a device sent before the route 
   }
 });
 
+test('(h4) a scoped link hears its own device with the socket the message came on (#286: a screen detail counts only from the screen session\'s socket)', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    const sock = (link) => (typeof link.screenSocket === 'function' ? link.screenSocket() : link.outbound());
+    for (const [from, other] of [[B, C], [C, B]]) {
+      const link = A.hub.scoped(from.id);
+      const got = [];
+      link.on(P.T.RTC_DETAIL, (m, ws) => got.push({ m, ws }));
+      other.hub.bus.send(A.id, { t: P.T.RTC_DETAIL, session: 9, height: 1440 });
+      from.hub.bus.send(A.id, { t: P.T.RTC_DETAIL, session: 7, height: 1080 });
+      await waitFor(() => got.length === 1, `A's scoped link for ${from.name} hears it`);
+      await sleep(100);
+      assert.strictEqual(got.length, 1, `only ${from.name}'s detail, not ${other.name}'s`);
+      assert.strictEqual(got[0].m.session, 7);
+      const ws = sock(link);
+      assert.ok(ws && ws.readyState === 1, `${from.name}: a live socket for its session`);
+      assert.strictEqual(got[0].ws, ws, `${from.name}: the detail came on that socket`);
+    }
+  } finally {
+    close3(N);
+  }
+});
+
 async function main() {
   await runTests(tests);
 }
