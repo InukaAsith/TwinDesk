@@ -82,10 +82,10 @@
           icon.replaceChildren(UI.appIcon(i.icon));
         }
         row.label.textContent = i.title || i.name || i.appName;
-        row.setHint(kindWord(i) + ' · ' + (i.kind === 'web' ? hostOf(i.url) : i.kind === 'doc' ? i.name + (i.size ? ', ' + size(i.size) : '')
+        row.setHint(kindWord(i) + ', ' + (i.kind === 'web' ? hostOf(i.url) : i.kind === 'doc' ? i.name + (i.size ? ', ' + size(i.size) : '')
           : i.kind === 'window' ? tr('{app}, in a window here', { app: i.appName || i.app })
             : (h.mirrorReady ? tr('{app}, in a window here', { app: i.appName || i.app }) : (i.appName || i.app)))
-          + (i.appName && i.kind !== 'app' && i.kind !== 'window' ? ' · ' + i.appName : ''));
+          + (i.appName && i.kind !== 'app' && i.kind !== 'window' ? ', ' + i.appName : ''));
       },
     };
   };
@@ -250,7 +250,7 @@
                   : tr('Ready'));
         out.hidden = !h.out;
         if (h.out) {
-          out.setHint(h.out.title + (h.out.kind === 'web' ? ' · ' + hostOf(h.out.url) : h.out.kind === 'doc' ? ' · ' + h.out.name : h.out.kind === 'window' ? ' · ' + tr('Window') : ''));
+          out.setHint(h.out.title + (h.out.kind === 'web' ? ', ' + hostOf(h.out.url) : h.out.kind === 'doc' ? ', ' + h.out.name : h.out.kind === 'window' ? ', ' + tr('Window') : ''));
         }
         outRow.hidden = !h.on || !h.connected;
         push.disabled = !h.last;

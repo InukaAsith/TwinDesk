@@ -49,7 +49,7 @@
         items.replaceChildren(...(hist.length ? hist.slice(0, 200).map((x) => el('div', { class: 'hist-item' }, [
           el('div', { class: 'hist-text' }, [
             el('div', { class: 'hist-preview selectable', attrs: { 'data-literal': '' }, text: [x.title, x.body].filter(Boolean).join(' — ') }),
-            el('div', { class: 'hint', attrs: { 'data-literal': '' }, text: `${x.appName || x.app || ''} · ${UI.ago ? UI.ago(x.at) : new Date(x.at).toLocaleString()}` }),
+            el('div', { class: 'hint', attrs: { 'data-literal': '' }, text: `${x.appName || x.app || ''}, ${UI.ago ? UI.ago(x.at) : new Date(x.at).toLocaleString()}` }),
           ]),
         ])) : [UI.row(t('Nothing yet'), '')]));
       },

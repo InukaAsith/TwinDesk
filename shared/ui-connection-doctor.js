@@ -38,7 +38,7 @@ UI.connectionDoctor = (platform) => {
       const transport = phoneSelected && phone.usb ? t('USB cable')
         : UI.onBle(s) || s.net?.onGroup || s.net?.lan ? UI.via(s) : 'IP';
       const rtt = mac ? peer.rttMs : link.rtt;
-      linkRow.setHint(Number.isFinite(rtt) && rtt >= 0 ? `${transport} · ${t('Round-trip time')} · ${rtt} ms` : transport);
+      linkRow.setHint(Number.isFinite(rtt) && rtt >= 0 ? `${transport}, ${t('Round-trip time')} ${rtt} ms` : transport);
     } else {
       const status = link?.state;
       linkRow.setHint(s.phone?.returning || status === 'reconnecting' ? t('Reconnecting…')
@@ -86,7 +86,7 @@ UI.connectionDoctor = (platform) => {
         stats.fps > 0 && stats.width > 0 && stats.height > 0) {
       const video = [`${stats.width} × ${stats.height}`, t('{value} fps', { value: stats.fps })];
       if (stats.mbps > 0) video.push(t('{value} Mb/s', { value: stats.mbps }));
-      streamRow.setHint(video.join(' · '));
+      streamRow.setHint(video.join(', '));
     } else {
       streamRow.setHint(mac && s.sharing?.on === false ? t('Off') : !connected ? t('Not connected')
         : !mac && !scoped ? t('Unknown') : !on ? t('Off')

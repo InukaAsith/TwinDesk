@@ -63,8 +63,8 @@
         D.phonePic(hero.pic, info);
         const rtt = c && c.rttMs;
         const via = c && c.usb ? 'USB' : D.viaOf(s);
-        desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `${info.platform === 'ipados' ? 'iPadOS' : 'iOS'} ${info.release}`].filter(Boolean).join(' · ');
-        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
+        desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `${info.platform === 'ipados' ? 'iPadOS' : 'iOS'} ${info.release}`].filter(Boolean).join(', ');
+        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(', ');
         hero.battery(info.battery, info.charging);
         const ble = !!(UI.onBle && UI.onBle(s));
         showBtn.disabled = ble; // its Share Screen needs Wi-Fi or the cable
@@ -74,7 +74,7 @@
         const pi = (ctl && ctl.info) || {};
         hero.setFacts([
           [t('Storage'), pi.storageTotal ? t('{used} of {total} GB', { used: pi.storageUsed, total: pi.storageTotal }) : info.storage ? t('{used} of {total} GB', { used: info.storage.used, total: info.storage.total }) : ''],
-          [t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(' · ')],
+          [t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(', ')],
           [t('Link'), via],
           ['TwinDesk', D.version(ctl)],
         ]);

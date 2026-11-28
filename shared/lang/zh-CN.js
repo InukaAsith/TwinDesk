@@ -2438,8 +2438,17 @@
   "Network folders": "网络文件夹",
   "Transfers": "传输",
   "Copy received files to clipboard": "将收到的文件复制到剪贴板",
-  "{count} of {total} apps hidden": "已隐藏 {count}/{total} 个应用",
-  "All apps shown": "显示所有应用",
-  "Apps by device": "按设备的应用",
-  "Rows send to columns. This computer’s row and column can be changed here.": "行发送到列。可在此更改这台电脑的行和列。"
+  "Rows send to columns. This computer’s row and column can be changed here.": "行发送到列。可在此更改这台电脑的行和列。",
+  "Receive all notifications": "接收所有通知",
+  "From every device and app": "来自所有设备和应用",
+  "Some apps": "部分应用",
+  "Rows send, columns show. Select a cell to choose apps.": "行发送，列显示。选择单元格以选择应用。",
+  "Across devices": "跨设备",
+  "From ↓  To →": "从 ↓  到 →",
+  "Computer": "电脑",
+  "1 app": "1 个应用",
+  "Set on {name}": "在 {name} 上设置",
+  "Select a cell to choose apps.": "选择单元格以选择应用。",
+  "Some": "部分",
+  "Apps appear after their first notification": "应用在首次通知后显示"
 });

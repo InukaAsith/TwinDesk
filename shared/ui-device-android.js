@@ -95,8 +95,8 @@
         D.phonePic(hero.pic, info);
         const rtt = c && c.rttMs;
         const via = c && c.usb ? 'USB' : D.viaOf(s);
-        desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(' · ');
-        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
+        desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(', ');
+        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(', ');
         hero.battery(info.battery, info.charging);
         const br = ph.bridge || {};
         const ready = br.state === 'ready';
@@ -112,7 +112,7 @@
           : br.state === 'ready' ? t('ADB · ready') : br.state === 'connecting' ? t('ADB · connecting') : br.state === 'needsPair' ? t('ADB · not paired') : br.state === 'waitingWifi' ? t('ADB · off') : t('Not set up');
         hero.setFacts([
           [t('Storage'), pi.storageTotal ? t('{used} of {total} GB', { used: pi.storageUsed, total: pi.storageTotal }) : info.storage ? t('{used} of {total} GB', { used: info.storage.used, total: info.storage.total }) : ''],
-          [t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(' · ')],
+          [t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(', ')],
           [t('Control'), control],
           [t('Signal'), pi.signal],
           [t('Link'), via],

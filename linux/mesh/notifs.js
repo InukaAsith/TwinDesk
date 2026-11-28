@@ -112,6 +112,7 @@ class Notifs extends EventEmitter {
   }
 
   _takes(id) {
+    if (this.consent && this.cfg.takeAll) return true; // Receive all notifications (Multi-device)
     return this.consent ? this.consent.get(id, 'notifs', 'in') : !!this.cfg.receive;
   }
 

@@ -73,7 +73,7 @@
         const rtt = s.link ? s.link.rtt : s.client && s.client.rttMs;
         const via = D.viaOf(s);
         desc.textContent = { mac: 'Mac', win: t('Windows PC'), linux: t('Linux computer') }[p.os] || '';
-        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
+        hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(', ');
         hero.battery(ctl && ctl.battery != null ? ctl.battery : null, !!(ctl && ctl.charging)); // a laptop's, from its dev.state
         ring.update(ctl);
         lockBtn.hidden = !can('lock');

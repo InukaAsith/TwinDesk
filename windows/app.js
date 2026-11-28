@@ -164,7 +164,7 @@
       : (s.pairing || l.state === 'connecting' || l.state === 'reconnecting') ? 'warn' : '';
     $('peer-dot').className = 'dot ' + dot;
     let text = t('Not paired');
-    if (l.state === 'connected') text = l.macName + (UI.via(s) !== 'Wi-Fi' ? ' · ' + UI.via(s) : '') + (l.rtt != null ? ' · ' + t('{value} ms', { value: l.rtt }) : '');
+    if (l.state === 'connected') text = l.macName + (UI.via(s) !== 'Wi-Fi' ? ', ' + UI.via(s) : '') + (l.rtt != null ? ', ' + t('{value} ms', { value: l.rtt }) : '');
     else if (s.pairing) text = t('Pairing…');
     else if (l.state === 'connecting' || l.state === 'reconnecting') text = t('Reconnecting…');
     else if (l.state === 'identity_changed') text = t('Identity changed');
@@ -241,7 +241,7 @@
     // The connected phone's line (ping, battery) changes often: written in place, the tiles (and
     // their wallpaper) built again only when something else changed, else they flicker.
     const subOf = (d) => (d.connected
-      ? (ph.connected.rttMs != null ? t('{value} ms', { value: ph.connected.rttMs }) : t('Connected')) + (info.battery != null ? ' · ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
+      ? (ph.connected.rttMs != null ? t('{value} ms', { value: ph.connected.rttMs }) : t('Connected')) + (info.battery != null ? ', ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
       : ph.connecting && ph.connecting.id === d.id ? t('Connecting…') : t('Nearby · Click to connect'));
     const key = JSON.stringify([UI.webDev, ph.nearby, ph.connecting, ph.held, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) {

@@ -99,7 +99,7 @@ const DEFAULT_SETTINGS = {
     outboxHours: 24, // Keep files to send: hours they wait for the other device (shared/outbox.js), 0 = off
     plain: false, // Encrypt file transfers off: plain HTTP for file bytes where both allow it (shared/fastfile.js fxPlain)
     shortcuts: false, copyKeys: 'Control+Alt+C', pasteKeys: 'Control+Alt+V' }, // Copy/paste files
-  notifs: { send: false, receive: false, hideText: false, muted: [], style: '', otpCopy: false, quiet: { on: false, from: '22:00', to: '07:00' }, phoneApps: {} }, // style…phoneApps: how a phone's show here (shared/notifrules.js)
+  notifs: { send: false, receive: false, hideText: false, muted: [], style: '', otpCopy: false, takeAll: false, quiet: { on: false, from: '22:00', to: '07:00' }, phoneApps: {}, fromApps: {} }, // style…phoneApps: how a phone's show here (shared/notifrules.js)
   apps: { offer: false, onVirtual: false, moveWindows: false, moveKey: 'MetaRight' }, // The PC can list and open this Mac's apps; onVirtual: they open on the virtual display, in Mirror mode too (off: on the shared display, as always); moveWindows: a window dragged past the edge with moveKey held moves there (movewin.js)
   papps: { on: false }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.

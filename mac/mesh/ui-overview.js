@@ -154,7 +154,7 @@ UI.tab({
             const direct = Array.isArray(dv.direct) ? dv.direct.length : 0;
             const state = dv.state === 'via' ? tr('via {name}', { name: (dv.via || []).join(', ') || tr('another device') }) : dv.connected ? (dv.rtt != null ? `${dv.rtt} ms` : tr('Connected'))
               : dv.state === 'waiting' ? tr('Waiting for it to connect') : dv.state === 'connecting' || dv.state === 'reconnecting' ? tr('Connecting…') : tr('Not connected');
-            const hint = [state, dv.connected && direct ? tr(direct === 1 ? '{count} direct link' : '{count} direct links', { count: direct }) : ''].filter(Boolean).join(' · ');
+            const hint = [state, dv.connected && direct ? tr(direct === 1 ? '{count} direct link' : '{count} direct links', { count: direct }) : ''].filter(Boolean).join(', ');
             const r = UI.row(dv.name || tr('Device'), hint, [
               dv.selected ? el('span', { class: 'pill good', text: tr('In use') }) : null,
               dv.connected && !dv.selected ? UI.button(tr('Use'), () => api.selectPeer(dv.id), 'small') : null,
@@ -217,7 +217,7 @@ UI.tab({
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = `hero-link ${c ? 'up' : ''}`;
       const connecting = ['connecting', 'reconnecting'].includes(g.status.state);
-      linkText.textContent = c ? `${c.rttMs != null ? `${c.rttMs} ms · ` : ''}${UI.via(s)}`
+      linkText.textContent = c ? `${c.rttMs != null ? `${c.rttMs} ms, ` : ''}${UI.via(s)}`
         : s.pairing || gp ? tr('Pairing…') : connecting ? tr('Connecting…') : tr('Not connected');
       const inp = s.input || { where: 'home' };
       const bad = s.serverError || (g.status.state === 'identity_changed' && tr(g.status.message || ''));

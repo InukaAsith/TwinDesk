@@ -260,7 +260,7 @@
           devKey = dk;
           const pick = devs.length > 1;
           const rows = devs.map((d) => {
-            const via = [d.usb ? tr('Cable') : '', d.wifi ? tr('Wi-Fi') : ''].filter(Boolean).join(' · ');
+            const via = [d.usb ? tr('Cable') : '', d.wifi ? tr('Wi-Fi') : ''].filter(Boolean).join(', ');
             const mine = d.udid === v.udid;
             const r = UI.row(d.name || d.udid, via, [el('span', { class: 'tick', attrs: { 'aria-hidden': 'true' } })], {
               literal: true, onClick: pick ? () => act({ a: 'set', udid: d.udid }) : undefined,
@@ -369,7 +369,7 @@
           // TwinDesk's own first; another tool's asks for confirmation before it goes (the app's dialog).
           const certs = ((need && need.certs) || []).slice().sort((p, q) => (q.ours ? 1 : 0) - (p.ours ? 1 : 0));
           certList.replaceChildren(...certs.map((c) => UI.row(c.machine || c.name || c.serial,
-            [c.ours ? tr('Created by TwinDesk') : tr('Created by another tool: the apps it signed stop launching'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(' · '),
+            [c.ours ? tr('Created by TwinDesk') : tr('Created by another tool: the apps it signed stop launching'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(', '),
             [UI.button(tr('Revoke'), () => act({ a: 'answer', revoke: [c.serial] }), c.ours ? 'small' : 'small danger')], { literal: true })));
         }
 
@@ -380,7 +380,7 @@
         refreshBtn.disabled = !!run || !(kept || (phone && phone.signedIn) || (!sess && near.length));
         allBtn.hidden = !(v.anyIpa && apps.length > 1);
         allBtn.disabled = refreshBtn.disabled;
-        refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
+        refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(', ')
           : !sess && near.length ? tr('Nearby over Bluetooth. Refresh now wakes TwinDesk on the device.')
             : sess && !(phone && phone.signedIn) ? tr('Not signed in. Sign in on the iPhone under TwinDesk › App refresh.') : v.udid ? tr('Not installed') : '');
         const up = v.update;
@@ -390,7 +390,7 @@
         const ak = JSON.stringify([apps.filter((a) => !a.twindesk), v.anyIpa, !!(kept || (phone && phone.signedIn))]) + Math.floor(Date.now() / 3600000);
         if (ak !== appKey) {
           appKey = ak;
-          appList.replaceChildren(...apps.filter((a) => !a.twindesk).map((a) => UI.row(a.name, [a.version, a.teamName].filter(Boolean).join(' · '), [
+          appList.replaceChildren(...apps.filter((a) => !a.twindesk).map((a) => UI.row(a.name, [a.version, a.teamName].filter(Boolean).join(', '), [
             // No stored IPA needed: new profiles are enough unless it has to be signed again.
             v.anyIpa && (kept || (phone && phone.signedIn)) ? UI.button(tr('Refresh'), () => act({ a: 'app', bundleId: a.bundleId }), 'small') : null,
             el('span', { class: daysLeft(a.expires) < 2 ? 'pill bad' : 'pill muted', text: leftText(a.expires) }),
@@ -420,7 +420,7 @@
         idsBtn.textContent = ids && ids.list ? tr('Reload') : tr('View app IDs');
         idsRow.setHint(ids && ids.loading ? tr('Loading from Apple…')
           : ids && ids.error ? tr(ids.error)
-            : ids && ids.list ? [tr('{count} registered', { count: ids.list.length }), ids.available != null ? tr('{count} more can be created this week', { count: ids.available }) : '', ids.teamName ? tr('Team: {team}', { team: ids.teamName }) : ''].filter(Boolean).join(' · ')
+            : ids && ids.list ? [tr('{count} registered', { count: ids.list.length }), ids.available != null ? tr('{count} more can be created this week', { count: ids.available }) : '', ids.teamName ? tr('Team: {team}', { team: ids.teamName }) : ''].filter(Boolean).join(', ')
               : canIds ? tr('The app IDs registered for this Apple ID. Free accounts can create 10 app IDs per 7 days.')
                 : tr('Requires the developer session stored on {computer}.', { computer: here }));
         const ik = JSON.stringify(ids && ids.list || []);

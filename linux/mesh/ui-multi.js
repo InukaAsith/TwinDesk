@@ -8,7 +8,7 @@ UI.tab({
   id: 'multi',
   order: 95,
   title: I18n.t('Multi-device'),
-  heading: I18n.t('Multi-device · Mesh mode'),
+  heading: I18n.t('Multi-device'),
   color: 'linear-gradient(#5e5ce6, #3634a3)',
   desc: I18n.t('Several computers and phones connected at once'),
   bottom: true,
@@ -57,7 +57,7 @@ UI.tab({
     }
 
     // ---- the matrix: who shares what, the whole mesh (shared/ui-matrix.js, docs/mesh-graph.md step 6) ----
-    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on), setApp: (from, app, name, show) => api.setNotifs({ fromApp: { from, app, name, hide: !show } }) });
+    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on) });
     // ---- Phones: the mesh manager on phones may reach this computer (shared/ui-manage.js) ----
     const phones = MeshPhones.create({ setOn: (on) => api.setManage({ on }), setRevoked: (id, revoked) => api.setManage({ id, revoked }) });
 
@@ -87,7 +87,7 @@ UI.tab({
     return (s) => {
       last = s;
       drawLayout(s);
-      matrix.render(s.matrix, s.notifs && s.notifs.appsFrom);
+      matrix.render(s.matrix);
       phones.render(s.manage);
       const jn = (s.mesh || {}).autoJoin === true;
       joinSw.set(jn);

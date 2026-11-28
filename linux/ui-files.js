@@ -173,7 +173,7 @@ UI.tab({
         outRow.setHint(I18n.t('{sent} of {size}{waiting}', { sent: mb(c.sent), size: mb(c.size), waiting: f.queued ? I18n.t(' · {count} more waiting', { count: f.queued }) : '' }));
       } else {
         outRow.label.textContent = f.last ? I18n.t(f.last.ok ? 'Sent {file}' : 'Not sent: {file}', { file: f.last.name || '' }) : I18n.t('Nothing sent');
-        outRow.setHint(f.last ? I18n.t(f.last.text, p) + ' · ' + UI.ago(f.last.at) : '');
+        outRow.setHint(f.last ? I18n.t(f.last.text, p) + ', ' + UI.ago(f.last.at) : '');
       }
       const inc = f.incoming;
       const dr = f.drag;
@@ -184,12 +184,12 @@ UI.tab({
       }
       if (dr.last && (!inc.last || dr.last.at > inc.last.at)) {
         inRow.label.textContent = dr.last.ok ? I18n.t('Received from {name}', { name: p.name }) : I18n.t('Not received');
-        inRow.setHint(I18n.t(dr.last.text, p) + ' · ' + UI.ago(dr.last.at));
+        inRow.setHint(I18n.t(dr.last.text, p) + ', ' + UI.ago(dr.last.at));
         return;
       }
       inRow.label.textContent = inc.receiving ? I18n.t(inc.receiving === 1 ? 'Receiving {count} file from {name}' : 'Receiving {count} files from {name}', { count: inc.receiving, name: p.name })
         : inc.last ? I18n.t(inc.last.ok ? 'Received {file}' : 'Not received: {file}', { file: inc.last.name }) : I18n.t('Nothing received');
-      inRow.setHint(inc.receiving ? '' : inc.last ? I18n.t(inc.last.text, p) + ' · ' + UI.ago(inc.last.at) : '');
+      inRow.setHint(inc.receiving ? '' : inc.last ? I18n.t(inc.last.text, p) + ', ' + UI.ago(inc.last.at) : '');
     };
   },
 });

@@ -20,10 +20,13 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   the phone's Files app. Folders shared only with phones don't load the sync engine. One-to-one and
   Multi-device, on the Mac, Windows and Linux. Tested here; not yet between devices.
 - **File Sharing in four tabs**: File Sharing, TwinDesk Drive, Shared folders and Settings.
-- **Notifications per app, per device** (Multi-device › Who shares what › Notifications): below the
-  grid, each sending device with its apps, a switch each. Hides that app from that device only; the
-  same app from another device still shows. Phones and older apps need no update (decided on the
-  receiving computer). Untested between devices.
+- **Notifications › Across devices** (Multi-device): a grid of who shows whose notifications. Each
+  cell reads All, the number of apps, or Off; selecting one of this computer's cells opens a panel
+  (All, Some, Off, and a switch per app). Apps are filtered on the receiving computer, so phones and
+  older versions need no update. **Receive all notifications** (off by default) shows every device's
+  notifications here and greys the grid out. Notifications left the Multi-device grid. Untested
+  between devices.
+- **Wording**: no middle dots in the interface; the Multi-device heading is just Multi-device.
 - **ReZume asks which device** in Multi-device: turned on with none selected, the top of the ReZume
   tab lists the connected devices (a single device is selected automatically); a computer you select
   also selects this one.

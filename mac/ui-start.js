@@ -161,7 +161,7 @@
     const c = s.client;
     $('peer-dot').className = `dot ${c ? 'good' : s.pairing ? 'warn' : ''}`;
     const gs = s.guest && s.guest.status && s.guest.status.state;
-    $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? ` · ${UI.via(s)}` : ''}${c.rttMs != null ? ` · ${c.rttMs} ms` : ''}`
+    $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? `, ${UI.via(s)}` : ''}${c.rttMs != null ? `, ${c.rttMs} ms` : ''}`
       : s.pairing || (s.guest && s.guest.pairing) ? tr('Pairing…') : gs === 'connecting' || gs === 'reconnecting' ? tr('Connecting…') : tr('Not connected');
     if (UI.webDev && !UI.webDevOf(s)) UI.webDev = null; // forgotten meanwhile
     // A web device's pages: the line under TwinDesk is that device (shared/ui-web.js).
@@ -237,7 +237,7 @@
       else if (d.connected && colors) wall.style.backgroundImage = `linear-gradient(160deg, ${colors.join(', ')}${colors.length === 1 ? `, ${colors[0]}` : ''})`;
       const connecting = ph.connecting && ph.connecting.id === d.id;
       const sub = d.connected
-        ? `${ph.connected.rttMs != null ? `${ph.connected.rttMs} ms` : tr('Connected')}${info.battery != null ? ` · ${info.battery}%${info.charging ? ' ⚡' : ''}` : ''}`
+        ? `${ph.connected.rttMs != null ? `${ph.connected.rttMs} ms` : tr('Connected')}${info.battery != null ? `, ${info.battery}%${info.charging ? ' ⚡' : ''}` : ''}`
         : connecting ? tr('Connecting…') : tr('Nearby · Click to connect');
       const b = el('button', { class: `phone-tile${d.connected ? ' connected' : ''}`, title: d.connected ? `${d.name}` : tr('Connect to {name}', { name: d.name }) }, [
         wall,

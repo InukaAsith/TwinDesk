@@ -2437,8 +2437,17 @@
   "Network folders": "Pastas de rede",
   "Transfers": "Transferências",
   "Copy received files to clipboard": "Copiar arquivos recebidos para a área de transferência",
-  "{count} of {total} apps hidden": "{count} de {total} apps ocultos",
-  "All apps shown": "Todos os apps exibidos",
-  "Apps by device": "Apps por dispositivo",
-  "Rows send to columns. This computer’s row and column can be changed here.": "Linhas enviam para colunas. A linha e a coluna deste computador podem ser alteradas aqui."
+  "Rows send to columns. This computer’s row and column can be changed here.": "Linhas enviam para colunas. A linha e a coluna deste computador podem ser alteradas aqui.",
+  "Receive all notifications": "Receber todas as notificações",
+  "From every device and app": "De todos os dispositivos e apps",
+  "Some apps": "Alguns apps",
+  "Rows send, columns show. Select a cell to choose apps.": "Linhas enviam, colunas exibem. Selecione uma célula para escolher apps.",
+  "Across devices": "Entre dispositivos",
+  "From ↓  To →": "De ↓  Para →",
+  "Computer": "Computador",
+  "1 app": "1 app",
+  "Set on {name}": "Definido em {name}",
+  "Select a cell to choose apps.": "Selecione uma célula para escolher apps.",
+  "Some": "Alguns",
+  "Apps appear after their first notification": "Os apps aparecem após a primeira notificação"
 });

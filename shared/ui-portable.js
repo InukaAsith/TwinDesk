@@ -23,7 +23,7 @@
     pill.hidden = false;
     const full = p.level === 'full';
     pill.classList.toggle('limited', !full);
-    pill.lastChild.textContent = ' · ' + (full ? t('FULL') : t('LIMITED'));
+    pill.lastChild.textContent = ', ' + (full ? t('FULL') : t('LIMITED'));
     pill.title = full ? t('TwinDesk Portable, running as administrator: everything it can do without installing')
       : t('TwinDesk Portable, without administrator rights: what needs an administrator is off');
   };
@@ -35,7 +35,7 @@
   UI.portableCard = () => {
     const level = UI.row(t('TwinDesk Portable'), '', [], { literal: true });
     const admin = UI.row(t('Needs administrator'), '', [], { literal: true });
-    const never = UI.row(t('Needs the installed TwinDesk'), NEVER.map((x) => t(x)).join(' · '), [], { literal: true });
+    const never = UI.row(t('Needs the installed TwinDesk'), NEVER.map((x) => t(x)).join(', '), [], { literal: true });
     const card = UI.card(t('Portable'), [level, admin, never]);
     card.hidden = true;
     return {
@@ -48,7 +48,7 @@
         level.setHint(full
           ? t('Running as administrator: everything that works without installing, the steps that need an administrator included')
           : t('Running without administrator rights. Everything else works; to use what needs an administrator, close TwinDesk and run it again with Run as administrator'));
-        admin.setHint((full ? t('On') : t('Off')) + ' · ' + NEEDS_ADMIN.map((x) => t(x)).join(' · '));
+        admin.setHint((full ? t('On') : t('Off')) + ', ' + NEEDS_ADMIN.map((x) => t(x)).join(', '));
       },
     };
   };

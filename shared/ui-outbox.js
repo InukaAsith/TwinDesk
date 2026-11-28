@@ -30,7 +30,7 @@
         el('span', { class: 'hist-dir out' }, [UI.icon('up')]),
         el('div', { class: 'hist-text' }, [
           el('div', { class: 'hist-preview', text: e.name || t(e.files === 1 ? '{count} file' : '{count} files', { count: e.files }) }),
-          el('div', { class: 'hint', text: `${e.state === 'paused' ? t('Paused') : t('Waiting for {device}', { device: e.peerName || t('the other device') })} · ${UI.ago(e.at)}` }),
+          el('div', { class: 'hint', text: `${e.state === 'paused' ? t('Paused') : t('Waiting for {device}', { device: e.peerName || t('the other device') })}, ${UI.ago(e.at)}` }),
         ]),
         e.state === 'paused' ? UI.button(t('Resume'), () => api.resumeSend(e.id), 'small') : null,
         UI.button(t('Remove'), () => api.forgetSend(e.id), 'small'),

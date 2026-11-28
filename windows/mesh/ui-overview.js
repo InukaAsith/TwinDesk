@@ -193,7 +193,7 @@ UI.tab({
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = 'hero-link' + (connected ? ' up' : '');
       const ble = s.net && s.net.transport === 'ble';
-      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms · ' : '') + UI.via(s)
+      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms, ' : '') + UI.via(s)
         : s.pairing ? t('Pairing…') : s.paired ? t('Connecting…') : t('Not connected');
       const bad = l.state === 'identity_changed';
       status.textContent = bad ? t('This {kind} looks different now. Forget it and pair again.', { kind: t(p.kind) })
@@ -300,7 +300,7 @@ UI.tab({
           // On several networks (a cable and Wi-Fi): one row per network, each with its own Connect.
           const routes = dev.os === 'android' || dev.os === 'ios' ? [] : dev.routes || [];
           const many = routes.length > 1 && !!btn;
-          const where = routes.length > 1 ? routes.map((x) => x.address).join(' · ') : dev.address;
+          const where = routes.length > 1 ? routes.map((x) => x.address).join(', ') : dev.address;
           const r = UI.row(dev.name, dev.invited ? t('{address} · wants to connect', { address: where }) : where, [
             online ? el('span', { class: 'pill good', text: t('Connected') }) : isKnown ? el('span', { class: 'pill muted', text: t('Paired') }) : null, many ? null : btn, take], { literal: true });
           r.querySelector('.text').prepend(UI.osIcon(dev.os));
@@ -309,7 +309,7 @@ UI.tab({
           return [r, ...routes.map((x) => {
             const b = UI.button(btn.textContent, () => api.pair(dev.id, x.address), 'small' + (dev.invited ? ' primary' : ''));
             b.disabled = busy;
-            const sub = UI.row(x.via ? x.via + ' · ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
+            const sub = UI.row(x.via ? x.via + ', ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
             sub.classList.add('route-row');
             return sub;
           })];

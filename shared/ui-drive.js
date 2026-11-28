@@ -75,7 +75,7 @@
       if (!list.length) box.append(UI.row(t('No shared folders'), '', []));
       for (const f of list) {
         const shown = open.has(f.id);
-        box.append(UI.row(f.name, [devLabel(fv, f.devices), tilde(f.path), folderState(f)].filter(Boolean).join(' · '), [
+        box.append(UI.row(f.name, [devLabel(fv, f.devices), tilde(f.path), folderState(f)].filter(Boolean).join(', '), [
           UI.button(shown ? t('Done') : t('Devices'), () => { shown ? open.delete(f.id) : open.add(f.id); foldersKey = ''; drawFolders(fv); }, 'small'),
           UI.button(showLabel, () => api.folderOpen(f.id), 'small'),
           UI.button(t('Stop sharing'), () => api.folderRemove(f.id), 'small'),

@@ -191,7 +191,7 @@ UI.tab({
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = 'hero-link' + (connected ? ' up' : '');
       const ble = s.net && s.net.transport === 'ble';
-      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms · ' : '') + UI.via(s)
+      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms, ' : '') + UI.via(s)
         : s.pairing ? t('Pairing…') : s.paired ? t('Connecting…') : t('Not connected');
       const bad = l.state === 'identity_changed';
       status.textContent = bad ? t('This {kind} looks different now. Forget it and pair again.', { kind: t(p.kind) })

@@ -125,7 +125,7 @@
           if (level == null) return;
           batt.firstChild.style.width = Math.max(2, Math.min(100, level)) + '%';
           batt.classList.toggle('low', level <= 20);
-          battText.textContent = t('{level}%{charging}', { level, charging: charging ? ' · ' + t('Charging') : '' });
+          battText.textContent = t('{level}%{charging}', { level, charging: charging ? ', ' + t('Charging') : '' });
         },
         // [[label, value]…]: the ones with a value; dd: an element in place of a value.
         setFacts(list) {
@@ -515,14 +515,14 @@
           if (nk !== notifKey) {
             notifKey = nk;
             notifList.replaceChildren(...(history.length ? history.map((item) => {
-              const text = [item.subtitle, item.body].filter(Boolean).join(' · ');
+              const text = [item.subtitle, item.body].filter(Boolean).join(', ');
               const code = otpOf([item.title, item.body].join(' '));
               const copy = code ? UI.button(t('Copy {code}', { code }), () => api.copyText(code), 'small') : null;
               // A phone's: its own buttons (Mark as read…), and × dismisses it there too (shared/notifacts.js).
               const acts = phone && api.notifReply ? (item.actions || []).map((a, i) => UI.button(a, () => api.notifReply({ id: item.id, act: i }), 'small')) : [];
               const x = phone && api.notifReply ? UI.button('×', () => api.notifReply({ id: item.id, dismiss: true }), 'small') : null;
               if (x) { x.title = t('Dismiss'); x.setAttribute('aria-label', t('Dismiss')); }
-              const r = row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || t('Notification')) + ' · ' + UI.ago(item.at), [copy, ...acts, x]);
+              const r = row([item.appName || item.app, item.title].filter(Boolean).join(', '), (text || t('Notification')) + ', ' + UI.ago(item.at), [copy, ...acts, x]);
               // Its buttons on a line of their own under the words, which keep the row's width.
               if (copy || acts.length || x) r.classList.add('dv-notif');
               const icon = (nf.historyIcons || {})[item.app];
@@ -545,8 +545,8 @@
               el('span', { class: 'hist-dir ' + h.dir, title: t(h.dir === 'out' ? 'Sent to {name}' : 'From {name}', { name: devName }) }, [UI.icon(h.dir === 'out' ? 'up' : 'down')]),
               h.image && h.image.thumb ? el('img', { class: 'hist-thumb', src: h.image.thumb, alt: '' }) : null,
               el('div', { class: 'hist-text' }, [
-                el('div', { class: 'hist-preview', text: h.image ? (h.image.shot ? t('Screenshot') : t('Picture')) + ' · ' + h.image.w + ' × ' + h.image.h : String(h.text || '').replace(/\s+/g, ' ').trim() || t('(whitespace)') }),
-                el('div', { class: 'hint', text: t(h.dir === 'out' ? 'To {name}' : 'From {name}', { name: devName }) + ' · ' + UI.ago(h.at) }),
+                el('div', { class: 'hist-preview', text: h.image ? (h.image.shot ? t('Screenshot') : t('Picture')) + ', ' + h.image.w + ' × ' + h.image.h : String(h.text || '').replace(/\s+/g, ' ').trim() || t('(whitespace)') }),
+                el('div', { class: 'hint', text: t(h.dir === 'out' ? 'To {name}' : 'From {name}', { name: devName }) + ', ' + UI.ago(h.at) }),
               ]),
               (() => { // Open / Email / Call for a link, an address, a number (shared/clipact.js)
                 const a = !h.image && api.openClip && window.ClipAct && ClipAct.of(h.text);

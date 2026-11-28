@@ -110,7 +110,7 @@ UI.tab({
             h.image
               ? el('div', { class: 'hist-preview', text: I18n.t('{kind} · {width} × {height}', { kind: h.image.shot ? I18n.t('Screenshot') : I18n.t('Picture'), width: h.image.w, height: h.image.h }) })
               : el('div', { class: 'hist-preview selectable', attrs: { 'data-literal': '' }, text: h.text.replace(/\s+/g, ' ').trim() || I18n.t('(whitespace)') }),
-            el('div', { class: 'hint', text: (h.dir === 'out' ? I18n.t('To {name}') : I18n.t('From {name}')) + ' · ' + UI.ago(h.at) + ' · ' + UI.bytes(h.size) }),
+            el('div', { class: 'hint', text: (h.dir === 'out' ? I18n.t('To {name}') : I18n.t('From {name}')) + ', ' + UI.ago(h.at) + ', ' + UI.bytes(h.size) }),
           ]),
           (() => { // Open / Email / Call for a link, an address, a number (shared/clipact.js)
             const a = !h.image && api.openClip && window.ClipAct && ClipAct.of(h.text);

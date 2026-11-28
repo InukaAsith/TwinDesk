@@ -2437,8 +2437,17 @@
   "Network folders": "Ağ klasörleri",
   "Transfers": "Aktarımlar",
   "Copy received files to clipboard": "Alınan dosyaları panoya kopyala",
-  "{count} of {total} apps hidden": "{total} uygulamadan {count} tanesi gizli",
-  "All apps shown": "Tüm uygulamalar gösteriliyor",
-  "Apps by device": "Cihaza göre uygulamalar",
-  "Rows send to columns. This computer’s row and column can be changed here.": "Satırlar sütunlara gönderir. Bu bilgisayarın satırı ve sütunu burada değiştirilebilir."
+  "Rows send to columns. This computer’s row and column can be changed here.": "Satırlar sütunlara gönderir. Bu bilgisayarın satırı ve sütunu burada değiştirilebilir.",
+  "Receive all notifications": "Tüm bildirimleri al",
+  "From every device and app": "Tüm cihaz ve uygulamalardan",
+  "Some apps": "Bazı uygulamalar",
+  "Rows send, columns show. Select a cell to choose apps.": "Satırlar gönderir, sütunlar gösterir. Uygulama seçmek için bir hücre seçin.",
+  "Across devices": "Cihazlar arasında",
+  "From ↓  To →": "Kimden ↓  Kime →",
+  "Computer": "Bilgisayar",
+  "1 app": "1 uygulama",
+  "Set on {name}": "{name} üzerinde ayarlanır",
+  "Select a cell to choose apps.": "Uygulama seçmek için bir hücre seçin.",
+  "Some": "Bazıları",
+  "Apps appear after their first notification": "Uygulamalar ilk bildirimden sonra görünür"
 });

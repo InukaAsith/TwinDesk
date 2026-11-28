@@ -175,7 +175,7 @@
         if (key === listKey) return;
         listKey = key;
         list.replaceChildren(...(w.devices.length ? w.devices.map((d) => {
-          const hint = [kind(d), status(d), d.ip, d.online && d.link === 'USB-C' ? 'USB-C' : '', d.online ? (d.secure ? tr('Secure') : tr('Not secure')) : '', d.push ? tr('Notifications on') : ''].filter(Boolean).join(' · ');
+          const hint = [kind(d), status(d), d.ip, d.online && d.link === 'USB-C' ? 'USB-C' : '', d.online ? (d.secure ? tr('Secure') : tr('Not secure')) : '', d.push ? tr('Notifications on') : ''].filter(Boolean).join(', ');
           return UI.row(d.name, hint, [
             UI.button(tr('Open'), () => UI.openWebDev(d.id), 'small'),
             UI.button(tr('Forget'), () => api().webForget(d.id), 'small'),
@@ -347,7 +347,7 @@
           if (a.session) {
             liveRow.label.textContent = a.session.mirroring === false ? tr('Playing') : tr('Mirroring');
             const VIA = { ethernet: tr('over Ethernet'), wifi: tr('over Wi-Fi') };
-            const via = VIA[a.session.via] ? ' · ' + VIA[a.session.via] : '';
+            const via = VIA[a.session.via] ? ', ' + VIA[a.session.via] : '';
             liveRow.setHint(tr('{name} · since {when}', { name: a.session.name, when: new Date(a.session.since).toLocaleTimeString() }) + via);
           }
           if (playing) playing.update(s);
@@ -474,7 +474,7 @@
         const d = UI.webDevOf(s);
         if (!d) return;
         name.textContent = d.name;
-        sub.textContent = [kind(d), status(d), d.online && d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(' · ');
+        sub.textContent = [kind(d), status(d), d.online && d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(', ');
         pic.className = `device big ${['mac', 'win', 'linux'].includes(d.os) ? (d.os === 'mac' ? 'mac' : 'pc') : 'phone'}${tablet(d) ? ' tablet' : ''}`;
         const al = d.allow || {};
         const w = W(s);
@@ -497,7 +497,7 @@
         if (k !== dropKey) {
           dropKey = k;
           dropList.replaceChildren(...(chat.length ? chat.map((x) => {
-            const r = UI.row(x.file ? `📎 ${x.file.name}` : String(x.text || '').replace(/\s+/g, ' ').slice(0, 140), `${x.from === 'pc' ? tr('You') : d.name} · ${ago(x.at)}`, [], { literal: true });
+            const r = UI.row(x.file ? `📎 ${x.file.name}` : String(x.text || '').replace(/\s+/g, ' ').slice(0, 140), `${x.from === 'pc' ? tr('You') : d.name}, ${ago(x.at)}`, [], { literal: true });
             r.classList.add('click');
             r.onclick = () => UI.go('wd-drop');
             return r;
@@ -511,7 +511,7 @@
         const notes = d.push ? [alt.clip && tr('Clipboard'), alt.drop && tr('Messages'), alt.files && tr('Files'), alt.notifs && tr('Notifications')].filter(Boolean).join(', ') || tr('None') : tr('Off');
         facts.replaceChildren(
           ...fact(tr('Address'), d.ip),
-          ...fact(tr('Connection'), d.online ? [d.link === 'USB-C' ? 'USB-C' : d.link ? tr(d.link) : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(' · ') : tr('Offline')),
+          ...fact(tr('Connection'), d.online ? [d.link === 'USB-C' ? 'USB-C' : d.link ? tr(d.link) : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(', ') : tr('Offline')),
           ...fact(tr('Alerts'), notes),
           ...fact(tr('Now'), d.watching ? (d.watching.mode === 'extend' ? tr('Extended screen') : tr('Mirroring screen')) : d.remote ? tr('Remote') : ''),
           ...fact(tr('Paired'), d.pairedAt ? new Date(d.pairedAt).toLocaleDateString() : ''),
@@ -560,7 +560,7 @@
         const ds = W(s).displays || [];
         if (dispSel && dispSel.options) {
           const k = JSON.stringify(ds);
-          if (k !== dispKey) { dispKey = k; dispSel.options([{ value: '', label: tr('Main display') }, ...ds.filter((x) => !x.main).map((x) => ({ value: x.id, label: `${x.label} · ${x.w} × ${x.h}` }))]); }
+          if (k !== dispKey) { dispKey = k; dispSel.options([{ value: '', label: tr('Main display') }, ...ds.filter((x) => !x.main).map((x) => ({ value: x.id, label: `${x.label}, ${x.w} × ${x.h}` }))]); }
         }
         if (dispRow) dispRow.hidden = ds.length < 2;
         if (dispSel) dispSel.set(ds.some((x) => x.id === al.display) ? al.display : '');
@@ -568,7 +568,7 @@
         if (mbpsSel) mbpsSel.set(String(al.mbps || 0));
         extRow.setHint(W(s).extend ? tr('Adds a separate display that matches the device’s screen') : tr('Not available while this screen is shared with the other computer'));
         const st = d.watching;
-        stRow.setHint(st ? `${st.video ? (st.mode === 'extend' ? tr('Extended screen') : tr('Mirrored screen')) : tr('Sound only')} · ${live(st.status)}` : tr('Not watching'));
+        stRow.setHint(st ? `${st.video ? (st.mode === 'extend' ? tr('Extended screen') : tr('Mirrored screen')) : tr('Sound only')}, ${live(st.status)}` : tr('Not watching'));
         stRow.querySelector('button').hidden = !st;
       };
     },
@@ -745,7 +745,7 @@
           acts.push(UI.button(pc && !f.saved ? tr('Cancel') : tr('Remove'), () => api().webDeleteItem({ id: d.id, item: x.id }), 'small'));
           return el('div', { class: `web-xfer ${pc ? 'out' : 'in'}` }, [
             UI.icon('doc'),
-            el('div', { class: 'web-xfer-text' }, [el('div', { class: 'web-file-name', text: `${pc ? '↑' : '↓'} ${f.name}` }), el('div', { class: 'hint', text: `${bytes(f.size || 0)} · ${state}` }), bar]),
+            el('div', { class: 'web-xfer-text' }, [el('div', { class: 'web-file-name', text: `${pc ? '↑' : '↓'} ${f.name}` }), el('div', { class: 'hint', text: `${bytes(f.size || 0)}, ${state}` }), bar]),
             el('div', { class: 'web-xfer-acts' }, acts),
           ]);
         }));
@@ -883,7 +883,7 @@
         setAll(d, [snd, mic]);
         const m = (W(s).cam || {}).mic;
         const mine = m && m.dev === d.id;
-        micRow.setHint(mine ? `${live(m.status)}${m.out ? ` · ${m.out}` : ''}` : tr('Off'));
+        micRow.setHint(mine ? `${live(m.status)}${m.out ? `, ${m.out}` : ''}` : tr('Off'));
         micRow.querySelector('button').hidden = !mine;
       };
     },
@@ -973,7 +973,7 @@
         setTimeout(() => hero.classList.remove('just'), 1600);
       }
       was = up;
-      linkText.textContent = up ? [tr('TwinDesk Web'), d.link === 'USB-C' ? 'USB-C' : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(' · ') : tr('Not connected');
+      linkText.textContent = up ? [tr('TwinDesk Web'), d.link === 'USB-C' ? 'USB-C' : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(', ') : tr('Not connected');
       status.textContent = up ? (d.watching ? (d.watching.mode === 'extend' ? tr('{name} is extending this screen', { name: d.name }) : tr('{name} is viewing this screen', { name: d.name })) : tr('Connected'))
         : tr('Paired. It connects when TwinDesk Web is opened on it. {when}', { when: status_(d) });
       offBtn.hidden = !up;
@@ -999,7 +999,7 @@
         const k = JSON.stringify([w.running, w.devices.map((d) => [d.id, d.name, d.online, d.background, d.lastSeen])]);
         if (k === key) return;
         key = k;
-        list.replaceChildren(...(w.devices.length ? w.devices.map((d) => UI.row(d.name, [kind(d), status(d)].join(' · '), [
+        list.replaceChildren(...(w.devices.length ? w.devices.map((d) => UI.row(d.name, [kind(d), status(d)].join(', '), [
           d.online ? el('span', { class: 'pill good', text: tr('Connected') }) : el('span', { class: 'pill muted', text: tr('Paired') }),
           UI.button(tr('Open'), () => UI.openWebDev(d.id), 'small'),
           UI.button(tr('Forget'), () => api().webForget(d.id), 'small'),
@@ -1052,8 +1052,8 @@
   UI.webPeerLine = (s) => {
     const d = UI.webDev && UI.webDevOf(s);
     if (!d) return null;
-    const text = d.online ? [d.name, d.link === 'USB-C' ? 'USB-C' : '', d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(' · ')
-      : `${d.name} · ${tr('Not connected')}`;
+    const text = d.online ? [d.name, d.link === 'USB-C' ? 'USB-C' : '', d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(', ')
+      : `${d.name}, ${tr('Not connected')}`;
     return { text, dot: d.online ? 'good' : '' };
   };
   UI.webTiles = (box, s, pick) => {
@@ -1068,7 +1068,7 @@
     box.replaceChildren(...list.map((d) => {
       // As the phones' and computers' tiles: its round trip while connected, then what it's doing.
       const ms = d.rtt != null ? tr('{value} ms', { value: d.rtt }) : '';
-      const sub = d.online ? [ms || (d.background ? '' : tr('Connected')), d.link === 'USB-C' ? 'USB-C' : '', d.watching ? (d.watching.mode === 'extend' ? tr('Extending') : tr('Viewing')) : d.background ? tr('In the background') : ''].filter(Boolean).join(' · ')
+      const sub = d.online ? [ms || (d.background ? '' : tr('Connected')), d.link === 'USB-C' ? 'USB-C' : '', d.watching ? (d.watching.mode === 'extend' ? tr('Extending') : tr('Viewing')) : d.background ? tr('In the background') : ''].filter(Boolean).join(', ')
         : tr('Last seen {when}', { when: ago(d.lastSeen) });
       const b = el('button', { class: 'phone-tile web-tile' + (d.online ? ' connected' : ''), title: d.name }, [
         el('span', { class: 'phone-wall web-wall' }, [UI.icon(d.os === 'ios' || d.os === 'ipados' || d.os === 'android' ? 'phone' : 'globe')]),

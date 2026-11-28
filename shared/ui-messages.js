@@ -203,7 +203,7 @@ UI.tab({
     // title (the sender or the group).
     const synced = (s) => !!(s && Array.isArray(s.chats));
     function chatThreads(s) {
-      const own = synced(s) ? s.chats.map((c) => ({ key: c.key, pkg: c.app, avatar: c.avatar || '', app: appOf(c.app) || 'other', name: appOf(c.app) ? c.name || c.appName : [c.name, c.appName].filter(Boolean).join(' · '), group: !!c.group, reply: !!c.reply, pic: !!c.pic, at: c.at, msgs: c.items || [] })) : [];
+      const own = synced(s) ? s.chats.map((c) => ({ key: c.key, pkg: c.app, avatar: c.avatar || '', app: appOf(c.app) || 'other', name: appOf(c.app) ? c.name || c.appName : [c.name, c.appName].filter(Boolean).join(', '), group: !!c.group, reply: !!c.reply, pic: !!c.pic, at: c.at, msgs: c.items || [] })) : [];
       const by = new Map();
       for (const h of ((s && s.notifs) || {}).history || []) {
         const app = appOf(h.app);
@@ -279,7 +279,7 @@ UI.tab({
       chatKey = k;
       // The list: chats, and in All the texts too (opening one goes to Texts).
       const snippet = snippetOf;
-      const rows = shown.map((t) => ({ at: t.at, el: threadRow(t.name, t.at, (APP_NAME[t.app] || '') + ' · ' + snippet(t), t.key === chatOpen, () => { chatOpen = t.key; paintChats(UI.state); }, t.avatar, t.pkg) }));
+      const rows = shown.map((t) => ({ at: t.at, el: threadRow(t.name, t.at, (APP_NAME[t.app] || '') + ', ' + snippet(t), t.key === chatOpen, () => { chatOpen = t.key; paintChats(UI.state); }, t.avatar, t.pkg) }));
       if (pill === 'all') {
         for (const t of visibleThreads()) {
           rows.push({ at: t.at || 0, el: threadRow(t.name || (t.addrs || []).join(', '), t.at, tr('Text · {message}', { message: t.snippet || '' }), false, () => { pill = 'texts'; paintChats(UI.state); layout.hidden = false; openThread(t.id); }, t.photo) });

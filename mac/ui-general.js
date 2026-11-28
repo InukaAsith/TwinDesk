@@ -194,7 +194,7 @@ UI.tab({
         bleWifiSw.set(s.net.bleWifiOff !== false);
         tailSw.set(s.net.tailscale !== false);
         tailRow.setHint(s.net.tailscale === false ? t('Off: only this network, Bluetooth and the cable') : t('When the other device isn’t on this network, TwinDesk tries its Tailscale address'));
-        tailHere.setHint((s.net.tailnet || []).length ? s.net.tailnet.join(' · ') : t('Not on Tailscale now'));
+        tailHere.setHint((s.net.tailnet || []).length ? s.net.tailnet.join(', ') : t('Not on Tailscale now'));
         if (relayCard) relayCard.update(s.net.relay);
         bleWifiRow.setHint(s.net.bleWifiOff === false ? t('Bluetooth stays on beside the Wi-Fi, the way back if it drops')
           : s.net.bleOff ? t('Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends')

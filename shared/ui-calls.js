@@ -144,7 +144,7 @@ UI.tab({
     const contactRow = (p, d = '') => {
       const nums = p.numbers;
       const first = (d && nums.find((x) => has(x.n, d))) || nums[0];
-      const line = (x) => `${x.label ? `${x.label} · ` : ''}${x.n}`;
+      const line = (x) => `${x.label ? `${x.label}, ` : ''}${x.n}`;
       let pick = null;
       if (nums.length > 1) {
         pick = UI.select(nums.map((x) => ({ value: x.n, label: line(x) })), () => {});
@@ -224,7 +224,7 @@ UI.tab({
     const TYPE = { in: tr('Incoming'), out: tr('Outgoing'), missed: tr('Missed'), rejected: tr('Declined'), blocked: tr('Blocked'), voicemail: tr('Voicemail') };
     UI.hubOn('call.log', (m) => {
       recent.replaceChildren(...(m.items || []).map((c) => {
-        const r = UI.row(c.name || c.number || tr('Unknown number'), `${TYPE[c.type] || ''}${c.dur && c.type !== 'missed' ? ` · ${UI.duration(c.dur)}` : ''} · ${UI.clock(c.at)}`,
+        const r = UI.row(c.name || c.number || tr('Unknown number'), `${TYPE[c.type] || ''}${c.dur && c.type !== 'missed' ? `, ${UI.duration(c.dur)}` : ''}, ${UI.clock(c.at)}`,
           c.number ? [UI.button(tr('Call'), () => dial(c.number), 'small')] : [], { literal: true });
         if (c.type === 'missed' || c.type === 'rejected') r.label.classList.add('hub-missed');
         r.prepend(UI.avatar(c.name || c.number));

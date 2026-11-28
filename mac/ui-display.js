@@ -150,8 +150,8 @@ UI.tab({
       const p = UI.peer(s);
       statVals.status.textContent = !sh.on ? I18n.t('Off') : !c ? I18n.t('Waiting for {device}', { device: p.name }) : UI.fill(STATUS[st.status] || st.status);
       const shown = sh.displays.find((d) => d.id === sh.targetId);
-      statVals.display.textContent = shown ? `${shown.virtual ? I18n.t('TwinDesk virtual display') : UI.monitorLabel(shown.label)} · ${shown.pixelWidth} × ${shown.pixelHeight}` : '';
-      statVals.picture.textContent = live ? `${st.width} × ${st.height} · ${st.fps} fps` : '';
+      statVals.display.textContent = shown ? `${shown.virtual ? I18n.t('TwinDesk virtual display') : UI.monitorLabel(shown.label)}, ${shown.pixelWidth} × ${shown.pixelHeight}` : '';
+      statVals.picture.textContent = live ? `${st.width} × ${st.height}, ${st.fps} fps` : '';
       statVals.rate.textContent = live ? (st.targetMbps ? I18n.t('{mbps} Mbps of {targetMbps}', { mbps: st.mbps, targetMbps: st.targetMbps }) : `${st.mbps} Mbps`) : '';
       statVals.rtt.textContent = c && c.rttMs != null ? `${c.rttMs} ms` : '';
       statVals.codec.textContent = live && st.codec ? st.codec : '';

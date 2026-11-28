@@ -83,7 +83,7 @@ UI.tab({
       const st = r.stats;
       const isLive = r.status === 'live' && st;
       vals.status.textContent = UI.fill(STATUS[r.status] || r.status);
-      vals.picture.textContent = isLive ? `${st.width} × ${st.height} · ${st.fps} fps` : '';
+      vals.picture.textContent = isLive ? `${st.width} × ${st.height}, ${st.fps} fps` : '';
       vals.rate.textContent = isLive ? `${st.mbps} Mbps` : '';
       vals.rtt.textContent = s.client && s.client.rttMs != null ? `${s.client.rttMs} ms` : '';
       vals.codec.textContent = isLive && st.codec ? st.codec : '';

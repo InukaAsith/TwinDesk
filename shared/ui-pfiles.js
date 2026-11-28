@@ -194,7 +194,7 @@ UI.tab({
         setTimeout(() => {
  input.focus(); input.setSelectionRange(0, it.dir ? it.name.length : it.name.replace(/\.[^.]*$/, '').length || it.name.length); });
       } else {
-        r = UI.row(it.name, hint.filter(Boolean).join(' · '), it.dir ? [el('span', { class: 'chev', text: '›' })] : [UI.button(tr('Save'), () => save([it.name]), 'small')], {
+        r = UI.row(it.name, hint.filter(Boolean).join(', '), it.dir ? [el('span', { class: 'chev', text: '›' })] : [UI.button(tr('Save'), () => save([it.name]), 'small')], {
           literal: true,
           onClick: (e) => (it.dir ? open(join(it.name)) : choose(it.name, !chosen.has(it.name), !!(e && e.shiftKey))),
         });

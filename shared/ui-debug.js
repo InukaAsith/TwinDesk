@@ -134,7 +134,7 @@ UI.tab({
         if (h && h.ok && h.data.version) bits.push(`TwinDesk ${h.data.version}`);
         const open = UI.button(picked === p.id ? I18n.t('Close') : I18n.t('Debug'), () => pick(picked === p.id ? null : p.id), 'small');
         open.disabled = !(h && h.ok && h.data.allowed) && picked !== p.id;
-        const row = UI.row(p.name || p.id.slice(0, 8), bits.join(' · '), [el('span', { class: `pill ${st.pill}`, text: st.text }), open], { literal: true });
+        const row = UI.row(p.name || p.id.slice(0, 8), bits.join(', '), [el('span', { class: `pill ${st.pill}`, text: st.text }), open], { literal: true });
         row.prepend(UI.osIcon(p.os));
         row.classList.add('with-ico');
         return row;
@@ -210,7 +210,7 @@ UI.tab({
       shotImg.hidden = false;
       shotShow.path = r.path;
       shotShow.hidden = false;
-      shotRow.setHint(r.data && r.data.width ? `${r.data.width} × ${r.data.height}${r.data.displays > 1 ? ' · ' + I18n.t('display {n} of {count}', { n: r.data.display + 1, count: r.data.displays }) : ''}` : '');
+      shotRow.setHint(r.data && r.data.width ? `${r.data.width} × ${r.data.height}${r.data.displays > 1 ? ', ' + I18n.t('display {n} of {count}', { n: r.data.display + 1, count: r.data.displays }) : ''}` : '');
     }, 'small');
     const shotRow = UI.row(I18n.t('Screenshot'), '', [shotBtn, shotShow]);
 

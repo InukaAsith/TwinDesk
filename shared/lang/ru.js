@@ -2437,8 +2437,17 @@
   "Network folders": "Сетевые папки",
   "Transfers": "Передача",
   "Copy received files to clipboard": "Копировать полученные файлы в буфер обмена",
-  "{count} of {total} apps hidden": "Скрыто приложений: {count} из {total}",
-  "All apps shown": "Показываются все приложения",
-  "Apps by device": "Приложения по устройствам",
-  "Rows send to columns. This computer’s row and column can be changed here.": "Строки отправляют в столбцы. Строку и столбец этого компьютера можно изменить здесь."
+  "Rows send to columns. This computer’s row and column can be changed here.": "Строки отправляют в столбцы. Строку и столбец этого компьютера можно изменить здесь.",
+  "Receive all notifications": "Получать все уведомления",
+  "From every device and app": "Со всех устройств и приложений",
+  "Some apps": "Некоторые приложения",
+  "Rows send, columns show. Select a cell to choose apps.": "Строки отправляют, столбцы показывают. Выберите ячейку, чтобы выбрать приложения.",
+  "Across devices": "На всех устройствах",
+  "From ↓  To →": "От ↓  Кому →",
+  "Computer": "Компьютер",
+  "1 app": "1 приложение",
+  "Set on {name}": "Задаётся на {name}",
+  "Select a cell to choose apps.": "Выберите ячейку, чтобы выбрать приложения.",
+  "Some": "Некоторые",
+  "Apps appear after their first notification": "Приложения появляются после первого уведомления"
 });

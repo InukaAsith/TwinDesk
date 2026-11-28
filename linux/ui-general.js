@@ -196,7 +196,7 @@ UI.tab({
       const wl = ss.type === 'wayland';
       sessPill.textContent = x11 ? 'X11' : wl ? 'Wayland' : t('Unknown');
       sessPill.className = 'pill ' + (x11 || wl ? 'good' : 'muted');
-      sessRow.setHint([ss.desktop, ss.wsl ? 'WSL' : '', ss.input ? t('input through {how}', { how: ss.input === 'uinput' ? t('uinput (Wayland)') : t('XInput2 and XTest') }) : ''].filter(Boolean).join(' · '));
+      sessRow.setHint([ss.desktop, ss.wsl ? 'WSL' : '', ss.input ? t('input through {how}', { how: ss.input === 'uinput' ? t('uinput (Wayland)') : t('XInput2 and XTest') }) : ''].filter(Boolean).join(', '));
       inRow.hidden = !wl;
       const a = ss.access || {};
       const ok = a.uinput && a.read;
@@ -228,7 +228,7 @@ UI.tab({
       bleWifiSw.set(n.bleWifiOff !== false);
       tailSw.set(n.tailscale !== false);
       tailRow.setHint(n.tailscale === false ? t('Off: only this network, Bluetooth and the cable') : t('When the other device isn’t on this network, TwinDesk tries its Tailscale address'));
-      tailHere.setHint((n.tailnet || []).length ? n.tailnet.join(' · ') : t('Not on Tailscale now'));
+      tailHere.setHint((n.tailnet || []).length ? n.tailnet.join(', ') : t('Not on Tailscale now'));
       if (relayCard) relayCard.update(n.relay);
       bleWifiRow.setHint(n.bleWifiOff === false ? t('Bluetooth stays on beside the Wi-Fi, the way back if it drops')
         : n.bleOff ? t('Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends')

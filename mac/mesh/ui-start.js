@@ -161,7 +161,7 @@
     const c = s.client;
     $('peer-dot').className = `dot ${c ? 'good' : s.pairing ? 'warn' : ''}`;
     const gs = s.guest && s.guest.status && s.guest.status.state;
-    $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? ` · ${UI.via(s)}` : ''}${c.rttMs != null ? ` · ${c.rttMs} ms` : ''}`
+    $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? `, ${UI.via(s)}` : ''}${c.rttMs != null ? `, ${c.rttMs} ms` : ''}`
       : s.pairing || (s.guest && s.guest.pairing) ? tr('Pairing…') : gs === 'connecting' || gs === 'reconnecting' ? tr('Connecting…') : tr('Not connected');
     if (UI.webDev && !UI.webDevOf(s)) UI.webDev = null; // forgotten meanwhile
     renderPhones(s);
@@ -249,14 +249,14 @@
       const rtt = mine ? mine.rttMs : ph.connected && ph.connected.rttMs;
       const bat = mine ? mine.battery : info.battery;
       const chg = mine ? mine.charging : info.charging;
-      return (rtt != null ? rtt + ' ms' : tr('Connected')) + (bat != null ? ' · ' + bat + '%' + (chg ? ' ⚡' : '') : '');
+      return (rtt != null ? rtt + ' ms' : tr('Connected')) + (bat != null ? ', ' + bat + '%' + (chg ? ' ⚡' : '') : '');
     };
     const phones = ph.nearby.map((d) => ({ id: d.id, name: d.name, os: d.os, connected: !!d.connected, connecting: !!(ph.connecting && ph.connecting.id === d.id), sub: subOf(d) }));
     const tiles = M.buildTiles({ peers: s.peers || [], phones, transport: UI.via(s) }).map((tile) => {
       if (phones.some((d) => d.id === tile.id)) return tile; // the phone's own ping and battery line is already localized
       const peer = (s.peers || []).find((d) => d.id === tile.id) || {};
       const sub = tile.state === 'via' ? tr('via {name}', { name: tile.via.join(', ') || tr('another device') })
-        : tile.connected ? (peer.rtt != null ? peer.rtt + ' ms' : tr('Connected')) + (tile.selected && UI.via(s) !== 'Wi-Fi' ? ' · ' + UI.via(s) : '')
+        : tile.connected ? (peer.rtt != null ? peer.rtt + ' ms' : tr('Connected')) + (tile.selected && UI.via(s) !== 'Wi-Fi' ? ', ' + UI.via(s) : '')
           : tile.state === 'connecting' ? tr('Connecting…') : peer.state === 'waiting' ? tr('Waiting for it to connect')
             : peer.state === 'identity_changed' ? tr('Identity changed') : tr('Not connected');
       return { ...tile, sub };

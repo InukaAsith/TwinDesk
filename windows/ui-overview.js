@@ -147,7 +147,7 @@ UI.tab({
       const p = s.paired;
       const seen = s.found.find((dev) => dev.id === p.macId);
       const list = (seen && seen.routes) || [];
-      const options = [{ value: '', label: t('Network: automatic') }, ...list.map((x) => ({ value: x.address, label: x.via ? x.via + ' · ' + x.address : x.address }))];
+      const options = [{ value: '', label: t('Network: automatic') }, ...list.map((x) => ({ value: x.address, label: x.via ? x.via + ', ' + x.address : x.address }))];
       if (p.route && !list.some((x) => x.address === p.route)) options.push({ value: p.route, label: t('{address} (not seen now)', { address: p.route }) });
       if (options.length < 2) return { select: null, missed: p.routeMissed, now: p.now };
       const sel = UI.select(options, (v) => api.setRoute(v));
@@ -209,7 +209,7 @@ UI.tab({
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = 'hero-link' + (connected ? ' up' : '');
       const ble = s.net && s.net.transport === 'ble';
-      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms · ' : '') + UI.via(s)
+      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms, ' : '') + UI.via(s)
         : s.pairing ? t('Pairing…') : s.paired ? t('Connecting…') : t('Not connected');
       const bad = l.state === 'identity_changed';
       status.textContent = bad ? t('This {kind} looks different now. Forget it and pair again.', { kind: t(p.kind) })
@@ -299,7 +299,7 @@ UI.tab({
           if (take) take.disabled = busy;
           const match = st && st.code ? UI.button(t('Codes match'), () => api.confirmCode(), 'small primary') : null;
           if (btn && dev.invited && !busy) focus = btn;
-          const where = many ? routes.map((x) => x.address).join(' · ') : dev.address;
+          const where = many ? routes.map((x) => x.address).join(', ') : dev.address;
           const hint = !st || st.ok ? dev.invited ? t('{address} · wants to connect', { address: where }) : where
             : st.code ? t('Check the code: {code} (the same on {name}?)', { code: st.code.slice(0, 3) + ' ' + st.code.slice(3), name: dev.name })
               : st.text;
@@ -317,7 +317,7 @@ UI.tab({
             const b = UI.button(pairLabel, () => go(dev, 'pair', () => api.pair(dev.id, x.address)), 'small' + (dev.invited ? ' primary' : ''));
             b.disabled = (busy && !st) || connected;
             if (dev.invited && !busy && !focus) focus = b;
-            const sub = UI.row(x.via ? x.via + ' · ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
+            const sub = UI.row(x.via ? x.via + ', ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
             sub.classList.add('route-row');
             return sub;
           })];

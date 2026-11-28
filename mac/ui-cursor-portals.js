@@ -71,7 +71,7 @@ const CursorPortalsUI = {
         list.replaceChildren(...rules.map((rule) => {
           const labelFor = (items, id) => (displayOptions(items).find((d) => d.value === id) || { label: 'Display unavailable' }).label;
           const shortcut = [...rule.modifiers, rule.key].filter(Boolean).join(' + ') || 'No shortcut';
-          const text = `${labelFor(map.mine, rule.source.display)} ${rule.source.side} ${rule.source.from * 100}–${rule.source.to * 100}% → ${labelFor(map.theirs, rule.target.display)} ${rule.target.side} ${rule.target.from * 100}–${rule.target.to * 100}% · ${shortcut}`;
+          const text = `${labelFor(map.mine, rule.source.display)} ${rule.source.side} ${rule.source.from * 100}–${rule.source.to * 100}% → ${labelFor(map.theirs, rule.target.display)} ${rule.target.side} ${rule.target.from * 100}–${rule.target.to * 100}%, ${shortcut}`;
           const remove = UI.button('Remove', () => api.setPortals(rules.filter((r) => r.id !== rule.id)), 'small');
           remove.disabled = input.where !== 'home';
           return UI.row(text, '', [remove], { literal: true });

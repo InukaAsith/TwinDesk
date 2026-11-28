@@ -256,7 +256,7 @@ UI.tab({
       if (!it) return;
       if (thumbs.get(it.id)) bigImg.src = thumbs.get(it.id); else bigImg.removeAttribute('src');
       bigName.textContent = it.name;
-      bigSub.textContent = [new Date(it.at).toLocaleString(), it.w && it.h ? `${it.w} × ${it.h}` : '', UI.bytes(it.size || 0), it.album].filter(Boolean).join(' · ');
+      bigSub.textContent = [new Date(it.at).toLocaleString(), it.w && it.h ? `${it.w} × ${it.h}` : '', UI.bytes(it.size || 0), it.album].filter(Boolean).join(', ');
       if (!UI.onBle(UI.state)) UI.hubAsk({ t: 'media.view', id: it.id });
       const i = items.indexOf(it);
       prev.disabled = i <= 0;
@@ -320,7 +320,7 @@ UI.tab({
       const notes = [];
       if (m.confirm > 0) notes.push(tr('Tap the notification on the phone to remove {count} more', { count: m.confirm }));
       if (m.failed > 0) notes.push(tr('{count} couldn’t be removed', { count: m.failed }));
-      if (notes.length) status.textContent = notes.join(' · ');
+      if (notes.length) status.textContent = notes.join(', ');
       if (albums.length) UI.hubAsk({ t: 'media.albums' }); // their counts
     });
     UI.hubOn('media.view', (m) => {

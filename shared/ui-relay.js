@@ -24,7 +24,7 @@
         r = r || {};
         if (!typed || document.activeElement !== addr) { addr.value = r.addr || ''; if (!typed) key.value = r.key || ''; }
         remove.hidden = !r.addr;
-        const why = r.error ? ` · ${t(r.error)}` : '';
+        const why = r.error ? `, ${t(r.error)}` : '';
         row.setHint(!r.addr ? t('None: the phone connects on this network, the cable, Bluetooth or Tailscale')
           : r.state === 'ready' ? t('Connected to the relay: a phone away from here can reach this computer')
             : r.state === 'connecting' ? t('Connecting to the relay…')

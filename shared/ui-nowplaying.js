@@ -251,7 +251,7 @@ UI.nowPlaying = () => {
         readTint(now.art);
       }
       title.textContent = now.title;
-      sub.textContent = [now.artist, now.appName].filter(Boolean).join(' · ');
+      sub.textContent = [now.artist, now.appName].filter(Boolean).join(', ');
       play.replaceChildren(svg(now.playing ? PAUSE : PLAY));
       play.title = now.playing ? t('Pause') : t('Play');
       play.setAttribute('aria-label', play.title);
@@ -344,7 +344,7 @@ UI.airplayPlaying = () => {
         art.classList.toggle('none', !now.art);
       }
       title.textContent = now.title || t('AirPlay');
-      sub.textContent = [now.artist, now.album].filter(Boolean).join(' · ');
+      sub.textContent = [now.artist, now.album].filter(Boolean).join(', ');
       sub.hidden = !sub.textContent;
       from.textContent = t('AirPlay from {device}', { device: ses.name });
       play.replaceChildren(svg(now.playing ? PAUSE : PLAY));

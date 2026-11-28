@@ -481,7 +481,7 @@
               const list = (dev && dev.bt && dev.bt.devices) || [];
               out.push(field(t('Device'), pick([
                 { value: '', label: dev ? t('Choose a paired device') : t('Loading…') },
-                ...list.map((d) => ({ value: d.id, label: d.name + (d.connected ? ` · ${t('connected')}` : '') })),
+                ...list.map((d) => ({ value: d.id, label: d.name + (d.connected ? ` (${t('connected')})` : '') })),
                 ...(a.id && !list.some((d) => d.id === a.id) ? [{ value: a.id, label: a.name }] : []),
               ], a.id, (id) => {
                 const d = list.find((x) => x.id === id);

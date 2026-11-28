@@ -197,7 +197,7 @@ UI.tab({
           el('span', { class: `hist-dir ${r.dir}`, title: UI.fill(r.dir === 'out' ? I18n.t('Sent to {name}') : I18n.t('From {name}')) }, [UI.icon(r.dir === 'out' ? 'up' : 'down')]),
           el('div', { class: 'hist-text' }, [
             el('div', { class: 'hist-preview', text: r.name }),
-            el('div', { class: 'hint', text: `${r.ok ? (r.dir === 'in' ? tilde(r.path) : r.where || pc) : I18n.t('Failed: {error}', { error: r.error })} · ${UI.ago(r.at)}` }),
+            el('div', { class: 'hint', text: `${r.ok ? (r.dir === 'in' ? tilde(r.path) : r.where || pc) : I18n.t('Failed: {error}', { error: r.error })}, ${UI.ago(r.at)}` }),
           ]),
           r.dir === 'in' && r.ok ? UI.button(I18n.t('Show'), () => api.revealDrop(f.recent.indexOf(f.recent.find((x) => x.at === r.at))), 'small') : null,
         ]))

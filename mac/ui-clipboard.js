@@ -122,9 +122,9 @@ UI.tab({
           h.image && h.image.thumb ? el('img', { class: 'hist-thumb', src: h.image.thumb, alt: '' }) : null,
           el('div', { class: 'hist-text' }, [
             h.image
-              ? el('div', { class: 'hist-preview', text: `${I18n.t(h.image.shot ? 'Screenshot' : 'Picture')} · ${h.image.w} × ${h.image.h}` })
+              ? el('div', { class: 'hist-preview', text: `${I18n.t(h.image.shot ? 'Screenshot' : 'Picture')}, ${h.image.w} × ${h.image.h}` })
               : el('div', { class: 'hist-preview selectable', attrs: { 'data-literal': '' }, text: h.text.replace(/\s+/g, ' ').trim() || I18n.t('(whitespace)') }),
-            el('div', { class: 'hint', text: `${UI.fill(h.dir === 'out' ? I18n.t('To {name}') : I18n.t('From {name}'))} · ${UI.ago(h.at)} · ${UI.bytes(h.size)}` }),
+            el('div', { class: 'hint', text: `${UI.fill(h.dir === 'out' ? I18n.t('To {name}') : I18n.t('From {name}'))}, ${UI.ago(h.at)}, ${UI.bytes(h.size)}` }),
           ]),
           (() => { // Open / Email / Call for a link, an address, a number (shared/clipact.js)
             const a = !h.image && api.openClip && window.ClipAct && ClipAct.of(h.text);

@@ -80,7 +80,7 @@
           parts.push(st.active ? t('Running') : t('Installed, not running'));
           parts.push(st.connected ? t('this app’s mouse and keyboard go through it') : t('not connected to this app yet'));
         }
-        statusRow.setHint(parts.join(' · '));
+        statusRow.setHint(parts.join(', '));
         err.set(st.error ? t(st.error) : '');
       }
 

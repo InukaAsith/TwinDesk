@@ -32,11 +32,20 @@ UI.tab({
 
     const hist = UI.historyCard('notifs');
     const showing = UI.notifShowCard ? UI.notifShowCard() : null; // how they show here (shared/ui-notifrules.js)
-    body.append(note, pair.el, ...(showing ? [showing.el] : []), histCard, hist.el, UI.card(I18n.t('Apps'), [apps]));
+    // Multi-device: who shows whose notifications, per app (shared/ui-matrix.js; hidden one-to-one).
+    const across = window.MeshMatrix && MeshMatrix.notifs ? MeshMatrix.notifs({
+      toggle: (id, dir, on) => api.setConsent(id, 'notifs', dir, on),
+      setApp: (from, app, name, show) => api.setNotifs({ fromApp: { from, app, name, hide: !show } }),
+      showAll: (from) => api.setNotifs({ fromApp: { from, all: true } }),
+      takeAll: (on) => api.setNotifs({ takeAll: on }),
+    }) : null;
+    if (across) across.el.hidden = true;
+    body.append(note, ...(across ? [across.el] : []), pair.el, ...(showing ? [showing.el] : []), histCard, hist.el, UI.card(I18n.t('Apps'), [apps]));
 
     let key = '';
     let histKey = '';
     return (s) => {
+      if (across) across.render(s.matrix, s.notifs);
       const n = s.notifs;
       if (showing) showing.update(s);
       hist.update(s);
@@ -61,9 +70,9 @@ UI.tab({
             const isPhone = UI.isPhone(s);
             const openBtn = isPhone && item.app ? UI.button(I18n.t('Open'), () => api.openNotifiedApp({ app: item.app, appName }), 'small') : null;
             const time = UI.ago(item.at);
-            const topText = [appName, item.title].filter(Boolean).join(' · ');
+            const topText = [appName, item.title].filter(Boolean).join(', ');
             const subText = [item.subtitle, item.body].filter(Boolean).join(' — ') || I18n.t('Notification');
-            const r = UI.row(topText, `${subText} · ${time}`, [openBtn], { literal: true });
+            const r = UI.row(topText, `${subText}, ${time}`, [openBtn], { literal: true });
             if (icons[item.app]) {
               const img = el('img', { src: icons[item.app], style: 'width: 20px; height: 20px; border-radius: 4px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;' });
               r.querySelector('.text').prepend(img);
