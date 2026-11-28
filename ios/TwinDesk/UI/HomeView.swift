@@ -22,6 +22,7 @@ struct OverviewView: View {
                 if core.connected && (core.dev.can.contains(.volume) || core.dev.can.contains(.lock)) { controls }
             } right: {
                 if core.connected, let n = core.media.now { NowPlayingCard(now: n) }
+                if core.connected { MeshCard() }
                 if core.connected { PcClipCard(); PcNotifsCard() }
                 if !core.connected {
                     VStack(alignment: .leading, spacing: 10) {

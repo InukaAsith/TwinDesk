@@ -71,6 +71,8 @@
 	<string>To save screenshots of the computer's screen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Send photos and videos to your computer, and let it show and save them (Photos on the computer, while you have it on).</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Confirm it’s you before restarting, shutting down or unlocking a computer of your mesh, or answering a pairing.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Use this camera on your computer (its Camera tab and virtual camera), while you let it.</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -1325,7 +1325,6 @@
   "Computers": "Bilgisayarlar",
   "Confirm it’s you": "Siz olduğunuzu doğrulayın",
   "Connected to this phone": "Bu telefona bağlı",
-  "Connected · an older TwinDesk": "Bağlı · eski bir TwinDesk",
   "Deny {name}": "{name} reddet",
   "Doesn’t let phones manage it": "Telefonların yönetmesine izin vermiyor",
   "Move {name}": "{name} taşı",
@@ -1349,5 +1348,7 @@
   "{what}: {why}": "{what}: {why}",
   "{what}…": "{what}…",
   "{name} (connected)": "{name} (bağlı)",
-  "Send to": "Gönder"
+  "Send to": "Gönder",
+  "Connected (an older TwinDesk)": "Bağlı (eski bir TwinDesk)",
+  "{what} {name}": "{name}: {what}"
 }

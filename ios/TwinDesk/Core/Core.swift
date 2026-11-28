@@ -41,6 +41,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
     lazy var mic = Mic(self)
+    lazy var mesh = MeshMgr(self) // the whole mesh's computers on Overview (shared/mesh-manage.js): asks only while shown
     lazy var deck = Deck(self) // the Deck: tiles here the computer runs, while it offers it (Deck.swift)
     lazy var signer = Signer(self) // TwinDesk signed with the person's own Apple ID, by the computer (SignerFeature.swift)
     lazy var updates = Updates(self) // new releases on GitHub (About › Updates)
@@ -113,7 +114,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, signer, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic, deck]
+        features = [sync, clip, notifs, signer, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic, deck, mesh]
         link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 

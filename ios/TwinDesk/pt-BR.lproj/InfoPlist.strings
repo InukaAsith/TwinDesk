@@ -7,3 +7,4 @@ NSMicrophoneUsageDescription = "Envie o som deste microfone ao computador, enqua
 NSBluetoothAlwaysUsageDescription = "O TwinDesk mantém um link Bluetooth com o computador, para as notificações dele chegarem em segundo plano e a sessão continuar longe do Wi-Fi.";
 NSLocationAlwaysAndWhenInUseUsageDescription = "O TwinDesk usa sua localização aproximada (sem GPS) só para ficar conectado ao computador enquanto não está na tela. Ele nunca guarda nem envia onde você está.";
 "NSPhotoLibraryAddUsageDescription" = "Para salvar capturas de tela da tela do computador.";
+"NSFaceIDUsageDescription" = "Confirme que é você antes de reiniciar, desligar ou desbloquear um computador da sua malha, ou responder a um pareamento.";

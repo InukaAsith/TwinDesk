@@ -1325,7 +1325,6 @@
   "Computers": "Computadores",
   "Confirm it’s you": "Confirme que é você",
   "Connected to this phone": "Conectado a este telefone",
-  "Connected · an older TwinDesk": "Conectado · TwinDesk mais antigo",
   "Deny {name}": "Negar {name}",
   "Doesn’t let phones manage it": "Não permite que telefones o gerenciem",
   "Move {name}": "Mover {name}",
@@ -1349,5 +1348,7 @@
   "{what}: {why}": "{what}: {why}",
   "{what}…": "{what}…",
   "{name} (connected)": "{name} (conectado)",
-  "Send to": "Enviar para"
+  "Send to": "Enviar para",
+  "Connected (an older TwinDesk)": "Conectado (um TwinDesk mais antigo)",
+  "{what} {name}": "{what} {name}"
 }

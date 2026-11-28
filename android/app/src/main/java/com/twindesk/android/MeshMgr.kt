@@ -188,7 +188,7 @@ fun MeshCard(core: Core, v: Int) {
                 d.self -> tr("Connected to this phone")
                 !d.online -> tr("Not connected")
                 !d.on -> tr("Doesn’t let phones manage it")
-                !d.said -> tr("Connected · an older TwinDesk")
+                !d.said -> tr("Connected (an older TwinDesk)")
                 else -> tr("Connected")
             }
             MacRow(d.name, state, i == 0)
@@ -203,7 +203,7 @@ fun MeshCard(core: Core, v: Int) {
                             if ("restart" in d.can) add("restart" to tr("Restart"))
                             if ("shutdown" in d.can) add("shutdown" to tr("Shut down"))
                         }
-                        items(buttons) { (what, label) -> MPill(label, what in strong) { go(d, what, label + " · " + d.name) } }
+                        items(buttons) { (what, label) -> MPill(label, what in strong) { go(d, what, tr("{what} {name}", "what" to label, "name" to d.name)) } }
                     }
                 }
                 d.pending?.let { (name, _, code) ->

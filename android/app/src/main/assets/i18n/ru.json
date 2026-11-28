@@ -1325,7 +1325,6 @@
   "Computers": "Компьютеры",
   "Confirm it’s you": "Подтвердите, что это вы",
   "Connected to this phone": "Подключён к этому телефону",
-  "Connected · an older TwinDesk": "Подключён · старая версия TwinDesk",
   "Deny {name}": "Отклонить {name}",
   "Doesn’t let phones manage it": "Не разрешает телефонам управлять им",
   "Move {name}": "Переместить {name}",
@@ -1349,5 +1348,7 @@
   "{what}: {why}": "{what}: {why}",
   "{what}…": "{what}…",
   "{name} (connected)": "{name} (подключено)",
-  "Send to": "Отправить на"
+  "Send to": "Отправить на",
+  "Connected (an older TwinDesk)": "Подключено (старая версия TwinDesk)",
+  "{what} {name}": "{what}: {name}"
 }

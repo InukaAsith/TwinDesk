@@ -12,6 +12,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 ## Next (unreleased)
 
 ### New
+- iPhone and iPad, Overview › Computers: the mesh manager, as on Android. Every computer of the mesh,
+  with Wake, Lock, Unlock, Sleep, Restart and Shut down where it allows them, pairings to answer,
+  Remove from the mesh and the layout under Arrange. Strong actions ask for Face ID first.
 - Multi-device, phone share sheet: Send to TwinDesk asks which computer, the connected one first. The
   connected computer takes the files and passes them on to the one picked (Android; Mac, Windows, Linux
   pass them on). With no other computer in the mesh it sends straight away, as before.

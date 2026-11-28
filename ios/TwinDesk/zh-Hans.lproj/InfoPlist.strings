@@ -7,3 +7,4 @@ NSMicrophoneUsageDescription = "在你允许时，将此麦克风的声音发送
 NSBluetoothAlwaysUsageDescription = "TwinDesk 与你的电脑保持蓝牙连接，让它的通知在后台也能到达，离开 Wi-Fi 后会话也能继续。";
 NSLocationAlwaysAndWhenInUseUsageDescription = "TwinDesk 仅在不在屏幕上时使用你的大致位置（无 GPS）来保持与电脑的连接。它从不存储或发送你的位置。";
 "NSPhotoLibraryAddUsageDescription" = "用于保存电脑屏幕的截图。";
+"NSFaceIDUsageDescription" = "确认是你本人，然后再重启、关闭或解锁网格中的电脑，或回应配对请求。";

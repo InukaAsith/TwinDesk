@@ -1325,7 +1325,6 @@
   "Computers": "电脑",
   "Confirm it’s you": "确认是你本人",
   "Connected to this phone": "已连接到此手机",
-  "Connected · an older TwinDesk": "已连接 · 较旧的 TwinDesk",
   "Deny {name}": "拒绝 {name}",
   "Doesn’t let phones manage it": "不允许手机管理它",
   "Move {name}": "移动 {name}",
@@ -1349,5 +1348,7 @@
   "{what}: {why}": "{what}：{why}",
   "{what}…": "{what}…",
   "{name} (connected)": "{name}（已连接）",
-  "Send to": "发送到"
+  "Send to": "发送到",
+  "Connected (an older TwinDesk)": "已连接（较旧的 TwinDesk）",
+  "{what} {name}": "{what} {name}"
 }
