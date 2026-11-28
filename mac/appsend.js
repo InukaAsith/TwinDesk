@@ -27,9 +27,10 @@ const MAX_POPUPS = 6;
 const IN_TYPES = [T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL, T.IN_KEY_DOWN, T.IN_KEY_UP];
 
 class AppSend extends EventEmitter {
-  constructor({ server, helper, displays, getSettings }) {
+  // allows(): "Let {name} open this Mac's apps" for the device it sends to, its own pair (shared/consent.js)
+  constructor({ server, helper, displays, getSettings, allows = null }) {
     super();
-    Object.assign(this, { server, helper, displays, getSettings });
+    Object.assign(this, { server, helper, displays, getSettings, allows });
     this.accepts = false; // the viewer's papp.policy
     this.launched = new Map(); // app id -> {id, pids: Set, since, had, lastSeen}
     this.moved = new Map(); // wid -> {pid, x, y, w, h}: windows moved to the other computer (movewin.js), and where they were (points)
@@ -102,6 +103,7 @@ class AppSend extends EventEmitter {
   }
 
   get allowed() {
+    if (this.allows) return !!this.allows();
     return this.getSettings().apps.offer !== false;
   }
 

@@ -373,4 +373,9 @@ pair, `shared/consent.js`); the other devices' cells are theirs, shown as they t
 **Gossip** (`shared/mesh-edges.js`): every device publishes its pairs and whom it's connected to in a
 pool (`mesh.edges`, relayed as the layout's displays are) when they change and every minute. Both ends of a
 pair agree (pair.sync), so one side is enough: an older TwinDesk, which publishes nothing, shows through
-what its peers say of their pairs with it. Apps isn't in the matrix: its switch isn't read per device yet.
+what its peers say of their pairs with it.
+
+**Apps per device** (after the matrix): "Open {name}'s apps here" and "Let {name} open my apps" are read for
+each device's own pair: another computer's apps here (PeerApps, the Mac's PcApps: `allowed`), this computer's
+windows there (PcApps on Move windows' link, the Mac's Apps and AppSend: `allows`), the Mac apps shown in
+Monitor 2 (its link's device). So Apps is in the matrix too.

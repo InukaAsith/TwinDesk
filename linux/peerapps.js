@@ -15,6 +15,7 @@ const POINTER = new Set([T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL]);
 
 class PeerApps {
   // opts: link (peer.js), settings (shared; macApps.on = "Open <peer>'s apps here"), popup(kind, text), peerName(), onChange()
+  //   allowed() (Multi-device: that switch for this link's device)
   constructor(opts) {
     Object.assign(this, opts);
     this.list = [];  // [{id, name, icon}]
@@ -82,6 +83,12 @@ class PeerApps {
     return this.settings.macApps;
   }
 
+  // "Open {name}'s apps here" for this link's device: its own pair in Multi-device (opts.allowed,
+  // shared/consent.js), else the setting.
+  get takes() {
+    return this.allowed ? !!this.allowed() : !!this.cfg.on;
+  }
+
   // A PC or a Linux computer on the other end (the Mac does with apps.js instead).
   // Any computer on the other end: its windows come here. A Mac's apps don't (it opens them with
   // apps.js, as always): from a Mac only the windows moved here with Move windows.
@@ -109,7 +116,7 @@ class PeerApps {
   get accepting() {
     const moves = !!(this.settings.pcApps && this.settings.pcApps.moveWindows); // Move windows takes the windows moved here too
     if (this.fromMac) return moves; // a Mac's apps and ReZume windows come through apps.js
-    return !!this.cfg.on || this.rz === true || moves;
+    return this.takes || this.rz === true || moves;
   }
 
   _policy() {
@@ -125,12 +132,12 @@ class PeerApps {
   }
 
   refresh() {
-    if (!this.appsHere || !this.cfg.on) return;
+    if (!this.appsHere || !this.takes) return;
     if (this.link.send({ t: T.PAPPS_LIST })) { this.loading = true; this.onChange(); }
   }
 
   launch(id) {
-    if (!this.appsHere || !this.cfg.on || typeof id !== 'string') return;
+    if (!this.appsHere || !this.takes || typeof id !== 'string') return;
     const a = this.list.find((x) => x.id === id);
     this.message = '';
     this.popup('away', { key: 'Opening {app} on {name}…', vars: { app: a ? a.name : { key: 'the app' }, name: this.peerName() } });

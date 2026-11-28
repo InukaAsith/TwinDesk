@@ -10,7 +10,7 @@
 
 (function () {
   // The matrix's features and their names on the pages (the same words as their tabs).
-  const LABELS = { clipboard: 'Clipboard', notifs: 'Notifications', audio: 'Sound', files: 'Files', cursor: 'Mouse and keyboard', terminal: 'Terminal' };
+  const LABELS = { clipboard: 'Clipboard', notifs: 'Notifications', audio: 'Sound', files: 'Files', cursor: 'Mouse and keyboard', terminal: 'Terminal', apps: 'Apps' };
 
   function create(opts) {
     const t = (k, v) => I18n.t(k, v);
