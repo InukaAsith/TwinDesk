@@ -42,7 +42,11 @@ class FakeScreen {
     this.win = null;
     link.on(T.SCREEN_STATE, (m) => this.got.push(m.t));
   }
-  open() { this.win = { isDestroyed: () => false, isVisible: () => true }; }
+  open() {
+    if (this.win) return void (this.win.shown = true);
+    const hides = [];
+    this.win = { shown: true, isDestroyed: () => false, isVisible: () => this.win.shown, on: (ev, fn) => ev === 'hide' && hides.push(fn), hide: () => { this.win.shown = false; hides.forEach((f) => f()); } };
+  }
 }
 
 (async () => {
@@ -62,6 +66,9 @@ class FakeScreen {
     const made = [];
     const viewers = screenViewers({ hub: A.hub, primary: () => first, primaryLink: firstLink, make: (l, id) => { const s = new FakeScreen(l); made.push(id); return s; } });
 
+    // C said it shares before anyone opened a Monitor 2 for it: its own hears that as it opens.
+    C.hub.bus.send(A.id, { t: T.SCREEN_STATE, on: false, remote: true });
+    await new Promise((r) => setTimeout(r, 200));
     viewers.open(B.id); // Monitor 2, B selected
     assert.strictEqual(firstLink.id, B.id);
     assert.ok(first.win);
@@ -72,6 +79,8 @@ class FakeScreen {
     assert.deepStrictEqual(made, [C.id]);
     const forC = viewers.of(C.id);
     assert.ok(forC && forC !== first);
+    assert.deepStrictEqual(forC.got, [T.SCREEN_STATE], 'C’s last screen.state, said before it was made');
+    forC.got.length = 0;
     // What reaches a link doesn't depend on its type (rtc.* are renamed by the session's role swap on the way).
     C.hub.bus.send(A.id, { t: T.SCREEN_STATE, on: true, mode: 'extend' });
     await waitFor(() => forC.got.length === 1, 'C’s Monitor 2 gets C’s state');
@@ -85,10 +94,27 @@ class FakeScreen {
     assert.strictEqual(viewers.of(B.id), first);
     viewers.open(B.id);
     assert.deepStrictEqual(made, [C.id], 'no second window for B');
-    // The first one closed: Open for C now takes the first one (free), as before.
+    // The first one closed while C's own shows C: following the selection (C), it waits on nobody, so two
+    // never answer C's one stream (both were black).
+    A.hub.select(C.id);
     first.win = null;
+    firstLink.follow();
+    assert.strictEqual(firstLink.id, null, 'not onto C, which its own Monitor 2 shows');
+    assert.strictEqual(viewers.of(C.id), forC);
     viewers.open(C.id);
+    assert.deepStrictEqual(made, [C.id], 'Open for C shows C’s own');
+    // C's own closed: it lets go of C (hears nothing), and the first one may follow C again.
+    forC.win.hide();
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(forC.link.id, null, 'closed, it lets go of C');
+    assert.strictEqual(viewers.of(C.id), null);
+    C.hub.bus.send(A.id, { t: T.SCREEN_STATE, on: true, mode: 'extend' });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(forC.got.length, 1, 'a closed one hears nothing more');
+    firstLink.follow();
     assert.strictEqual(firstLink.id, C.id, 'free: the first one goes to C');
+    viewers.open(C.id);
+    assert.strictEqual(viewers.of(C.id), first, 'and Open for C is the first one, not two');
     console.log('screen-viewers: ok');
   } finally {
     close(A, B, C);

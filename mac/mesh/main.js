@@ -316,6 +316,7 @@ function publishState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+let sharingBy = ''; // the device whose screen.ctl started our sharing ('' = this Mac's own menu): screen.state's by
 
 // To every connected device (each may watch this Mac's screen; the facade told the selected one only), once
 // per device and change.
@@ -323,7 +324,10 @@ function sendScreenState() {
   if (!svc || !hub) return void (screenStateKey = '');
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
+  if (!settings.sharing.on) sharingBy = '';
+  // by: who asked for it. Only that device's Monitor 2 opens by itself; the others' would watch too, and
+  // the picture went to whichever answered (a Monitor 2 on every computer of the mesh opened).
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], by: sharingBy };
   const ids = hub.bus.connectedIds();
   const key = JSON.stringify([ids, msg]);
   if (key === screenStateKey) return;
@@ -336,7 +340,7 @@ function displayPick(m) {
 }
 
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
-function onScreenCtl(m) {
+function onScreenCtl(m, from) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
@@ -346,7 +350,10 @@ function onScreenCtl(m) {
   if (m.mode === 'extend' || m.mode === 'mirror') {
     if (displayMode() !== m.mode) actions.setDisplayMode(m.mode);
   }
-  if (typeof m.share === 'boolean' && m.share !== !!settings.sharing.on) actions.setSharing(m.share, 'remote');
+  if (typeof m.share === 'boolean' && m.share !== !!settings.sharing.on) {
+    if (m.share) sharingBy = typeof from === 'string' ? from : '';
+    actions.setSharing(m.share, 'remote');
+  }
 }
 
 // macshare://send?p=<path>&p=… from the Share menu extension: Send files to the peer.
@@ -1040,7 +1047,7 @@ app.whenReady().then(() => {
   const blockEdge = svc.kvm.blockEdge;
   svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
-  hub.bus.on(P.T.SCREEN_CTL, (m) => onScreenCtl(m)); // from any device watching this Mac's screen
+  hub.bus.on(P.T.SCREEN_CTL, (m, from) => onScreenCtl(m, from)); // from any device watching this Mac's screen
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),

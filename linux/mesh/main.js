@@ -294,14 +294,14 @@ function start() {
     settings,
     saveSettings,
     onChange: () => { screenLink.follow(); pushState(); }, // closed: it follows the selection again
-    isQuitting: () => quitting,
+    isQuitting: () => quitting, selfId: device.id,
   });
   // Monitor 2 per device (#256, shared/screen-viewers.js): Open for a device the first one isn't showing,
   // while it shows another, opens one of that device's own; files dropped on it go to that device.
   viewers = require('../../shared/screen-viewers.js').screenViewers({
     hub, primary: () => screen, primaryLink: screenLink,
     make: (l, pid) => {
-      const v = new Screen({ link: l, clip, inputAllowed: () => !kvm || kvm.mode === 'home', settings, saveSettings, onChange: pushState, isQuitting: () => quitting });
+      const v = new Screen({ link: l, clip, inputAllowed: () => !kvm || kvm.mode === 'home', settings, saveSettings, onChange: pushState, isQuitting: () => quitting, selfId: device.id });
       v.fileDrop = { drop: (...a) => { const u = fileDrop.unit(pid); if (u) u.drop(...a); } };
       return v;
     },
@@ -316,6 +316,8 @@ function start() {
   // shared its Extend screen while another device was selected, and nothing came).
   hub.bus.on(P.T.SCREEN_STATE, (m, from) => {
     if (m.on !== true || from === screenLink.id || screen.state.state === 'on') return;
+    if (m.by && m.by !== device.id) return; // another computer asked it to share: it's watching it, not us
+    if (viewers && viewers.showing(from)) return; // a Monitor 2 of its own shows it already
     const w = screen.win;
     if (!w || w.isDestroyed() || !w.isVisible()) return;
     console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
