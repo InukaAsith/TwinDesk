@@ -11,6 +11,8 @@
 // the one-to-one app (a new token) joins again.
 'use strict';
 
+const { normalizeDebug } = require('../../shared/debug-settings.js');
+
 const store = require('../store');
 
 const MULTI = 'multi.json';
@@ -64,7 +66,10 @@ function loadSettings() {
   out.layoutDisplays = m.layoutDisplays || null; // the other devices' monitors (the monitor map, #225)
   // Join every device automatically: on unless switched off in the Multi-device tab, so every computer the
   // mouse goes through is connected to the others; a paired device can add others without a pairing code.
-  out.mesh = { autoJoin: !switchedOff(m.mesh) };
+  // The other devices' logs (docs/peer-logs.md): ours to them, theirs copied here; on unless switched off.
+  const ml = m.mesh || {};
+  // Debug (docs/debug.md): who may debug this Mac, Allow any command, the verbose log.
+  out.mesh = { autoJoin: !switchedOff(m.mesh), shareLogs: ml.shareLogs !== false, collectLogs: ml.collectLogs !== false, debug: normalizeDebug(ml.debug) };
   return out;
 }
 
@@ -78,7 +83,7 @@ function saveSettings(s) {
   const { layout, layoutDisplays, mesh, ...rest } = s;
   store.saveSettings(rest);
   const join = !mesh || mesh.autoJoin !== false;
-  store.write(MULTI, { ...store.read(MULTI, {}), layout, layoutDisplays, mesh: join ? { autoJoin: true } : { autoJoin: false, chosen: true } });
+  store.write(MULTI, { ...store.read(MULTI, {}), layout, layoutDisplays, mesh: { ...(join ? { autoJoin: true } : { autoJoin: false, chosen: true }), shareLogs: !mesh || mesh.shareLogs !== false, collectLogs: !mesh || mesh.collectLogs !== false, debug: normalizeDebug(mesh && mesh.debug) } });
 }
 
 module.exports = { init: store.init, filePath: store.filePath, read, write, loadSettings, saveSettings };

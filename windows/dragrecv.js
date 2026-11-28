@@ -64,16 +64,31 @@ class DragRecv {
     link.on('closed', () => this.cancel('cancelled', false));
     this.helper.on('event', (name, m) => this._event(name, m));
     this.helper.on('exit', () => this.cancel('failed', false));
-    try { fs.rmSync(this.root, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    // Leftovers of an earlier run, once: Multi-device has a DragRecv per device (shared/files-mesh.js),
+    // made when each one comes, and their drags share this folder.
+    if (!DragRecv.cleaned) {
+      DragRecv.cleaned = true;
+      try { fs.rmSync(this.root, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    }
+  }
+
+  // Receive files from this link's device: its pair's switch (opts.accepts, shared/consent.js), else the settings'.
+  _accepts() {
+    return this.accepts ? !!this.accepts() : !!this.settings.files.acceptFromMac;
   }
 
   _start(m) {
-    const end = (result) => this.link.send({ t: T.DRAG_END, drag: m.drag, result });
+    const end = (result, why) => {
+      console.log('[drag] in, ' + result + (why ? ': ' + why : ''));
+      return this.link.send({ t: T.DRAG_END, drag: m.drag, result });
+    };
     if (typeof m.drag !== 'string' || !m.drag) return;
     if (this.cur) this.cancel('cancelled', false);
     const home = Date.now() < this.homeUntil; // the Mac's drag came over with the pointer, back home
     this.homeUntil = 0;
-    if (!this.settings.files.edgeDrag || !this.settings.files.acceptFromMac || !(this.isDriven() || home)) return end('cancelled');
+    if (!this.settings.files.edgeDrag || !this._accepts() || !(this.isDriven() || home)) {
+      return end('cancelled', !this.settings.files.edgeDrag ? 'Drag across the edge is off here' : !this._accepts() ? 'Receive files is off here' : 'the pointer isn’t here');
+    }
     const list = Array.isArray(m.list) ? m.list : [];
     if (!list.length && !(Array.isArray(m.dirs) && m.dirs.length) || list.length > MAX_FILES) return end('failed');
     // Folders first (parents before children: Explorer creates them in order), then the files.
@@ -265,6 +280,7 @@ class DragRecv {
   _finish(result) {
     const c = this.cur;
     this.cur = null;
+    console.log('[drag] in, ' + result + ' (' + c.files.size + ' file(s))');
     const where = c.where && /desktop$/i.test(c.where) ? 'Desktop' : c.where;
     if (!c.batch) this.link.send(where && result === 'dropped' ? { t: T.DRAG_END, drag: c.drag, result, where } : { t: T.DRAG_END, drag: c.drag, result });
     let ok = 0;

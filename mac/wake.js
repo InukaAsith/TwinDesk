@@ -35,25 +35,40 @@ function magic(mac) {
 }
 
 class Wake extends EventEmitter {
-  constructor({ server, getSettings, saveSettings }) {
+  // bus, peer(id) → {name, os, address}: Multi-device (the hub's bus): every device is told how to wake
+  // this Mac when it connects, and learned from whichever device tells, not only the selected one (#313)
+  constructor({ server, getSettings, saveSettings, bus = null, peer = null }) {
     super();
-    Object.assign(this, { server, getSettings, saveSettings });
+    Object.assign(this, { server, getSettings, saveSettings, bus, peer });
     this.womp = null; // this Mac: Wake for network access (null = unknown)
     this.last = null; // {id, at} the last wake we sent
 
-    server.on('client', (ctx) => {
+    const info = () => {
       const all = interfaces();
       const addr = all.find((i) => /^en\d/.test(i.name)) || all[0];
-      server.send(ctx, { t: P.T.WOL_INFO, macs: ownMacs(), address: addr ? addr.address : '' });
-    });
-    server.on(`t:${P.T.WOL_INFO}`, (m, ctx) => {
-      const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
-      if (!ctx || !macs.length) return;
-      this.peers[ctx.deviceId] = { name: ctx.name, os: ctx.os, macs, address: String(m.address || ctx.address || '').slice(0, 64), at: Date.now() };
-      this.saveSettings();
-      this.emit('change');
-    });
+      return { t: P.T.WOL_INFO, macs: ownMacs(), address: addr ? addr.address : '' };
+    };
+    if (bus) {
+      bus.onPeer('welcome', (id) => bus.send(id, info()));
+      bus.on(P.T.WOL_INFO, (m, from) => { const x = peer(from); if (x) this._learn(from, x, m); });
+    } else {
+      server.on('client', (ctx) => server.send(ctx, info()));
+      server.on(`t:${P.T.WOL_INFO}`, (m, ctx) => ctx && this._learn(ctx.deviceId, ctx, m));
+    }
     this.checkWomp();
+  }
+
+  // A device's wol.info: kept for it, saved only when it changed (it comes again on every connect).
+  _learn(id, who, m) {
+    const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
+    if (!id || !macs.length) return;
+    const name = String(who.name || '').slice(0, 200);
+    const address = String(m.address || who.address || '').slice(0, 64);
+    const was = this.peers[id];
+    if (was && was.name === name && was.os === who.os && was.address === address && String(was.macs) === String(macs)) return;
+    this.peers[id] = { name, os: who.os, macs, address, at: Date.now() };
+    this.saveSettings();
+    this.emit('change');
   }
 
   get peers() {

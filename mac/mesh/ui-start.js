@@ -15,7 +15,7 @@
   // The sidebar's order and groups (as ../ui-start.js): the device and Connection, the phone's own
   // things, screens, input, sharing, media; General below a line.
   const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, receive: 2, share: 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
-  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, receive: 11, share: 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
+  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, receive: 11, share: 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, debug: 96, general: 100, about: 110 };
   const orderOf = (d) => ORDER[UI.baseOf(d)] ?? d.order ?? 50; // a kind's own version of a page (variantOf): the page's place
   let lastGroup = null;
   let gap = null; // the gap before the current group (hidden with the group: renderSidebar)
@@ -206,7 +206,7 @@
   let goAfter = null; // { id, kind, timer }: open the sections once the new selection reached this window
   function pick(t) {
     if (t.action === 'connect') {
-      connectAfter = { id: t.id, at: Date.now() }; // once it is connected it is selected too, so the first click is enough (#317)
+      connectWant = { id: t.id, until: Date.now() + 60000 };
       return api.connectPhone(t.id);
     }
     if (t.action !== 'select') return;
@@ -224,7 +224,9 @@
   // Every known device above the sections: paired phones (wallpaper, name, link) and computers (OS icon,
   // name, ping/transport), devices only another one reaches with a "via" line (not clickable).
   let phonesKey = '';
-  let connectAfter = null; // { id, at }: a phone the user clicked to connect, selected when it is up
+  // A phone clicked to connect becomes the selected device once it's connected (#317), as a second
+  // click did: { id, until }, given up after a minute.
+  let connectWant = null;
   let assetsSeen = -1;
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
@@ -259,11 +261,12 @@
             : peer.state === 'identity_changed' ? tr('Identity changed') : tr('Not connected');
       return { ...tile, sub };
     });
-    if (connectAfter) {
-      const up = tiles.find((x) => x.id === connectAfter.id && x.action === 'select');
-      if (up || Date.now() - connectAfter.at > 30000) {
-        connectAfter = null;
-        if (up) setTimeout(() => pick(up), 0); // not inside this render
+    if (connectWant) {
+      const want = tiles.find((x) => x.id === connectWant.id && x.kind === 'phone');
+      if (Date.now() > connectWant.until) connectWant = null;
+      else if (want && want.action === 'select') {
+        connectWant = null;
+        setTimeout(() => pick(want), 0); // after this render: pick selects it and opens its sections
       }
     }
     const key = JSON.stringify([tiles.map((t) => [t.id, t.kind, t.name, t.os, t.state, t.selected, t.action, t.via, t.forget]), ph.held, ph.activeId, (ph.phones || []).map((x) => [x.id, x.colors]), colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);

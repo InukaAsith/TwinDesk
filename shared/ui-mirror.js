@@ -41,6 +41,10 @@
       const modeRow = UI.row(tr('Show the screen through'), '', [mode.el]);
       const showBtn = UI.button(tr('Show Phone Screen'), () => api.phoneScreen(true), 'primary');
       const showRow = UI.row(tr('Phone screen'), tr('Opens in its own window. Close it any time; the phone keeps running.'), [showBtn]);
+      // Two phones or more (Multi-device on the Mac): which one this page is for (#263).
+      const pick = api.phonePick ? UI.select([], (v) => api.phonePick(v)) : null;
+      const pickRow = pick && typeof pick.options === 'function' ? UI.row(tr('Phone'), tr('Which phone Show Phone Screen opens, and this page shows'), [pick.el]) : null;
+      if (pickRow) pickRow.hidden = true;
       const winList = el('div');
       const winCard = UI.card(tr('Open on {computer}', { computer: here }), [winList]);
 
@@ -66,12 +70,14 @@
         controls = UI.switch((v) => api.setPhone({ controls: v ? 'side' : 'top' }), { label: tr('Side panel') });
         rows.push(UI.row(tr('Side panel'), tr('All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.'), [controls]));
       }
-      let enterSends = null, arrowSwipe = null;
+      let enterSends = null, arrowSwipe = null, hover = null;
       {
         enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }) });
         rows.push(UI.row(tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }), tr('In WhatsApp, Instagram and Telegram. {shortcut} adds a new line.', { shortcut: mac ? '⇧Return' : 'Shift+Enter' }), [enterSends]));
         arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
         rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
+        hover = UI.switch((v) => api.setPhone({ hover: v }), { label: tr('Mouse hover') });
+        rows.push(UI.row(tr('Mouse hover'), tr('Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.'), [hover]));
       }
       // The phone screen window's Rotate and screen off, here rather than in its title bar (Windows'
       // side panel has them too).
@@ -86,13 +92,19 @@
       const optsCard = UI.card(tr('Phone windows'), rows);
       const kbRow = UI.row(tr('Mouse and keyboard'), tr('Push the pointer past the screen edge to use the phone.'), [UI.button(tr('Mouse Settings'), () => UI.go('cursor'), 'small')]);
 
-      body.append(UI.card('', [modeRow]), adb.el, UI.card('', [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
+      body.append(UI.card('', [modeRow]), adb.el, UI.card('', pickRow ? [pickRow, showRow] : [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
 
       let winKey = '';
       return (s) => {
         adb.update(s);
         const ph = s.phone || {};
         const br = ph.bridge || {};
+        if (pickRow) {
+          const list = Array.isArray(ph.phones) ? ph.phones : [];
+          pickRow.hidden = list.length < 2;
+          pick.options(list.map((p) => ({ value: p.id, label: p.name || p.id })));
+          if (ph.activeId) pick.set(ph.activeId);
+        }
         const native = br.mirror === 'native';
         mode.set(br.mirrorMode || (native ? 'native' : 'adb'));
         const ready = br.state === 'ready';
@@ -112,6 +124,7 @@
         if (controls) controls.set(st.controls === 'side');
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
+        if (hover) hover.set(st.hover !== false);
         const wins = br.windows || [];
         if (rotateBtn) {
           const scr = wins.find((w) => w.kind === 'screen');

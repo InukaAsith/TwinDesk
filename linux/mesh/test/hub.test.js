@@ -160,17 +160,15 @@ test('(a2) a partial mesh: the roster of a device with one link lists only that 
   }
 });
 
-test('(b) the facade sees only the selected device; a switch delivers closed then welcome; a drop moves on, nothing throws', async () => {
+test('(b) the selection: the facade has no events (step 5), its status and snapshot follow the selected device; a drop moves on, nothing throws', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);
   const { A, B, C } = N;
   try {
     const log = [];
-    A.hub.facade.on('closed', () => log.push('closed'));
-    A.hub.facade.on('welcome', (m) => log.push(['welcome', m.macId]));
+    A.hub.on('selected', (id) => log.push(id ? ['selected', id] : 'none'));
+    assert.throws(() => A.hub.facade.on('welcome', () => {}), /no events/, 'nothing routes through the selection');
     const busGot = [];
-    const facadeGot = [];
     A.hub.bus.on('test.ping', (m, from) => busGot.push([m.n, from]));
-    A.hub.facade.on('test.ping', (m) => facadeGot.push(m.n));
 
     assert.strictEqual(A.hub.select(B.id), true, 'B is connected, so it can be selected');
     assert.strictEqual(A.hub.selectedId, B.id, 'selectedId is the id');
@@ -179,18 +177,17 @@ test('(b) the facade sees only the selected device; a switch delivers closed the
     log.length = 0;
     snaps(...all(N));
 
-    // Selected device B: its message reaches the bus and the facade; C's reaches the bus only.
+    // Selected or not, every device's message reaches the bus.
     C.hub.bus.send(A.id, { t: 'test.ping', n: 1 });
     await waitFor(() => busGot.some((x) => x[0] === 1), 'C message on the bus');
     B.hub.bus.send(A.id, { t: 'test.ping', n: 2 });
     await waitFor(() => busGot.some((x) => x[0] === 2), 'B message on the bus');
     assert.deepStrictEqual(busGot.map((x) => x[1]).sort(), [B.id, C.id].sort(), 'the bus gets both devices');
-    assert.deepStrictEqual(facadeGot, [2], 'the facade gets only the selected device B');
     snaps(...all(N));
 
-    // Switch to C: closed, then welcome for C; the facade now follows C.
+    // Switch to C: 'selected'; the facade's view is C's.
     assert.strictEqual(A.hub.select(C.id), true);
-    assert.deepStrictEqual(log, ['closed', ['welcome', C.id]], 'closed then welcome for the new device');
+    assert.deepStrictEqual(log, [['selected', C.id]], 'the hub says the selection changed');
     assert.strictEqual(A.hub.facade.status.state, 'connected');
     assert.strictEqual(A.hub.facade.peerOs, P.OS.LINUX);
     assert.strictEqual(A.hub.facade.snapshot().session.id, C.id, 'the facade snapshot names C');
@@ -198,30 +195,28 @@ test('(b) the facade sees only the selected device; a switch delivers closed the
     C.hub.bus.send(A.id, { t: 'test.ping', n: 4 });
     await waitFor(() => busGot.some((x) => x[0] === 4), 'C message after the switch');
     await waitFor(() => busGot.some((x) => x[0] === 3), 'B message after the switch');
-    assert.deepStrictEqual(facadeGot, [2, 4], 'after the switch the facade gets C, not B');
     snaps(...all(N));
 
     // The selected device C drops (its socket is cut): the facade moves to B, nothing throws.
     A.links.get(C.id).ws.terminate();
     await waitFor(() => A.hub.selectedId === B.id, 'selection moves to B');
-    assert.deepStrictEqual(log.slice(2), ['closed', ['welcome', B.id]], 'closed, then welcome for B');
+    assert.deepStrictEqual(log.slice(1), [['selected', B.id]], 'B selected');
     assert.ok(!A.hub.sessions.get(C.id).connected, 'C is down');
     snaps(...all(N));
 
     // C reconnects (its link dials again). The selection stays on B.
     await waitFor(() => up(A, C), 'C is back');
     assert.strictEqual(A.hub.selectedId, B.id, 'a returning device does not take the selection');
-    assert.strictEqual(log.length, 4, 'no extra switch on reconnect');
+    assert.strictEqual(log.length, 2, 'no extra switch on reconnect');
     C.hub.bus.send(A.id, { t: 'test.ping', n: 5 });
     await waitFor(() => busGot.some((x) => x[0] === 5), 'C message after reconnect');
-    assert.deepStrictEqual(facadeGot, [2, 4], 'the facade still does not get C');
     snaps(...all(N));
 
     // Both devices drop: nothing is selected, nothing throws, the facade says not connected yet.
     A.links.get(B.id).ws.terminate();
     A.links.get(C.id).ws.terminate();
     await waitFor(() => A.hub.selectedId === null, 'nothing selected');
-    assert.strictEqual(log[log.length - 1], 'closed');
+    assert.strictEqual(log[log.length - 1], 'none');
     assert.strictEqual(A.hub.facade.status.state, 'connecting', 'paired but not connected: connecting');
     assert.strictEqual(A.hub.facade.send({ t: 'test.ping' }), false, 'a send with nothing selected is refused');
     assert.strictEqual(A.hub.snapshot().session, null);
@@ -229,7 +224,7 @@ test('(b) the facade sees only the selected device; a switch delivers closed the
 
     // The first device back, with nothing selected, is selected by itself.
     await waitFor(() => A.hub.selectedId !== null, 'something selected again');
-    assert.deepStrictEqual(log[log.length - 1], ['welcome', A.hub.selectedId], 'welcome for the device that came back');
+    assert.deepStrictEqual(log[log.length - 1], ['selected', A.hub.selectedId], 'the device that came back is selected');
     snaps(...all(N));
   } finally {
     close3(N);
@@ -503,14 +498,14 @@ test('(f) a device that connects again with its id replaces its socket: the sele
     await waitFor(() => A.hub.sessions.get(phoneId) && A.hub.sessions.get(phoneId).connected, 'the phone is connected');
     assert.strictEqual(A.hub.select(phoneId), true);
     const log = [];
-    A.hub.facade.on('closed', () => log.push('closed'));
-    A.hub.facade.on('welcome', (m) => log.push(['welcome', m.macId]));
+    A.hub.bus.onPeer('closed', (pid) => pid === phoneId && log.push('closed'));
+    A.hub.bus.onPeer('welcome', (pid) => pid === phoneId && log.push(['welcome', pid]));
     const removed = [];
     A.hub.on('peerRemoved', (id) => removed.push(id));
 
     second = await hello(A.port, { id: phoneId, name: 'Phone', os: P.OS.ANDROID, token: phone.token });
     assert.strictEqual(second.reply.t, P.T.WELCOME, 'the second connection is welcomed');
-    await waitFor(() => log.length === 2, 'the facade restarts');
+    await waitFor(() => log.length === 2, 'its features start again');
     assert.deepStrictEqual(log, ['closed', ['welcome', phoneId]], 'closed then welcome for the same device');
     assert.strictEqual(A.hub.selectedId, phoneId, 'the selection stays on the phone');
     assert.strictEqual(A.mesh.peers().length, 2, 'the phone is still one mesh entry, next to B');
@@ -586,6 +581,135 @@ test('three devices: audio route stays on B when selection moves to C until the 
     route.refresh();
     assert.strictEqual(route.targetId, N.C.id, 'follows selection when the session ends');
     assert.strictEqual(closed.length, 1);
+  } finally {
+    close3(N);
+  }
+});
+
+// Step 5: nothing routes through the selection. Selecting a device replays nothing and switches nothing off
+// through the facade; the net hook hears the device it's bound to (hub.netId), whichever is selected. The
+// links that move keep what they need themselves (shared/link-memory.js: h3, h2).
+test('(h) selecting a device delivers and switches off nothing; the net hook hears its own device', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    const atB = [];
+    B.hub.bus.on('cam.policy', (m, from) => from === A.id && atB.push(m.share));
+    assert.strictEqual(A.hub.select(B.id), true);
+    const tapped = [];
+    A.hub.netTap = (m) => m.t === 'net.caps' && tapped.push(m.host);
+    // C says what it can do to leave Bluetooth while B is selected: the net hook, on B, doesn't hear it.
+    const onBus = [];
+    A.hub.bus.on('net.caps', (m, from) => from === C.id && onBus.push(m.host));
+    C.hub.bus.send(A.id, { t: 'net.caps', host: true, join: true, hotspot: false });
+    await waitFor(() => onBus.length === 1, 'A heard C');
+    assert.deepStrictEqual(tapped, [], 'the net hook is on the selected device (B)');
+    // Bound to C (main.js does it while Wi-Fi is set up for C): it hears C, whichever is selected.
+    A.hub.netId = C.id;
+    C.hub.bus.send(A.id, { t: 'net.caps', host: false, join: true, hotspot: false });
+    await waitFor(() => tapped.length === 1, 'the net hook hears C');
+    assert.deepStrictEqual(tapped, [false]);
+    A.hub.netId = undefined;
+
+    // The facade told B our camera policy; selecting C sends B no goodbye and replays nothing.
+    assert.strictEqual(A.hub.facade.send({ t: 'cam.policy', share: true }), true);
+    await waitFor(() => atB.length === 1, 'B gets our policy');
+    assert.strictEqual(A.hub.select(C.id), true);
+    await new Promise((r) => setTimeout(r, 150));
+    assert.deepStrictEqual(atB, [true], 'no goodbye through the facade: each feature on its own link says its own');
+    assert.deepStrictEqual(tapped, [false], 'and no replay into the net hook');
+
+    assert.strictEqual(A.hub.heard, undefined, 'no store of every device’s policies in the hub any more');
+  } finally {
+    close3(N);
+  }
+});
+
+// hub.sticky (#313, Move windows): a link that follows the selection unless it's held; held, a visit to a
+// third device leaves it with its device; let go, it moves, as a 'closed' and a 'welcome' with what was said.
+test('(h3) the sticky link stays with its device while held, then follows the selection', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    let held = false;
+    const link = A.hub.sticky(() => held, { remember: ['papp.policy'] });
+    const got = [];
+    link.on('welcome', (m) => got.push(['welcome', m.macId]));
+    link.on('closed', () => got.push(['closed']));
+    link.on('papp.policy', (m) => got.push(['papp.policy', m.accept]));
+    assert.strictEqual(A.hub.select(B.id), true);
+    assert.strictEqual(link.id, B.id, 'follows the selection');
+    await new Promise((r) => setImmediate(r));
+    assert.deepStrictEqual(got, [['welcome', B.id]], 'one welcome for B, made before or after B was selected');
+    assert.strictEqual(link.current.deviceId, B.id);
+    const atB = [];
+    B.hub.bus.on('papp.windows', (m, from) => from === A.id && atB.push(m));
+    const policyAtB = [];
+    B.hub.bus.on('screen.policy', (m, from) => from === A.id && policyAtB.push(m.accept));
+    assert.strictEqual(link.send({ t: 'screen.policy', accept: true }), true); // Monitor 2 watches B
+
+    held = true; // a window moved to B
+    const heardC = [];
+    A.hub.bus.on('papp.policy', (m, from) => from === C.id && heardC.push(m));
+    C.hub.bus.send(A.id, { t: 'papp.policy', accept: true }); // C takes windows (said while B has ours)
+    await waitFor(() => heardC.length === 1, 'A heard C (the link keeps it, shared/link-memory.js)');
+    got.length = 0;
+    assert.strictEqual(A.hub.select(C.id), true); // the pointer visits C
+    assert.strictEqual(link.id, B.id, 'held: still B');
+    assert.deepStrictEqual(got, [], 'no closed: the windows stay on B');
+    assert.strictEqual(link.send({ t: 'papp.windows', windows: [] }), true);
+    await waitFor(() => atB.length === 1, 'what it sends still goes to B');
+    assert.ok(!got.some((x) => x[0] === 'papp.policy'), 'C\'s messages don\'t reach it while it is on B');
+
+    held = false; // the windows came back
+    link.follow();
+    assert.strictEqual(link.id, C.id, 'then it follows the selection');
+    assert.deepStrictEqual(got, [['closed'], ['welcome', C.id], ['papp.policy', true]], 'closed for B, welcome for C, then what C said');
+    await waitFor(() => policyAtB.length === 2, 'B hears we stopped watching');
+    assert.deepStrictEqual(policyAtB, [true, false]);
+    assert.strictEqual(link.snapshot().link.macName, 'C');
+    link.moveTo(B.id); // Monitor 2 follows a device that starts sharing
+    assert.strictEqual(link.id, B.id);
+    assert.deepStrictEqual(got.slice(-2), [['closed'], ['welcome', B.id]]);
+    // C drops: forgotten, so a later move there replays nothing from its old session.
+    A.links.get(C.id).ws.terminate();
+    await waitFor(() => !up(A, C), 'C down');
+    await waitFor(() => up(A, C), 'C back');
+    got.length = 0;
+    link.moveTo(C.id);
+    assert.deepStrictEqual(got, [['closed'], ['welcome', C.id]], 'nothing kept from C’s last session');
+  } finally {
+    close3(N);
+  }
+});
+
+test('(h2) the audio route gets the audio.policy a device sent before the route moved to it, and the device it leaves hears accept: false', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    const route = A.hub.audioRoute();
+    const got = [];
+    route.on('client', (v) => got.push(['client', v.deviceId]));
+    route.on('t:audio.policy', (m) => got.push(['audio.policy', m.accept]));
+    const atB = [];
+    B.hub.bus.on('audio.policy', (m, from) => from === A.id && atB.push(m.accept));
+    A.hub.select(B.id);
+    route.refresh();
+    assert.strictEqual(route.targetId, B.id);
+
+    const heardC = [];
+    A.hub.bus.on('audio.policy', (m, from) => from === C.id && heardC.push(m));
+    C.hub.bus.send(A.id, { t: 'audio.policy', accept: true });
+    await waitFor(() => heardC.length === 1, 'A heard C (the route keeps it)');
+    assert.strictEqual(route.send({ t: 'audio.policy', accept: true }), true);
+    await waitFor(() => atB.length === 1, 'B gets our policy');
+
+    got.length = 0;
+    A.hub.select(C.id);
+    assert.strictEqual(route.targetId, C.id);
+    assert.deepStrictEqual(got, [['client', C.id], ['audio.policy', true]], 'C policy played after client');
+    await waitFor(() => atB.length === 2, 'B hears accept: false');
+    assert.deepStrictEqual(atB, [true, false]);
   } finally {
     close3(N);
   }

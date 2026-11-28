@@ -103,8 +103,10 @@ function setupIpc(ctx) {
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
   handle('checkWake', () => wake.check());
-  handle('openMonitor', () => screen.open(false));
-  handle('remoteScreen', (arg) => arg && typeof arg === 'object' && screen.control({ share: arg.share, mode: arg.mode })); // screen.ctl
+  // The page's device's Monitor 2 (#256): the first one, else one of its own while the first shows another.
+  const viewerOf = () => (ctx.viewers && ctx.viewers() && ctx.viewers().of(hub.selectedId)) || screen;
+  handle('openMonitor', () => (ctx.viewers && ctx.viewers() ? ctx.viewers().open(hub.selectedId) : screen.open(false)));
+  handle('remoteScreen', (arg) => arg && typeof arg === 'object' && viewerOf().control({ share: arg.share, mode: arg.mode })); // screen.ctl, to the page's device
 
   handle('setKvm', (partial) => {
     if (partial && typeof partial.linked === 'boolean') kvm.setLinked(partial.linked); // home first, tells the other side
@@ -156,7 +158,7 @@ function setupIpc(ctx) {
   handle('checkUpdates', () => ctx.updates.check(true));
   handle('openUpdate', () => ctx.updates.open());
   handle('openLink', (key) => (key === 'logs' ? require('../../shared/applog.js').open() : Object.hasOwn(LINKS, key) && shell.openExternal(LINKS[key]))); // About page: only its own links, and the log folder
-  handle('setMonitor', (partial) => change('monitor', partial, () => { screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
+  handle('setMonitor', (partial) => change('monitor', partial, () => { if (ctx.viewers && ctx.viewers()) ctx.viewers().each((v) => v.applyAudio()); else screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
   handle('setClipboard', (partial) => change('clipboard', partial, () => clip.applySettings()));
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
   handle('openClip', (index) => { // Recent's Open / Email / Call (shared/clipact.js): from the app's own copy
@@ -250,6 +252,7 @@ function setupIpc(ctx) {
   });
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.drive ? shell.openPath(smb.drive + '\\') : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
+  handle('openDrive', (id) => { const u = typeof id === 'string' && smb.unitOf ? smb.unitOf(id) : null; if (u && u.drive) shell.openPath(u.drive + '\\'); }); // another device's folder (Files)
   handle('cancelDrop', () => fileDrop.cancel());
   handle('pauseSend', (batch) => typeof batch === 'string' && fileDrop.pause(batch));
   handle('resumeSend', (id) => typeof id === 'string' && fileDrop.resume(id));
@@ -388,6 +391,21 @@ function setupIpc(ctx) {
   // Not on the same network: Bluetooth on/off, and giving up on moving to Wi-Fi (netlink.js).
   handle('setNet', (partial) => change('net', partial, () => ctx.applyNet()));
   handle('setMesh', (partial) => change('mesh', partial, () => ctx.applyMesh && ctx.applyMesh()));
+  // Debug (shared/debug-start.js, docs/debug.md): ask any device of the mesh; who may debug this computer.
+  handle('debugAsk', (to, op, args) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || typeof to !== 'string' || typeof op !== 'string') return { ok: false, error: 'off' };
+    return d.ask(to, op, args && typeof args === 'object' ? args : {});
+  });
+  handle('setDebug', (o) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (d && o && typeof o === 'object') change('mesh', { debug: d.next(o) });
+  });
+  // Only what Debug kept, in the log folder.
+  handle('debugShow', (p) => {
+    const dir = require('../../shared/applog.js').dir();
+    if (typeof p === 'string' && dir && path.resolve(p).startsWith(path.resolve(dir) + path.sep)) shell.showItemInFolder(p);
+  });
   handle('netCancel', () => ctx.net && ctx.net.cancel());
   handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));
   handle('netLocation', () => shell.openExternal('ms-settings:privacy-location')); // netsh's Wi-Fi commands need it (wifi.js)
@@ -401,10 +419,25 @@ function setupIpc(ctx) {
     if (ctx.pcScreen.mode !== 'off') ctx.pcScreen.setMode('off'); // Bluetooth can't carry the screen
   });
 
+  // The matrix (shared/ui-matrix.js): one of this computer's own cells, its pair with a device one way. The
+  // selected device's pair is the settings (the pages show it: pairsync-mesh.js tells it), any other's its
+  // saved pair (shared/consent.js tells it).
+  handle('setConsent', (id, feature, dir, on) => {
+    const c = ctx.consent && ctx.consent();
+    const F = require('../pairsync').FEATURES;
+    if (!c || typeof id !== 'string' || !F[feature] || !F[feature][dir] || typeof on !== 'boolean') return;
+    if (id === hub.selectedId) {
+      const [sec, key] = F[feature][dir];
+      return change(sec, { [key]: on }, AFTER[sec]);
+    }
+    c.set(id, feature, dir, on);
+    ctx.push();
+  });
+
   // pairsync.js applies a value the other computer changed, with the same side effects.
   const AFTER = {
     clipboard: () => clip.applySettings(),
-    monitor: () => { screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
+    monitor: () => { if (ctx.viewers && ctx.viewers()) ctx.viewers().each((v) => v.applyAudio()); else screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
     notifs: () => notifs.applySettings(),
     audio: () => sound.apply(),
     kvm: () => kvm.applyConfig(),

@@ -14,7 +14,7 @@
 //   FeatureArt.picture(scene, { color }) -> a scene alone, part of a page (Full KVM's, shared/ui-fullkvm.js)
 (function () {
   const t = (text) => window.I18n ? window.I18n.t(text) : text;
-  const FREE = ['overview', 'android-overview', 'ios-overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'iossign', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server; iossign: TwinDesk iPhone, on its own
+  const FREE = ['overview', 'android-overview', 'ios-overview', 'multi', 'debug', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'iossign', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server; iossign: TwinDesk iPhone, on its own
 
   // Nothing connected: a switch of a feature can't be turned on or off (it shows dimmed, styled from
   // .no-peer). Held here, before the page's own handler, so each page keeps setting its switches as it does.

@@ -11,7 +11,7 @@ const { normalizeFolder } = require('../shared/received.js');
 // The keys that can be held to move a window to the other computer (the helper grabs with them).
 const MOVE_KEYS = ['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'];
 
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'apps', 'rezume', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'apps', 'rezume', 'multi', 'debug', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const OLD_TABS = { display: 'mac-pc', receive: 'mac-pc', share: 'pc-mac' }; // older names
 
@@ -84,7 +84,7 @@ function normalize(s) {
     // hotkey: double-tap = mouse and keyboard home. lockKeys: cursor lock on/off (shared/cursorlock.js)
     keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.linux), emergencyKeys: Crossing.emergency(keys.emergencyKeys) }, // emergencyKeys: everything home, sharing off (#178)
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
-    app: { hud: bool(appS.hud, true), keepAwake: bool(appS.keepAwake, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true, localApi: appS.localApi === true }, // localApi: General › Local API (shared/localapi.js) // keepPinging: General › Advanced (shared/quiet.js)
+    app: { hud: bool(appS.hud, true), keepAwake: bool(appS.keepAwake, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true, localApi: appS.localApi === true, lockTogether: appS.lockTogether === true }, // lockTogether: General › Lock together (shared/locksync.js) // localApi: General › Local API (shared/localapi.js) // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
     updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '', install: up.install === true }, // install: install new versions by themselves (shared/selfupdate.js)
     clipboard: {
@@ -157,7 +157,11 @@ function normalize(s) {
     terminal: {
       enabled: bool(term.enabled, false), // shell on the Mac from this PC
       allowMac: bool(term.allowMac, false), // let the Mac open a shell here (needs OpenSSH Server)
-      installedKey: typeof term.installedKey === 'string' ? term.installedKey : '', // digest of the Mac key line we installed
+      installedKey: typeof term.installedKey === 'string' ? term.installedKey : '', // digest of the last key line we installed ('': none of ours)
+      // Each device's installed line, by its id (Multi-device: switching between two devices with keys
+      // rewrote authorized_keys every time, behind an administrator prompt on Windows).
+      installedKeys: Object.fromEntries(Object.entries(term.installedKeys && typeof term.installedKeys === 'object' ? term.installedKeys : {})
+        .filter(([k, v]) => /^[A-Za-z0-9._-]{1,64}$/.test(k) && /^[0-9a-f]{64}$/.test(v)).slice(0, 32)),
     },
     files: {
       dropToMac: bool(files.dropToMac, false),
@@ -215,6 +219,7 @@ function normalize(s) {
       enterSends: bool(ph.enterSends, true),
       uhid: bool(ph.uhid, false), // Type as a hardware keyboard (shared/uhidkbd.js)
       arrowSwipe: bool(ph.arrowSwipe, false),
+      hover: bool(ph.hover, true), // the mouse hovers over the phone (#330); off: only presses and drags reach it
       // Mirroring over wireless debugging: past adbd straight over the Wi-Fi (scrcpy.js), and the
       // encoder's low-latency profile.
       direct: bool(ph.direct, false),

@@ -39,25 +39,27 @@ if [ ! -x "$VENV/bin/dmgbuild" ]; then
   "$VENV/bin/pip" install --quiet --disable-pip-version-check dmgbuild
 fi
 
-# Notarize and staple the app itself before it goes into the disk image (#75). A ticket stapled to the
-# DMG alone leaves the app, once dragged out of it, to Gatekeeper's online check, which fails offline.
-# Only with the same credentials the DMG's own notarization below uses.
-if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ] || [ -n "$APPLE_KEYCHAIN_PROFILE" ]; then
-  APPZIP="$(mktemp -d)/TwinDesk.zip"
-  ditto -c -k --keepParent "$APP" "$APPZIP"
-  echo "Submitting $APP to Apple Notary Service..."
+# Notarization: the app first, its ticket stapled to it before it goes into the image (#75), so a copy
+# dragged out of the DMG opens offline too (Gatekeeper checks the app, not the image it came from);
+# then the DMG itself, below. Only with a notary account.
+notarize() { # <file to submit>
   if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-    xcrun notarytool submit "$APPZIP" \
-      --apple-id "$APPLE_ID" \
-      --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-      --team-id "$APPLE_TEAM_ID" \
-      --wait
+    xcrun notarytool submit "$1" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+  elif [ -n "$APPLE_KEYCHAIN_PROFILE" ]; then
+    xcrun notarytool submit "$1" --keychain-profile "$APPLE_KEYCHAIN_PROFILE" --wait
   else
-    xcrun notarytool submit "$APPZIP" \
-      --keychain-profile "$APPLE_KEYCHAIN_PROFILE" \
-      --wait
+    return 1
   fi
-  rm -f "$APPZIP"
+}
+NOTARY=""
+if { [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; } || [ -n "$APPLE_KEYCHAIN_PROFILE" ]; then
+  NOTARY=1
+  ZIP="dist/.notarize-app.zip"
+  echo "Submitting $APP to Apple Notary Service..."
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  notarize "$ZIP"
+  rm -f "$ZIP"
   echo "Stapling notarization ticket to $APP..."
   xcrun stapler staple "$APP"
 fi
@@ -77,22 +79,10 @@ if [ -n "$MAC_IDENTITY" ]; then
   codesign --force --sign "$MAC_IDENTITY" --timestamp "$DMG"
 fi
 
-if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+if [ -n "$NOTARY" ]; then
   echo "Submitting $DMG to Apple Notary Service..."
-  xcrun notarytool submit "$DMG" \
-    --apple-id "$APPLE_ID" \
-    --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-    --team-id "$APPLE_TEAM_ID" \
-    --wait
+  notarize "$DMG"
   echo "Stapling notarization ticket to $DMG..."
   xcrun stapler staple "$DMG"
-  echo "Successfully notarized and stapled! Gatekeeper quarantine will not block this DMG."
-elif [ -n "$APPLE_KEYCHAIN_PROFILE" ]; then
-  echo "Submitting $DMG to Apple Notary Service using keychain profile '$APPLE_KEYCHAIN_PROFILE'..."
-  xcrun notarytool submit "$DMG" \
-    --keychain-profile "$APPLE_KEYCHAIN_PROFILE" \
-    --wait
-  echo "Stapling notarization ticket to $DMG..."
-  xcrun stapler staple "$DMG"
-  echo "Successfully notarized and stapled! Gatekeeper quarantine will not block this DMG."
+  echo "Successfully notarized and stapled, the app inside too: Gatekeeper quarantine will not block them."
 fi

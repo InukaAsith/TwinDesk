@@ -69,11 +69,12 @@ function planDrag(paths) {
 
 class FileSend extends EventEmitter {
   // outboxFile: where Send files keeps what waits for the other device (shared/outbox.js).
-  constructor(server, getSettings, { outboxFile = null } = {}) {
+  // outbox: given in Multi-device, each device's FileSend a view of one list (mac/mesh/sendset.js).
+  constructor(server, getSettings, { outboxFile = null, outbox = null } = {}) {
     super();
     this.server = server;
     this.getSettings = getSettings;
-    this.outbox = new Outbox({
+    this.outbox = outbox || new Outbox({
       file: outboxFile,
       hours: () => (getSettings().files || {}).outboxHours,
       peer: () => (server.current && server.current.authed !== false ? { id: server.current.deviceId || server.current.name || '', name: server.current.name || '' } : null),

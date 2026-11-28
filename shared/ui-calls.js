@@ -307,7 +307,11 @@ UI.tab({
       recentCard.hidden = !ready || !(h.perm && !(h.perm.calls.missing || []).includes('numbers'));
 
       // Sound
-      soundCard.hidden = !h.calls || !h.canAudio;
+      // The calls' sound over Bluetooth where this computer can carry it; Pause what plays here
+      // everywhere (the Mac has no Bluetooth calls' sound, #293).
+      const btSound = !!h.calls && !!h.canAudio;
+      soundCard.hidden = !h.calls;
+      audioRow.hidden = statusRow.hidden = !btSound;
       storeCard.hidden = !h.calls || !h.audioStore;
       if (!storeCard.hidden) storeRow.setHint(tr('Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}', { phone: UI.phoneName(s), me: UI.fill('{me}') }));
       audioSw.set(!!h.callAudio);
@@ -340,7 +344,7 @@ UI.tab({
       }
 
       // Setup: the steps until they're paired, Forget always at the bottom.
-      setupCard.hidden = soundCard.hidden || !h.callAudio || !h.connected || !a || ['off', 'starting', 'unavailable'].includes(a.state);
+      setupCard.hidden = !btSound || !h.callAudio || !h.connected || !a || ['off', 'starting', 'unavailable'].includes(a.state);
       const paired = !needsPair && !!(a && a.device);
       step1.hidden = paired;
       step2.hidden = paired;

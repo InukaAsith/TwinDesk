@@ -56,8 +56,19 @@ UI.tab({
       layoutHint.set(I18n.t('Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).'));
     }
 
+    // ---- the matrix: who shares what, the whole mesh (shared/ui-matrix.js, docs/mesh-graph.md step 6) ----
+    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on) });
+
     const joinSw = UI.switch((v) => api.setMesh({ autoJoin: v }), { label: I18n.t('Join every device automatically') });
     const joinRow = UI.row(I18n.t('Join every device automatically'), '', [joinSw]);
+    // The other devices' logs, copied into this one's log folder (shared/peerlogs.js, docs/peer-logs.md).
+    const shareLogSw = UI.switch((v) => api.setMesh({ shareLogs: v }), { label: I18n.t('Let the other devices read this computer’s log') });
+    const collectLogSw = UI.switch((v) => api.setMesh({ collectLogs: v }), { label: I18n.t('Copy the other devices’ logs here') });
+    const logsOpen = UI.button(I18n.t('Open log folder'), () => api.openLink('logs'), 'small');
+    const logRows = [
+      UI.row(I18n.t('Let the other devices read this computer’s log'), I18n.t('To find what went wrong from any computer. Devices you paired with only'), [shareLogSw]),
+      UI.row(I18n.t('Copy the other devices’ logs here'), I18n.t('In the log folder, under peers, as they grow'), [collectLogSw, logsOpen]),
+    ];
 
     body.append(
       UI.card(I18n.t('Mesh mode'), [
@@ -65,14 +76,19 @@ UI.tab({
         UI.row(I18n.t('Computers'), I18n.t('Connect to this one over the same network only, not Bluetooth. Phones over Wi-Fi, a USB cable or Bluetooth, as before'), []),
       ]),
       UI.card(I18n.t('Layout'), [map.el, actions, reachNote, layoutHint, skipRow], { cls: 'keep-on' }),
+      UI.card(I18n.t('Who shares what'), [matrix.el]),
       UI.card(I18n.t('Joining'), [joinRow]),
+      UI.card(I18n.t('Logs'), logRows),
     );
 
     return (s) => {
       last = s;
       drawLayout(s);
+      matrix.render(s.matrix);
       const jn = (s.mesh || {}).autoJoin === true;
       joinSw.set(jn);
+      shareLogSw.set(!s.mesh || s.mesh.shareLogs !== false);
+      collectLogSw.set(!s.mesh || s.mesh.collectLogs !== false);
       joinRow.setHint(jn ? I18n.t('Pair with one device and the rest connect to this one by themselves. Devices you pair with can introduce others, without a pairing code')
         : I18n.t('Off: this computer neither introduces devices to each other nor accepts an introduction. Pair each device yourself'));
     };

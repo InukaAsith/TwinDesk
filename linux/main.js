@@ -130,6 +130,7 @@ let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
 let screen = null;
 let clip = null;
+let wlClipboardMissing = false;
 let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
 let camShare = null; // Camera tab: the cameras of the two computers (shared/camshare.js)
 let phoneRemote = null; // the phone's Remote page: touchpad, keyboard and gamepad here (shared/phone-remote.js)
@@ -260,6 +261,8 @@ function start() {
     pushState();
   });
   clip = new Clip(link, () => settings.clipboard, pushState, { popup: (kind, text) => hud && hud.show(kind, text), peerName });
+  wlClipboardMissing = require('./wlclip').missing(); // other apps' copies unseen here (#97)
+  if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
   devctl = new DevCtl({
     watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
     link, local: new DevLocal(), version: app.getVersion(), peerName, adb: () => {
@@ -421,6 +424,12 @@ function start() {
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined);
   };
   helper.on('exit', pushState);
+  // General › Lock together (#322, shared/locksync.js): this computer locked, the other one locks too.
+  const lockSync = new (require('../shared/locksync.js').LockSync)({
+    platform: 'linux', helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { const c = link.current; if (c && !P.isPhoneOs(c.os)) link.send(m); },
+  }).start();
+  link.on('lock.now', () => lockSync.onMessage(peerName()));
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) displays.on(ev, sendScreens);
@@ -1323,7 +1332,7 @@ function buildState() {
     kvm: { ...settings.kvm, pcSide: kvm.pcSide },
     keys: settings.keys,
     monitor: settings.monitor,
-    clipboard: { ...settings.clipboard, ...clip.view },
+    clipboard: { ...settings.clipboard, ...clip.view, needsWlClipboard: wlClipboardMissing },
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
     web: web ? web.view() : { cfg: { ...settings.web }, devices: [] }, // TwinDesk Web
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
@@ -1344,7 +1353,7 @@ function buildState() {
     audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
     pcScreen: pcScreen.view(),
     files: { ...settings.files, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view(), session: session.type },
-    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, server: sshd.view() },
+    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, installedKeys: undefined, server: sshd.view() },
     apps: link.peerOs === P.OS.MAC ? apps.view() : peerApps.view(), // a PC's or Linux computer's apps come through peerapps.js
     pcApps: pcApps.view(),
     macApps: settings.macApps,

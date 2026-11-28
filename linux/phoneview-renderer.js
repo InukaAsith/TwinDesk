@@ -270,8 +270,32 @@
     return { x: Math.max(0, Math.min(w - 1, ((e.clientX - r.left) / r.width) * w)), y: Math.max(0, Math.min(h - 1, ((e.clientY - r.top) / r.height) * h)) };
   };
   let down = false;
+  // A touchscreen on this computer (#316): each finger is one of the phone's, so a tap taps, a swipe
+  // swipes and two fingers pinch, without the mouse's right-click Back or hover. The canvas takes
+  // touches itself (touch-action: none in phoneview.css), or Chromium would pan with them and cancel.
+  const fingers = new Map(); // pointerId -> the phone's pointer id, 0..9
+  const fingerDown = (e) => {
+    let id = 0;
+    const used = new Set(fingers.values());
+    while (used.has(id) && id < 9) id++;
+    if (used.has(id)) return; // ten already
+    fingers.set(e.pointerId, id);
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    api.send({ t: 'touch', action: ACTION.DOWN, pointer: id, ...at(e) });
+  };
+  const fingerMove = (e) => {
+    if (fingers.has(e.pointerId)) api.send({ t: 'touch', action: ACTION.MOVE, pointer: fingers.get(e.pointerId), ...at(e) });
+  };
+  const fingerUp = (e) => {
+    if (!fingers.has(e.pointerId)) return;
+    try { if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch {}
+    api.send({ t: 'touch', action: ACTION.UP, pointer: fingers.get(e.pointerId), ...at(e) });
+    fingers.delete(e.pointerId);
+  };
+
   canvas.addEventListener('pointerdown', (e) => {
     canvas.focus();
+    if (e.pointerType === 'touch') return fingerDown(e);
     if (e.button === 2) return api.send({ t: 'nav', key: 'back' });
     if (e.button === 1) return api.send({ t: 'nav', key: 'home' });
     if (e.button !== 0) return;
@@ -280,19 +304,23 @@
     api.send({ t: 'touch', action: ACTION.DOWN, pointer: FINGER, ...at(e) });
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch') return fingerMove(e);
     if (down) api.send({ t: 'touch', action: ACTION.MOVE, pointer: FINGER, ...at(e) });
     else api.send({ t: 'touch', action: ACTION.HOVER_MOVE, pointer: -1, ...at(e) });
   });
   const up = (e) => {
+    if (e.pointerType === 'touch') return fingerUp(e);
     if (!down) return;
     down = false;
     api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, ...at(e) });
   };
   canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', (e) => { if (e.pointerType === 'touch') fingerUp(e); });
   canvas.addEventListener('pointercancel', up);
   // Off the picture: the mouse stops hovering there (left hovering, the phone's edges and gesture
   // navigation stop answering touches until it restarts).
   canvas.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'touch') return;
     if (!down && !rightDown) api.send({ t: 'touch', action: ACTION.HOVER_EXIT, pointer: -1, ...at(e) });
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());

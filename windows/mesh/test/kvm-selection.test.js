@@ -18,7 +18,9 @@ const { LinkManager } = require('../links.js');
 const { Hub } = require('../hub.js');
 const Kvm = require('../kvm.js');
 const LayoutSync = require('../layout-sync.js');
-const { PairSync } = require('../../pairsync.js');
+const { FEATURES, VALUES } = require('../../pairsync.js');
+const { pairSyncMesh } = require('../../../shared/pairsync-mesh.js');
+const { consent } = require('../../../shared/consent.js');
 const { normalize } = require('../settings.js');
 const { runTests } = require('./lib/run.js');
 const { loadTestCert } = require('./lib/testcert.js');
@@ -41,6 +43,8 @@ async function hubNode(name) {
   const mesh = new Mesh({ selfId: id });
   const hub = new Hub({ device: { id, name }, links, server, pairing, mesh });
   const n = { name, id, port: server.port, fp: cert.fp, server, pairing, links, mesh, hub, log: [], kvm: null, settings: normalize({ kvm: { mouse: true, keyboard: true } }) };
+  // Each device's own pair, as mesh/main.js puts it on the hub (shared/consent.js).
+  hub.consent = consent({ features: FEATURES, settings: () => n.settings, selectedId: () => hub.selectedId });
   n.layoutSync = new LayoutSync({
     bus: hub.bus,
     mesh,
@@ -96,15 +100,14 @@ function kvmOn(n) {
   return n.kvm;
 }
 
-// The two-way switches on A's facade, applied to A's settings as ipc.set does.
+// The two-way switches per pair (shared/pairsync-mesh.js), applied to A's settings as ipc.set does.
 function pairSyncOn(n) {
-  n.pairSync = new PairSync({
-    link: n.hub.facade,
-    settings: n.settings,
-    save: () => {},
-    set: (section, partial) => Object.assign(n.settings[section], partial),
-    only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
-    bus: n.hub.bus,
+  const only = ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'];
+  const features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => only.includes(f)));
+  n.pairSync = pairSyncMesh({
+    bus: n.hub.bus, hub: n.hub, features, values: VALUES, settings: () => n.settings, save: () => {},
+    setFeature: (f, dir, on) => { const [sec, key] = features[f][dir]; n.settings[sec][key] = on; },
+    setValue: (k, v) => { const [sec, key] = VALUES[k].path; n.settings[sec][key] = v; },
     peerRole: (id) => { const s = n.hub.sessions.get(id); return s ? s.role : null; },
     peerOs: (id) => { const s = n.hub.sessions.get(id); return s ? s.peerOs : null; },
   });

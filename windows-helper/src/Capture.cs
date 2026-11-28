@@ -25,6 +25,7 @@ namespace MacShare
         public bool DriveOther;      // edge detection on
         public bool EdgeKeyboard = true; // an edge crossing also captures the keyboard
         public bool DragFiles = true; // file drags at the edge go to the Mac (drag.policy + the Files switches)
+        public List<string> DragSides; // …through these sides only (kvmConfig dragSides; null: every watched side)
         public int DeadmanMs = 1500, DoubleTapMs = 400;
         public bool Gestures = true; // Touchpad gestures go over as k.ge (Touchpad.cs)
         Touchpad pad;
@@ -306,7 +307,8 @@ namespace MacShare
 
         // A button pressed while capturing has its release swallowed at home (Stop). A drag that came
         // home with it (dragStart home, dragLocal) is dropped by that release: let it through.
-        public void Unswallow(int button) { swallowButtons.Remove(button); }
+        // True when it was still held (its release now goes through); false: already let go (and swallowed).
+        public bool Unswallow(int button) { return swallowButtons.Remove(button); }
 
         // A file drag caught on the way back (DropEdge.cs, while driven): the input goes home with its
         // files, `return {offset, drag:{paths}}`.
@@ -437,6 +439,10 @@ namespace MacShare
                     c["reason"] = "secureDesktop";
                     emit(c);
                 }
+                // Back from it: a button pressed here for the other computer (the click that opened
+                // the prompt) had its release land on the secure desktop, where nothing gets in. Still
+                // held, it kept the next crossing from working until this PC's own mouse moved (#210).
+                if (!secure && ReleaseInjected != null) ReleaseInjected();
                 Dictionary<string, object> e = Ev("secureDesktop");
                 e["on"] = secure;
                 emit(e);

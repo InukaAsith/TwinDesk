@@ -42,7 +42,8 @@ class FileDrop {
     // Files › Send files waiting for the other device: sent while away, paused, cut off (shared/outbox.js).
     // opts.peer() → {id, name} of the device connected now; opts.outboxFile.
     const peerNow = () => (this.link.status && this.link.status.state === 'connected' && this.peer ? this.peer() : null);
-    this.outbox = new Outbox({
+    // opts.outbox: given in Multi-device, each device's FileDrop a view of one list (shared/filedrop-mesh.js).
+    if (!this.outbox) this.outbox = new Outbox({
       file: this.outboxFile || null,
       hours: () => ((this.settings && this.settings.files) || {}).outboxHours,
       // Before any session since an update: the computer this one is paired with.
@@ -60,10 +61,15 @@ class FileDrop {
     });
   }
 
+  // Send files to this link's device: its pair's switch (opts.sends, shared/consent.js), else the settings'.
+  _sends() {
+    return this.sends ? !!this.sends() : !!this.settings.files.dropToMac;
+  }
+
   // paths from the Monitor 2 drop (x/y normalized over the video, or null), or from a drag across
   // the edge (release = true: the Mac places them where its pointer is when the button comes up).
   drop(paths, x, y, release) {
-    if (!this.settings.files.dropToMac) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)', 'Dropping files onto Monitor 2 is off (Files tab)');
+    if (!this._sends()) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)', 'Dropping files onto Monitor 2 is off (Files tab)');
     const files = [];
     for (const p of paths) {
       try {
@@ -79,7 +85,7 @@ class FileDrop {
   // A drag across the edge: walk the folders. Returns what kvm.take and
   // beginDrag need, or null when nothing can go. Nothing is sent yet: kvm.take goes first.
   prepareDrag(paths) {
-    if (!this.settings.files.dropToMac || this.link.status.state !== 'connected') return null;
+    if (!this._sends() || this.link.status.state !== 'connected') return null;
     const d = plan(paths);
     return d && { drag: crypto.randomBytes(8).toString('hex'), ...d, count: d.items.length };
   }
@@ -183,6 +189,7 @@ class FileDrop {
     if (!this.drag || m.drag !== this.drag.drag) return;
     const d = this.drag;
     this.drag = null;
+    console.log('[drag] out, ' + m.result + (typeof m.where === 'string' && m.where ? ' in ' + m.where.slice(0, 200) : '') + ' (' + d.name + ')');
     if (m.result === 'dropped') {
       const folder = typeof m.where === 'string' ? m.where : '';
       this._report(d.name, true, 'Dropped on {name}' + (folder ? ' in ' + folder : ''),

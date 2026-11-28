@@ -454,6 +454,12 @@ function start() {
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid, { x: Number(m.fromX), y: Number(m.fromY) });
   };
   helper.on('exit', pushState);
+  // General › Lock together (#322, shared/locksync.js): this computer locked, the other one locks too.
+  const lockSync = new (require('../shared/locksync.js').LockSync)({
+    platform: 'win', helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { const c = link.current; if (c && !P.isPhoneOs(c.os)) link.send(m); },
+  }).start();
+  link.on('lock.now', () => lockSync.onMessage(peerName()));
   setupNet(guest);
   helper.start();
   helper.once('ready', () => vdd.check()); // switches a virtual monitor left on by a crash off
@@ -1324,7 +1330,7 @@ function buildState() {
     pcScreen: pcScreen.view(),
     pcApps: pcApps.view(),
     macApps: settings.macApps,
-    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, server: sshd.view() },
+    terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, installedKeys: undefined, server: sshd.view() },
     files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
     history: historyKeeper ? historyKeeper.view() : null,

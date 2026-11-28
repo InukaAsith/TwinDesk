@@ -259,7 +259,7 @@ class Kvm {
       takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
     });
     // Our switch, for the Mac (it doesn't pick up drags towards us while it's off).
-    const accept = !!this.settings.files.edgeDrag;
+    const accept = !!(this.settings.files.edgeDrag && this.settings.files.acceptFromMac); // dragrecv.js takes a drag only with both
     if (this.connected && accept !== this.sentDragPolicy) {
       this.sentDragPolicy = accept;
       this.link.send({ t: T.DRAG_POLICY, accept });
@@ -480,12 +480,9 @@ class Kvm {
         break;
       // We froze with a button the helper pressed for the other computer still down (Inject.cs WatchSilence):
       // it let go of it, which ended Windows' title-bar loop on our window.
-      case 'letGo': {
-        const caption = [msg.captionAppPid, msg.captionWindowPid, msg.captionHit].every(Number.isSafeInteger)
-          ? `, caption app ${msg.captionAppPid}, window ${msg.captionWindowPid}, hit ${msg.captionHit}` : '';
-        console.log(`[kvm] the helper let go of button(s) ${msg.buttons} after ${msg.silentMs} ms without a word from us (${this.mode})${caption}`);
+      case 'letGo':
+        console.log(`[kvm] the helper let go of button(s) ${msg.buttons} after ${msg.silentMs} ms without a word from us (${this.mode})`);
         break;
-      }
       case 'secureDesktop':
         console.log(`[kvm] administrator prompt or lock screen ${msg.on ? 'up' : 'gone'} here (${this.mode})`); // #210
         if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');

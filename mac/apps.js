@@ -14,9 +14,10 @@ const POLL_MS = 100; // ≤ 10 app.windows per second, only when something chang
 const IDLE_OFF_MS = 8000; // no app windows this long: the screen share we turned on goes off again
 
 class Apps extends EventEmitter {
-  constructor({ server, helper, displays, stream, getSettings }) {
+  // allows(): "Let {name} open this Mac's apps" for the device it serves, its own pair (shared/consent.js)
+  constructor({ server, helper, displays, stream, getSettings, allows = null }) {
     super();
-    Object.assign(this, { server, helper, displays, stream, getSettings });
+    Object.assign(this, { server, helper, displays, stream, getSettings, allows });
     this.launched = new Map(); // bundle id -> { pid, name, rz?, skip?, home? }
     this.lastKey = '';
     this.windows = [];
@@ -44,6 +45,7 @@ class Apps extends EventEmitter {
   }
 
   get enabled() {
+    if (this.allows) return !!this.allows();
     return this.getSettings().apps.offer !== false;
   }
 

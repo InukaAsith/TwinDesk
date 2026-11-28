@@ -89,7 +89,9 @@ UI.tab({
       pictures.set(!!c.images);
       // ⇧⌘4 saves a screenshot to a file; with ⌃ it goes on the clipboard, and over.
       picturesRow.setHint(!c.images ? I18n.t('Pictures you copy and screenshots taken with ⌃⇧⌘4, up to 10 MB, both ways')
-        : s.client && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: s.client.name })
+        // Multi-device: every connected device without Pictures, not only the selected one
+        : c.noPictures && c.noPictures.length ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: c.noPictures.join(', ') })
+        : !c.noPictures && s.client && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: s.client.name })
           : I18n.t('Pictures you copy and screenshots taken with ⌃⇧⌘4, up to 10 MB, both ways. Not over Bluetooth'));
       concealed.set(c.skipConcealed);
       maxKB.set(c.maxKB);

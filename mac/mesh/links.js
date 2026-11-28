@@ -122,7 +122,18 @@ class LinkManager extends EventEmitter {
     if (this.closed || !g) return false;
     const entry = fromStored({ ...g, fp: P.normFingerprint(g.fp), lastSeen: Date.now() });
     if (!valid(entry) || entry.macId === this.device.id) return false;
-    if (this.links.has(entry.macId) || this.links.size >= P.MAX_DEVICES) return false;
+    const have = this.links.get(entry.macId);
+    if (have) {
+      // Already a link: the host made this token for us and may no longer take the one we have. Kept
+      // for the next connect (else 'not paired' then, and the host forgotten here for good).
+      if (have.pairing && have.pairing.token !== entry.token) {
+        have.pairing.token = entry.token;
+        this._save(have, have.pairing);
+        console.log(`[autojoin] kept the new token of ${entry.macName || entry.macId}`);
+      }
+      return false;
+    }
+    if (this.links.size >= P.MAX_DEVICES) return false;
     this.entries = this.entries.filter((e) => e.macId !== entry.macId);
     this.entries.push(entry);
     this._write();

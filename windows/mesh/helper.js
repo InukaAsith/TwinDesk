@@ -12,6 +12,13 @@ const EXE = fs.existsSync(MULTI) ? MULTI : Helper.EXE;
 const RESTART_MS = 1000;
 
 class MeshHelper extends Helper {
+  // Every feature listens to the helper, and Multi-device has some per device (shared/files-mesh.js):
+  // past Node's 10 by design ('MaxListenersExceededWarning' at every start). 100 still flags a leak.
+  constructor(...args) {
+    super(...args);
+    this.setMaxListeners(100);
+  }
+
   // ../helper.js's start() with this EXE.
   start() {
     this.stopped = false;

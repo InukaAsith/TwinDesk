@@ -20,9 +20,10 @@ class KvmMap extends EventEmitter {
   // electron: { screen, BrowserWindow }. send(msg): to the other computer (false when not connected).
   // side(): the side of this computer the other one is on (null: not set). getAlong / setAlong: the
   // saved `along` (null = centred).
-  constructor({ electron, send, side, getAlong, setAlong, portalVersion = 0 }) {
+  // identifyHere(list): shows the numbers another way, true when it did (Linux on Wayland: the helper, #182).
+  constructor({ electron, send, side, getAlong, setAlong, portalVersion = 0, identifyHere = null }) {
     super();
-    Object.assign(this, { electron, send, side, getAlong, setAlong });
+    Object.assign(this, { electron, send, side, getAlong, setAlong, identifyHere });
     this.theirs = [];
     this.portalVersion = portalVersion;
     this.peerPortalVersion = 0;
@@ -117,6 +118,10 @@ class KvmMap extends EventEmitter {
     if (tell) this.send({ t: P.T.KVM_IDENTIFY });
     const { screen, BrowserWindow } = this.electron;
     const order = G.numbered(this.mine);
+    // On Wayland our windows can't be placed (every number came on one monitor): the helper's, if it can.
+    const list = screen.getAllDisplays().map((d) => [d, order.indexOf(String(d.id)) + 1]).filter(([, n]) => n)
+      .map(([d, n]) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, n].map(Math.round).join(',')).join(';');
+    if (this.identifyHere && list && this.identifyHere(list)) return;
     for (const d of screen.getAllDisplays()) {
       const n = order.indexOf(String(d.id)) + 1;
       if (!n) continue;

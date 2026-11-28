@@ -53,6 +53,7 @@ const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
 const I18n = require('../../shared/i18n.js');
 const Look = require('../../shared/look.js');
+let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
 let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
@@ -73,7 +74,7 @@ const { startServices } = require('./services');
 const { setupIpc, TABS } = require('./ipc');
 const login = require('../login');
 const { Hud } = require('../hud');
-const { PairSync } = require('../pairsync');
+const { FEATURES: PAIR_FEATURES, VALUES: PAIR_VALUES } = require('../pairsync');
 const { Phone } = require('../phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneSet, PhoneDir } = require('./phones');
@@ -86,6 +87,9 @@ const { BleHost, BleLook } = require('../../shared/blepipe.js');
 const { wifiQuiet } = require('../../shared/blepolicy.js');
 const { NetLink } = require('../../shared/netlink.js');
 const { aboutInfo } = require('../../shared/about.js');
+const { PeerLogs } = require('../../shared/peerlogs.js');
+const { MeshShadow } = require('../../shared/mesh-shadow.js');
+const { startDebug } = require('../../shared/debug-start.js');
 
 let win = null;
 let tray = null;
@@ -98,7 +102,15 @@ let startHidden = process.argv.includes('--hidden');
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
 let autoJoin, settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web (shared/web/webwire.js), beside the mesh as in the one-to-one app
+let dbg = null; // Debug (shared/debug-start.js): this computer's tools and the mesh's
+let localApi = null; // General › Local API (shared/localapi.js), with Debug's calls
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
+let consent = null; // each device's own two-way switches (shared/consent.js)
+let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 
@@ -238,8 +250,13 @@ function publishState() {
     state.ui = settings.ui;
     state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.mesh = settings.mesh;
+    state.matrix = edges ? edges.view() : null; // the Multi-device tab's matrix (shared/mesh-edges.js)
+    state.debug = dbg ? dbg.view() : null; // Debug tab (shared/debug-start.js)
+    state.localApi = localApi ? localApi.view() : null; // General › Local API
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
+    // The device the pointer is with, for the Overview's sentence (not the selected one; docs/mesh-graph.md).
+    if (kvm && state.input) { const ps = kvm.partner ? hub.sessions.get(kvm.partner) : null; state.input = { ...state.input, partnerName: ps ? ps.displayName() : '' }; }
     if (kvm && lockKey) {
       lockKey.sync(kvm.hub.bus.connectedIds().length > 0 ? settings.keys.lockKeys : '');
       state.input.lockError = lockKey.error;
@@ -290,6 +307,7 @@ function publishState() {
     if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
+    if (edges) edges.tick(); // the matrix: ours to every device when it changed
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
     updateTray();
@@ -298,17 +316,23 @@ function publishState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+let sharingBy = ''; // the device whose screen.ctl started our sharing ('' = this Mac's own menu): screen.state's by
 
+// To every connected device (each may watch this Mac's screen; the facade told the selected one only), once
+// per device and change.
 function sendScreenState() {
-  const c = peer && peer.current;
-  if (!c || !svc) return void (screenStateKey = '');
+  if (!svc || !hub) return void (screenStateKey = '');
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
-  const key = JSON.stringify([c.deviceId, msg]);
+  if (!settings.sharing.on) sharingBy = '';
+  // by: who asked for it. Only that device's Monitor 2 opens by itself; the others' would watch too, and
+  // the picture went to whichever answered (a Monitor 2 on every computer of the mesh opened).
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], by: sharingBy };
+  const ids = hub.bus.connectedIds();
+  const key = JSON.stringify([ids, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
-  peer.sendToClient(msg);
+  for (const pid of ids) hub.bus.send(pid, msg);
 }
 
 function displayPick(m) {
@@ -316,7 +340,7 @@ function displayPick(m) {
 }
 
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
-function onScreenCtl(m) {
+function onScreenCtl(m, from) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
@@ -326,7 +350,10 @@ function onScreenCtl(m) {
   if (m.mode === 'extend' || m.mode === 'mirror') {
     if (displayMode() !== m.mode) actions.setDisplayMode(m.mode);
   }
-  if (typeof m.share === 'boolean' && m.share !== !!settings.sharing.on) actions.setSharing(m.share, 'remote');
+  if (typeof m.share === 'boolean' && m.share !== !!settings.sharing.on) {
+    if (m.share) sharingBy = typeof from === 'string' ? from : '';
+    actions.setSharing(m.share, 'remote');
+  }
 }
 
 // macshare://send?p=<path>&p=… from the Share menu extension: Send files to the peer.
@@ -582,6 +609,8 @@ app.whenReady().then(() => {
   links.on('request', showWindow);
   hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
   hub.on('change', pushState);
+  // The other devices' logs, copied into this Mac's log folder (docs/peer-logs.md).
+  new PeerLogs({ bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : pid; }, dir: () => require('../../shared/applog.js').dir(), share: () => settings.mesh.shareLogs !== false, collect: () => settings.mesh.collectLogs !== false }).start();
   // Joining everyone (autojoin.js, shared/intro.js): the devices a connected device knows are linked by themselves.
   autoJoin = new AutoJoin({
     hub, mesh, pairing, links, identity: id, server,
@@ -616,32 +645,50 @@ app.whenReady().then(() => {
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
-  peer.on('client', (ctx) => {
-    console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
-    peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
+  hub.bus.onPeer('welcome', (pid) => {
+    const x = hub.sessions.get(pid);
+    if (x) console.log(`[peer] session with ${x.displayName()} (${x.peerOs}, ${x.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     pushState();
   });
-  peer.on('closed', pushState);
-  peer.on('rtt', pushState);
+  // Whether this Mac takes input from its stream: to every device (each may watch it), not only the selected one.
+  hub.bus.onPeer('welcome', (pid) => hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false }));
+  hub.bus.onPeer('closed', pushState);
   // Overview's controls of the selected device, and this Mac's for it (shared/devctl.js).
   {
     const { DevCtl } = require('../../shared/devctl.js');
     const { DevLocal } = require('../../shared/devlocal.js');
-    devctl = new DevCtl({
-    watching: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
-   
-      link: {
-        on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
-        send: (m) => peer.sendToClient(m),
-        get current() { return peer.current; },
-      },
-      local: new DevLocal(),
-      version: app.getVersion(),
-      adb: () => {
-        const br = svc && svc.phone && svc.phone.bridge;
-        return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+    // A DevCtl per device (shared/devctl-mesh.js), each on its own peer: each device's Overview can reach
+    // this Mac whichever device is selected here; Overview shows the selected device's.
+    const { ScopedPhonePeer } = require('./phones');
+    const watching = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()); // Overview may show the other side's controls (shared/devctl.js Looking)
+    const devLocal = new DevLocal();
+    devctl = require('../../shared/devctl-mesh.js').devCtlSet({
+      selectedId: () => hub.selectedId, local: devLocal,
+      make: (pid) => {
+        const p = new ScopedPhonePeer(hub, server, null);
+        const d = new DevCtl({
+          watching: () => watching() && hub.selectedId === pid, // asks only for the device Overview shows
+          link: {
+            on: (ev, fn) => (ev === 'welcome' ? p.on('client', fn) : ev === 'closed' ? p.on('closed', fn) : p.on('t:' + ev, fn)),
+            send: (m) => p.sendToClient(m),
+            get current() { return p.current; },
+          },
+          local: devLocal,
+          sharedLocal: true,
+          version: app.getVersion(),
+          adb: () => { // the phone's wireless debugging, for that phone only
+            if (hub.selectedId !== pid) return null;
+            const br = svc && svc.phone && svc.phone.bridge;
+            return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+          },
+        });
+        p.bind(pid); // after it listens: its 'client' now
+        return d;
       },
     });
+    hub.bus.onPeer('welcome', (pid) => devctl.ensure(pid));
+    for (const x of hub.sessions.list()) if (x.connected) devctl.ensure(x.id);
+    hub.on('selected', () => devctl.look()); // Overview shows another device: its fresh state
     devctl.on('change', pushState);
     app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
     // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
@@ -654,16 +701,46 @@ app.whenReady().then(() => {
       try { new Notification({ title, body }).show(); } catch {}
     });
     const { Chats } = require('../../shared/chats.js');
-    chats = new Chats({ link: {
-        on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
-        send: (m) => peer.sendToClient(m),
-        get current() { return peer.current; },
-      }, dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
+    chats = new Chats({ // every phone's conversations, each under its own id; the Messages page's phone answered (#313)
+      mesh: { bus: hub.bus, isPhone: (id) => { const s = hub.sessions.get(id); return !!s && P.isPhoneOs(s.peerOs); } },
+      who: () => (phonesLink.current && phonesLink.current.deviceId) || '',
+      dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
   }
   hub.start();
 
+  // Each device's own two-way switches (shared/consent.js): the settings are the selected device's pair,
+  // every other device's is its saved one. The clipboard, notifications and files serve them all at once.
+  consent = require('../../shared/consent.js').consent({
+    features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
+    send: (to, m) => hub.bus.send(to, m), save: () => store.saveSettings(settings),
+  });
+  hub.consent = consent; // sound and the pointer read each device's own pair from the hub (shared/sound-mesh.js, kvm.js)
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
-    hub, mesh, layoutSync, selfName: () => id.macName });
+    hub, mesh, layoutSync, selfName: () => id.macName, consent });
+  consent.on('change', () => { // a device's pair: its policies (and its Terminal key) again
+    svc.clipboard.applySettings();
+    svc.notifs.applySettings();
+    svc.terminal.applySettings();
+    svc.sshClient.applySettings();
+    svc.pcApps.applySettings();
+    pushState();
+  });
+  const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
+    app, hub, device: { id: id.macId, name: id.macName }, settings, save: () => store.saveSettings(settings),
+    kvm: () => svc.kvm, shadow, onChange: () => pushState(),
+    updates: () => updates, // its SelfUpdate: an update sent through the mesh installs as the app's own would
+  });
+  { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
+    const { LocalApi } = require('../../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => { const x = hub.selectedId && hub.sessions.get(hub.selectedId); return { connected: !!(x && x.connected), device: x && x.connected ? x.displayName() : '' }; },
+      send: () => null, // Send files of the selected device is the window's; not here yet
+      clipboard: (text) => require('electron').clipboard.writeText(text), // then Clipboard shares it by its rules
+      debug: dbg.api,
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -693,12 +770,21 @@ app.whenReady().then(() => {
   // In Multi-device it goes to the device the pointer went to, selected first, with what that
   // device said about taking windows (shared/mesh-movewin.js: #250, #251).
   const meshMoves = require('../../shared/mesh-movewin.js').meshMoves(hub, P.T);
+  // General › Lock together (#322, shared/locksync.js): this Mac locked, every connected computer locks too.
+  const isPc = (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected && !P.isPhoneOs(s.peerOs); };
+  const lockSync = new (require('../../shared/locksync.js').LockSync)({
+    platform: 'mac', helper: svc.helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { for (const pid of hub.bus.connectedIds()) if (isPc(pid)) hub.bus.send(pid, m); },
+  }).start();
+  hub.bus.on('lock.now', (m, from) => isPc(from) && lockSync.onMessage(hub.sessions.get(from).displayName()));
   svc.kvm.onMoveWindow = (m, to) => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;
     if (!settings.apps.moveWindows) return;
-    if (!meshMoves.ready(to, (v) => { svc.appSend.accepts = v; })) return;
-    svc.appSend.moveOut(wid, Number(m.movingPid));
+    const unit = svc.appSend.unit(to); // the device the pointer went to: its own AppSend (windows may be on others too)
+    if (!unit) return;
+    if (!meshMoves.ready(to, (v) => { unit.accepts = v; })) return;
+    unit.moveOut(wid, Number(m.movingPid));
   };
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
@@ -706,6 +792,7 @@ app.whenReady().then(() => {
   // svc.phone is also the single-phone API for the active one. One adb for all of them.
   const adb = new Adb();
   const phoneDir = new PhoneDir(hub, server);
+  svc.phoneDir = phoneDir;
   svc.wired = new Wired({ adb, raw: server, peer: phoneDir, getId: () => id.macId, getName: () => id.macName,
     hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
   pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
@@ -786,7 +873,9 @@ app.whenReady().then(() => {
       ph.bridge = bridge;
       ph.wired = svc.wired;
       bridge.wired = svc.wired;
-      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend: svc.fileSend });
+      // A drop on this phone's window goes to this phone, not to the selected device (#313).
+      const fileSend = { sendBatch: (...a) => { const f = scoped.id && svc.fileSend.unit(scoped.id); return f ? f.sendBatch(...a) : null; } };
+      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend });
       return { phone: ph, bridge, views };
     },
     onUnit: (u) => {
@@ -803,10 +892,11 @@ app.whenReady().then(() => {
       svc.anyPhone.unit(u);
       if (svc.deck) svc.deck.add(u.link); // that phone's Deck runs here
       // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
-      new PcNow({ server: u.link, key: (code) => {
+      const now = new PcNow({ server: u.link, key: (code) => {
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
       } });
+      if (!pcNowRef) pcNowRef = now; // what plays here, for Calls › Pause what plays here (one is enough: it's this computer's)
     },
   });
   svc.phone.on('change', pushState);
@@ -898,25 +988,30 @@ app.whenReady().then(() => {
   svc.loadCamera = () => {
     if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
     const { CamShare } = require('../../shared/camshare.js');
+    // Its own route: it stays with the computer the camera runs with, goes to a computer that opens this
+    // Mac's camera, else follows the selection (shared/cam-mesh.js). Made first, so it hears cam.open first.
+    const camRoute = require('../../shared/cam-mesh.js').camRoute(hub, () => svc.camShare);
+    const camPeer = new Peer(camRoute, server);
     // A computer; a phone's camera goes through its own stack.
-    const computer = () => !!peer.current && !P.isPhoneOs(peer.current.os);
+    const computer = () => !!camPeer.current && !P.isPhoneOs(camPeer.current.os);
     svc.loadVcam();
     svc.camShare = new CamShare({
       getLanguage: () => i18n.locale,
       link: {
-        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
-        send: (m) => peer.sendToClient(m),
+        on: (t, fn) => (t === 'welcome' ? camPeer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : camPeer.on(`t:${t}`, (m) => fn(m))),
+        send: (m) => camPeer.sendToClient(m),
         connected: computer,
-        ble: () => !!(peer.current && peer.current.transport === 'ble'),
-        closed: (fn) => peer.on('closed', fn),
+        ble: () => !!(camPeer.current && camPeer.current.transport === 'ble'),
+        closed: (fn) => camPeer.on('closed', fn),
       },
       cfg: () => settings.camera,
       save: () => store.saveSettings(settings),
       popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
-      peerName: () => (peer.current && peer.current.name) || 'the other computer',
-      onChange: pushState,
+      peerName: () => (camPeer.current && camPeer.current.name) || 'the other computer',
+      onChange: () => { pushState(); camRoute.settle(); },
     });
-    svc.camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+    camRoute.shareWithAll(); // every connected computer hears whether it's shared, not only the selected one
+    svc.camShare.sendPolicy(); // connected already: they hear it now
     return svc.camShare;
   };
   svc.cam = () => ({ camShare: svc.camShare || null, vcam: svc.vcam || null });
@@ -952,7 +1047,7 @@ app.whenReady().then(() => {
   const blockEdge = svc.kvm.blockEdge;
   svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
-  peer.on(`t:${P.T.SCREEN_CTL}`, (m) => onScreenCtl(m));
+  hub.bus.on(P.T.SCREEN_CTL, (m, from) => onScreenCtl(m, from)); // from any device watching this Mac's screen
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),
@@ -963,12 +1058,32 @@ app.whenReady().then(() => {
     terminal: (dir, on) => { actions.setTerminal({ [dir === 'out' ? 'allowPc' : 'connectPc']: on }); if (dir === 'in') svc.sshClient.applySettings(); }, // already set: setTerminal sees no change
     files: (dir, on) => actions.setFiles({ acceptDrops: on }),
   };
-  pairSync = new PairSync({ server: peer, bus: hub.bus,
-    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
-    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; },
-    getSettings: () => settings, saveSettings: () => store.saveSettings(settings), only: Object.keys(SYNC_ACTIONS), // no ReZume or Remote here
-    apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
-      : ['gestures', 'keyboard', 'speed', 'reverseScroll', 'syncPads'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
+  // Per pair (shared/pairsync-mesh.js): every device's pair on its own session; the settings hold the pair of
+  // the device the pages show (no ReZume or Remote here).
+  {
+    const features = Object.fromEntries(Object.entries(PAIR_FEATURES).filter(([f]) => SYNC_ACTIONS[f]));
+    const KVM_VALUES = ['gestures', 'keyboard', 'speed', 'reverseScroll', 'syncPads'];
+    pairSync = require('../../shared/pairsync-mesh.js').pairSyncMesh({
+      bus: hub.bus, hub, features, values: PAIR_VALUES, settings: () => settings, save: () => store.saveSettings(settings),
+      setFeature: (f, dir, on) => SYNC_ACTIONS[f](dir, on),
+      setValue: (k, v) => (KVM_VALUES.includes(k) ? actions.setKvm({ [k]: v }) : actions.setSharingOpts({ [k]: v })),
+      peerRole: (pid) => { const x = hub.sessions.get(pid); return x ? x.role : null; },
+      peerOs: (pid) => { const x = hub.sessions.get(pid); return x ? x.peerOs : null; },
+      onPair: (pid) => consent.changed(pid),
+    });
+  }
+  // The whole mesh's two-way switches, every device telling the others (shared/mesh-edges.js): the
+  // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
+  {
+    const known = (pid) => hub.peers().find((x) => x.id === pid) || mesh.known().find((x) => x.id === pid) || {};
+    edges = require('../../shared/mesh-edges.js').meshEdges({
+      bus: hub.bus, mesh, selfId: id.macId, consent,
+      features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal', 'apps'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+      names: (pid) => (pid === id.macId ? id.macName : known(pid).name || ''),
+      os: (pid) => (pid === id.macId ? P.OS.MAC : known(pid).os || ''),
+      connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+    });
+  }
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,
@@ -986,11 +1101,15 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent,
+    syncAction: (f, dir, on) => SYNC_ACTIONS[f] && SYNC_ACTIONS[f](dir, on), // the matrix: the selected device's cell is the settings
+    state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
-    const name = peer.current ? peer.current.name : { key: 'the other computer' };
+    // The device the pointer is with (the input peer, docs/mesh-graph.md), not the selected one.
+    const ps = svc.kvm.partner ? hub.sessions.get(svc.kvm.partner) : null;
+    const name = ps ? ps.displayName() : peer.current ? peer.current.name : { key: 'the other computer' };
     if (mode === 'driving') hud.show('away', { key: settings.kvm.mouse ? 'Using {name}' : 'Typing on {name}', vars: { name } });
     else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: id.macName } });
     else hud.show('home', { key: 'Back on {me}', vars: { me: id.macName } });
@@ -1019,7 +1138,9 @@ app.whenReady().then(() => {
   });
   svc.drop.on('batch', (b) => {
     if (svc.rz && svc.rz.received(b)) return; // a document taken here with ReZume: it opens
-    if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
+    // The device it came from (dropset.js: b.from), not the selected one.
+    const from = b.from ? hub.sessions.get(b.from) : null;
+    if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: from ? from.displayName() : peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
   createWindow();
   refreshPermissions();
@@ -1107,11 +1228,19 @@ function setupNet() {
     invite: (devId) => svc.ble.invite(devId) || svc.bleLook.invite(devId),
   };
   const wifi = (cmd, args, ms) => svc.helper.request(cmd, args, ms);
+  // The net hook's own peer (not the facade): the selected device's, kept while Wi-Fi is being set up or
+  // used for it, so a crossing doesn't cut a transfer through the network it was moved onto (hub.netId).
+  const netPeer = new (require('./phones').ScopedPhonePeer)(hub, server, null);
+  hub.netId = null;
+  // Each device's last net.caps (what it can do to leave Bluetooth): the hook gets it when it binds there.
+  const netCaps = new Map();
+  hub.bus.on(P.T.NET_CAPS, (m, from) => netCaps.set(from, m));
+  hub.bus.onPeer('closed', (pid) => netCaps.delete(pid));
   svc.net = new NetLink({
     os: P.OS.MAC,
-    send: (m) => peer.sendNow(m),
+    send: (m) => netPeer.sendNow(m),
     current: () => {
-      const c = peer.current;
+      const c = netPeer.current;
       return c && { deviceId: c.deviceId, os: c.os, role: c.role, transport: c.transport === 'ble' ? 'ble' : 'ip', address: c.address };
     },
     host: null, // a Mac can't host a network others join while it stays on its own
@@ -1127,7 +1256,7 @@ function setupNet() {
     // 'user': Connect with Wi-Fi Direct; 'hotspot': Connect with hotspot.
     hotspot: (why, peerOs) => peerOs === P.OS.ANDROID && why !== 'files' && why !== 'user',
     cable: () => {
-      const c = peer.current;
+      const c = netPeer.current;
       return !!c && c.os === P.OS.ANDROID && !!svc.wired && svc.wired.toCable(c.deviceId);
     },
   });
@@ -1136,12 +1265,24 @@ function setupNet() {
     pushState();
   });
   svc.net.on('dropped', () => settings.sharing.on && actions.setSharing(false)); // Bluetooth can't carry the screen
-  peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
-  peer.tap = (m) => svc.net.onMessage(m);
-  peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
-  peer.on('client', () => svc.net.started());
-  peer.on('closed', () => svc.net.ended());
-  peer.on('transport', () => {
+  hub.netHold = (m) => svc.net.holdOut(m, (x) => netPeer.sendNow(x)); // files wait for Wi-Fi, on any route to it
+  hub.netTap = (m) => svc.net.onMessage(m); // every message of the net hook's device (net.*)
+  netPeer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+  netPeer.on('client', () => svc.net.started());
+  netPeer.on('closed', () => svc.net.ended());
+  // Bound to a device: the selected one, unless it's busy with another (hosting, joining, asking).
+  const netBusy = () => ['asking', 'hosting', 'joining', 'joined', 'hotspot'].includes(svc.net.state);
+  const bindNet = (pid) => {
+    if (netPeer.id === pid) return;
+    netPeer.bind(pid); // 'closed' for the one it leaves, 'client' for the next
+    hub.netId = pid;
+    if (pid && netCaps.has(pid)) svc.net.onMessage(netCaps.get(pid));
+  };
+  hub.on('selected', (pid) => { if (!netBusy() || !netPeer.current) bindNet(pid || null); });
+  svc.net.on('change', () => setImmediate(() => { if (!netBusy() && netPeer.id !== (hub.selectedId || null)) bindNet(hub.selectedId || null); })); // done: the selection's again
+  hub.bus.onPeer('closed', (pid) => { if (pid === netPeer.id && hub.selectedId && hub.selectedId !== pid) bindNet(hub.selectedId); });
+  bindNet(hub.selectedId || null);
+  netPeer.on('transport', () => {
     pushState();
     if (!svc.smb.onBle) svc.smb.mountPc(); // on Wi-Fi now: the PC's folder too
   });
@@ -1149,7 +1290,7 @@ function setupNet() {
   // The phone's screen or an app window asked for while on Bluetooth: its hotspot, then the window.
   let pendingView = null;
   svc.phoneViews.onNoAdb = (v) => {
-    const c = peer.current;
+    const c = netPeer.current;
     if (!c || c.transport !== 'ble' || c.os !== P.OS.ANDROID) return false;
     pendingView = v;
     svc.net.need('phone').then((ok) => !ok && (pendingView = null));
@@ -1185,23 +1326,40 @@ function setupNet() {
 // Calls, Messages, Photos and Files from a phone (shared/phonehub.js): loaded when a phone connects with
 // one of them on, or the first time a page uses it. Before that none of it exists: no module, no
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
+// The phones' side of Calls, Messages and Media (shared/phonehub.js): what any phone says (PhoneDir), and
+// what's sent goes to the active phone (the Phone pages' one), as Windows' and Linux's phone-link.js do.
+// On the selected device's peer, a phone that wasn't selected rang, texted and played unheard (#313).
+const phonesLink = {
+  on: (ev, fn) => { svc.phoneDir.on(ev, fn); return phonesLink; },
+  get current() { const u = svc.phone && svc.phone.active; return (u && u.link.current) || null; },
+  sendToClient: (m) => { const u = svc.phone && svc.phone.active; return !!(u && u.link.current) && u.link.sendToClient(m); },
+};
+
 function setupHub() {
   const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
-  peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
+  phonesLink.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
-  peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
-  peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
-  peer.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
+  phonesLink.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
+  phonesLink.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  phonesLink.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
 }
 
 let callwin = null;
 function loadHub() {
   if (phoneHub) return phoneHub;
   const { PhoneHub } = require('../../shared/phonehub.js');
+  // One phone at a time, the active one, kept while it has a call (shared/phonehub-link.js, step 4).
+  const hubLink = require('../../shared/phonehub-link.js').hubLink({
+    phones: phonesLink, ctxOf: (id) => svc.phoneDir.ctxOf(id), sendTo: (id, m) => svc.phoneDir.hub.bus.send(id, m), held: () => !!(phoneHub && phoneHub.call),
+  });
   const hub = new PhoneHub({
-    server: peer, getSettings: () => settings, save: () => store.saveSettings(settings),
+    server: hubLink, getSettings: () => settings, save: () => store.saveSettings(settings),
     audio: (opts) => require('../callaudio.js').create({ helper: svc.helper, ...opts }), // the calls' sound over Bluetooth
-    send: (paths, batch) => !!(svc.fileSend && svc.fileSend.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
+    send: (paths, batch) => { // Files: into a folder on the phone (the one the page shows, not the selected device)
+      const c = phonesLink.current;
+      const f = svc.fileSend && c && svc.fileSend.unit(c.deviceId);
+      return !!(f && f.sendBatch(paths, 'send', batch));
+    },
     shareSheet: (paths) => new (require('electron').ShareMenu)({ filePaths: paths }).popup(win && !win.isDestroyed() ? { browserWindow: win } : {}), // Photos › Share
     choose: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openFile', 'openDirectory', 'multiSelections'] })
       .then((r) => (r.canceled ? [] : r.filePaths)),
@@ -1224,8 +1382,13 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this computer pauses for a call (shared/callpause.js, #293).
+  const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
+  hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
-  if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
+  hub.on('call', () => hubLink.refresh()); // a call that ended lets it go to the active phone
+  if (svc.phone) svc.phone.on('change', () => hubLink.refresh()); // another phone active
+  if (hubLink.current) hub.started();
   return hub;
 }
 

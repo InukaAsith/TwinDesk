@@ -30,7 +30,7 @@ class PhoneDir extends EventEmitter {
     this.server = server;
     this.wired = new Set();
     hub.bus.onPeer('welcome', (id) => { const c = this.ctxOf(id); if (c) this.emit('client', c); });
-    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && P.isPhoneOs(s.peerOs)) this.emit('closed', { deviceId: id }); });
+    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && P.isPhoneOs(s.peerOs)) this.emit('closed', { deviceId: id, os: s.peerOs }); });
     this.on('newListener', (ev) => {
       if (typeof ev !== 'string' || !ev.startsWith('t:') || this.wired.has(ev)) return;
       this.wired.add(ev);
@@ -87,6 +87,10 @@ class PhoneSet extends EventEmitter {
     this.reply = null; // kvm.attachLocal: a phone's answers (accept, refuse, home) go to Kvm as the partner's messages
     this.all = []; // every stack, the first one made before any phone is there
     this.connecting = null; // {id, name, timer}
+    this.hooks = {}; // key ('views', ...) -> {name: value} set through a proxy, given to each new stack
+    this.picked = null; // the phone the Phone pages show (#263): picked there, selected, or the one that just connected
+    // A phone made the selected device (the device list, a crossing) is the one the Phone pages show.
+    if (typeof hub.on === 'function') hub.on('selected', (id) => { if (id && this.byId.has(id)) this.picked = id; });
     this.message = '';
     // Before the stacks are made: the stack of a phone must be bound before its own listeners hear 'client'.
     link.on('client', (ctx) => this._client(ctx));
@@ -97,6 +101,7 @@ class PhoneSet extends EventEmitter {
     const scoped = this.link.scoped(null);
     const unit = this.make(scoped);
     unit.link = scoped;
+    for (const [key, set] of Object.entries(this.hooks)) if (unit[key]) Object.assign(unit[key], set);
     unit.seq = 0;
     unit.bridge.reply = (msg) => this.reply && this.reply(msg, unit.link.id);
     this.all.push(unit);
@@ -113,15 +118,31 @@ class PhoneSet extends EventEmitter {
     unit.id = ctx.deviceId;
     unit.seq = ++this.seq;
     this.byId.set(ctx.deviceId, unit);
+    // The phone just connected is the one the Phone pages show: the first one auto-selected kept them
+    // on it, and Show screen opened the first phone's screen (#263). The Mirroring page picks another.
+    this.picked = ctx.deviceId;
     this._doneConnecting('');
+    this.emit('change');
+  }
+
+  // The Phone pages show phone `id` (the Mirroring page's phone picker). False: not a connected phone.
+  pick(id) {
+    const u = id ? this.byId.get(id) : null;
+    if (!u || !u.link.current) return false;
+    this.picked = id;
+    this.emit('change');
+    return true;
   }
 
   unit(id) {
     return id ? this.byId.get(id) || null : this.active;
   }
 
-  // The phone the Phone page shows: the selected device when it is a phone, else the one that connected last.
+  // The phone the Phone page shows: the one picked (on the Mirroring page, by selecting it, or by connecting
+  // last) while it is connected, else the selected device when it is a phone, else the one that connected last.
   get active() {
+    const pick = this.picked ? this.byId.get(this.picked) : null;
+    if (pick && pick.link.current) return pick;
     const sel = this.hub.selectedId ? this.byId.get(this.hub.selectedId) : null;
     if (sel) return sel;
     let best = null;
@@ -146,6 +167,14 @@ class PhoneSet extends EventEmitter {
         const target = this.active[key];
         const v = target[name];
         return typeof v === 'function' ? v.bind(target) : v;
+      },
+      // A hook set on it (main.js: phoneViews.onNoAdb) goes to every phone's, and to the ones made later:
+      // set on the proxy alone, no PhoneViews ever saw it.
+      set: (_t, name, value) => {
+        if (!this.hooks[key]) this.hooks[key] = {};
+        this.hooks[key][name] = value;
+        for (const u of this.all) if (u[key]) u[key][name] = value;
+        return true;
       },
     });
   }

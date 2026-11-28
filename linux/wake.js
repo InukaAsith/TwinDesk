@@ -59,24 +59,38 @@ const pkexec = (script) => new Promise((resolve, reject) => {
 
 class Wake {
   // opts: link, settings (shared, .wake), save(), onChange(), address() (the one the peer can reach)
+  //   bus, peer(id) → {name, os}: Multi-device (the hub's bus): every device is told how to wake this one
+  //   when it connects, and learned from whichever device tells, not only the selected one (#313)
   constructor(opts) {
     Object.assign(this, opts);
     this.state = { checked: false, on: null, busy: false, adapters: [], error: '' };
     this.last = null; // {id, at}: the last wake we sent
 
-    this.link.on('welcome', () => {
-      this.link.send({ t: T.WOL_INFO, macs: ownMacs(), address: this.address() || '' });
-    });
-    this.link.on(T.WOL_INFO, (m) => {
-      const s = this.link.snapshot().session;
-      const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
-      if (!s || !s.id || !macs.length) return;
-      const address = typeof m.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(m.address) ? m.address : '';
-      this.settings.wake.peers[s.id] = { name: String(s.name || '').slice(0, 200), os: s.os, macs, address, at: Date.now() };
-      this.save();
-      this.onChange();
-    });
+    const info = () => ({ t: T.WOL_INFO, macs: ownMacs(), address: this.address() || '' });
+    if (this.bus) {
+      this.bus.onPeer('welcome', (id) => this.bus.send(id, info()));
+      this.bus.on(T.WOL_INFO, (m, from) => { const s = this.peer(from); if (s) this._learn(from, s.name, s.os, m); });
+    } else {
+      this.link.on('welcome', () => this.link.send(info()));
+      this.link.on(T.WOL_INFO, (m) => {
+        const s = this.link.snapshot().session;
+        if (s && s.id) this._learn(s.id, s.name, s.os, m);
+      });
+    }
     this.check();
+  }
+
+  // A device's wol.info: kept for it, saved only when it changed (it comes again on every connect).
+  _learn(id, peerName, peerOs, m) {
+    const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
+    if (!id || !macs.length) return;
+    const address = typeof m.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(m.address) ? m.address : '';
+    const name = String(peerName || '').slice(0, 200);
+    const was = this.settings.wake.peers[id];
+    if (was && was.name === name && was.os === peerOs && was.address === address && String(was.macs) === String(macs)) return;
+    this.settings.wake.peers[id] = { name, os: peerOs, macs, address, at: Date.now() };
+    this.save();
+    this.onChange();
   }
 
   // Wake a paired computer. False when we never learned how.

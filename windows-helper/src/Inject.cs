@@ -33,38 +33,6 @@ namespace MacShare
         // The armed return sides (Capture.ReturnStops): a move stops at their outer edge.
         public Func<List<string>> Stops;
 
-        // Main froze with a button we pressed for the other computer still down (#312): a press on our own
-        // app's title bar (a drag, or a caption button OnOwnCaptionButton missed) or borders runs Windows'
-        // modal loop on main's thread, the thread that has to bring us the release, so nothing came until
-        // this computer's own mouse moved. Main says it's alive with `keepalive {driven}` while it's driven;
-        // with no word from it for SilentMs and a button down, the button is let go here and the loop ends.
-        // Off until main sends that keepalive: an older one doesn't, and a button held still stays held.
-        const int SilentMs = 1500;
-        static int heard; // Environment.TickCount of main's last command
-        System.Windows.Forms.Timer silence; // on the UI thread: made by Heartbeat (Dispatch)
-        public Action<List<int>, int> LetGo; // the buttons let go, how long main was silent
-
-        public static void Heard() { heard = Environment.TickCount; }
-
-        public void Heartbeat()
-        {
-            if (silence != null) return;
-            silence = new System.Windows.Forms.Timer { Interval = 250 };
-            silence.Tick += delegate { WatchSilence(); };
-            silence.Start();
-        }
-
-        void WatchSilence()
-        {
-            int quiet = unchecked(Environment.TickCount - heard);
-            if (quiet < SilentMs) return;
-            List<int> down = new List<int>();
-            foreach (int b in heldButtons) if (!(b == 0 && captionHeld)) down.Add(b); // a held-back caption click was never pressed
-            if (down.Count == 0) return;
-            foreach (int b in down) Button(b, false);
-            if (LetGo != null) LetGo(down, quiet);
-        }
-
         static readonly int Size = Marshal.SizeOf(typeof(Native.INPUT));
 
         // SendInput usually wakes the display, but not always on the lock screen or modern-standby
@@ -129,8 +97,8 @@ namespace MacShare
             {
                 MoveTo(p.X, p.Y);
                 WatchStuck(cur);
+                CursorShow.Check(); // #329: Windows showing no pointer for the other computer's mouse
             }
-            DragCaption(p.X, p.Y);
             if (Moved != null) Moved(p.X, p.Y, dx, dy);
         }
 
@@ -154,6 +122,38 @@ namespace MacShare
             if (Stuck != null && (Elevated(WindowFromPoint(after)) || Elevated(Native.GetForegroundWindow()))) Stuck();
         }
 
+        // Main froze with a button we pressed for the other computer still down (#312): a press on our own
+        // app's title bar (a drag, or a caption button OnOwnCaptionButton missed) or borders runs Windows'
+        // modal loop on main's thread, the thread that has to bring us the release, so nothing came until
+        // this computer's own mouse moved. Main says it's alive with `keepalive {driven}` while it's driven;
+        // with no word from it for SilentMs and a button down, the button is let go here and the loop ends.
+        // Off until main sends that keepalive: an older one doesn't, and a button held still stays held.
+        const int SilentMs = 1500;
+        static int heard; // Environment.TickCount of main's last command
+        System.Windows.Forms.Timer silence; // on the UI thread: made by Heartbeat (Dispatch)
+        public Action<List<int>, int> LetGo; // the buttons let go, how long main was silent
+
+        public static void Heard() { heard = Environment.TickCount; }
+
+        public void Heartbeat()
+        {
+            if (silence != null) return;
+            silence = new System.Windows.Forms.Timer { Interval = 250 };
+            silence.Tick += delegate { WatchSilence(); };
+            silence.Start();
+        }
+
+        void WatchSilence()
+        {
+            int quiet = unchecked(Environment.TickCount - heard);
+            if (quiet < SilentMs) return;
+            List<int> down = new List<int>();
+            foreach (int b in heldButtons) if (!(b == 0 && captionHeld)) down.Add(b); // a held-back caption click was never pressed
+            if (down.Count == 0) return;
+            foreach (int b in down) Button(b, false);
+            if (LetGo != null) LetGo(down, quiet);
+        }
+
         [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
         [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
         [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
@@ -167,6 +167,11 @@ namespace MacShare
             IntPtr root = GetAncestor(w, 2); // GA_ROOT
             uint pid;
             GetWindowThreadProcessId(root != IntPtr.Zero ? root : w, out pid);
+            return ElevatedPid(pid);
+        }
+
+        static bool ElevatedPid(uint pid)
+        {
             if (pid == 0) return false;
             IntPtr h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
             if (h == IntPtr.Zero) return false;
@@ -196,14 +201,11 @@ namespace MacShare
                 case 4: flags = down ? Native.MOUSEEVENTF_XDOWN : Native.MOUSEEVENTF_XUP; data = Native.XBUTTON2; break;
                 default: return;
             }
-            bool captionButton = b == 0 && down && OnOwnCaptionButton();
-            if (b == 0 && down && (captionButton || (CaptionHit == 2 && CaptionAppPid != 0 && CaptionWindowPid == CaptionAppPid)))
+            if (b == 0 && down && OnOwnCaptionButton())
             {
                 // Held back until the release (#209): Windows' caption-button loop would stall our app's
                 // main thread, which is the one that has to bring us that release.
                 Native.GetCursorPos(out heldCaption);
-                captionWindow = captionButton ? IntPtr.Zero : captionTarget;
-                captionDragging = false;
                 captionHeld = true;
                 heldButtons.Add(b);
                 return;
@@ -212,21 +214,6 @@ namespace MacShare
             {
                 captionHeld = false;
                 heldButtons.Remove(b);
-                IntPtr draggedWindow = captionWindow;
-                captionWindow = IntPtr.Zero;
-                if (captionDragging)
-                {
-                    captionDragging = false;
-                    if (draggedWindow != IntPtr.Zero)
-                    {
-                        uint pid;
-                        GetWindowThreadProcessId(draggedWindow, out pid);
-                        Native.POINT release;
-                        if (pid != 0 && pid == AppPid() && Native.GetCursorPos(out release))
-                            AppWindows.EndCaptionDrag(draggedWindow, release.x, release.y, captionOffset);
-                    }
-                    return;
-                }
                 Native.POINT now;
                 Native.GetCursorPos(out now);
                 bool moved = now.x != heldCaption.x || now.y != heldCaption.y;
@@ -237,51 +224,34 @@ namespace MacShare
                 return;
             }
             if (down) heldButtons.Add(b); else heldButtons.Remove(b);
+            if (down && b <= 1) WatchClick();
             Send(Mouse(0, 0, data, flags));
+        }
+
+        // A click over a window run as administrator goes nowhere, and nothing says so: the moves land
+        // (the cursor is the system's), only the press and release are dropped, and SendInput doesn't
+        // tell (UIPI's refusal is silent by design). The pointer goes home with the note, as WatchStuck
+        // does (#278: cmd, Device Manager, an installer). Not when we're elevated ourselves (or SYSTEM):
+        // then the window takes our input.
+        static int selfElevated = -1;
+        void WatchClick()
+        {
+            if (Stuck == null) return;
+            if (selfElevated < 0) selfElevated = ElevatedPid((uint)System.Diagnostics.Process.GetCurrentProcess().Id) ? 1 : 0;
+            if (selfElevated == 1) return;
+            Native.POINT p;
+            if (Native.GetCursorPos(out p) && Elevated(WindowFromPoint(p))) Stuck();
         }
 
         bool captionHeld;
         Native.POINT heldCaption;
-        IntPtr captionWindow;
-        static IntPtr captionTarget;
-        bool captionDragging;
-        Point captionOffset;
-
-        void DragCaption(int x, int y)
-        {
-            if (!captionHeld || captionWindow == IntPtr.Zero) return;
-            uint pid;
-            GetWindowThreadProcessId(captionWindow, out pid);
-            if (pid != AppPid()) { captionWindow = IntPtr.Zero; captionDragging = true; return; }
-            if (!captionDragging)
-            {
-                Size threshold = System.Windows.Forms.SystemInformation.DragSize;
-                if (Math.Abs((long)x - heldCaption.x) < threshold.Width / 2 && Math.Abs((long)y - heldCaption.y) < threshold.Height / 2) return;
-                captionDragging = true;
-                if (!AppWindows.BeginCaptionDrag(captionWindow, heldCaption.x, heldCaption.y, out captionOffset))
-                {
-                    captionWindow = IntPtr.Zero;
-                    return;
-                }
-            }
-            if (!AppWindows.MoveCaptionDrag(captionWindow, x, y, captionOffset)) captionWindow = IntPtr.Zero;
-        }
 
         [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
         [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
         [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
 
-        internal static uint CaptionAppPid { get; private set; }
-        internal static uint CaptionWindowPid { get; private set; }
-        internal static int CaptionHit { get; private set; }
-
-        static uint appPid; // Full KVM's parent is the service; kvmConfig supplies the app owning the caption.
-        public static void SetAppPid(double pid)
-        {
-            if (pid > 0 && pid <= uint.MaxValue && pid == Math.Truncate(pid)) appPid = (uint)pid;
-        }
-
+        static uint appPid; // TwinDesk's main process (our parent), 0 until known
         static uint AppPid()
         {
             if (appPid == 0)
@@ -292,29 +262,68 @@ namespace MacShare
             return appPid;
         }
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int flags, System.Text.StringBuilder name, ref int size);
+
+        // TwinDesk's own process: our parent, or (the Full KVM build: the service started this helper, so
+        // our parent is the service) any process whose program is TwinDesk.exe.
+        static uint twinPid; // the last one found by its name
+        static bool IsTwinDesk(uint pid)
+        {
+            if (pid == 0) return false;
+            uint app = AppPid();
+            if (app != 0 && pid == app) return true;
+            if (pid == twinPid) return true;
+            IntPtr h = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, pid);
+            if (h == IntPtr.Zero) return false;
+            try
+            {
+                System.Text.StringBuilder name = new System.Text.StringBuilder(1024);
+                int size = name.Capacity;
+                if (!QueryFullProcessImageName(h, 0, name, ref size)) return false;
+                bool twin = string.Equals(System.IO.Path.GetFileName(name.ToString()), "TwinDesk.exe", StringComparison.OrdinalIgnoreCase);
+                if (twin) twinPid = pid;
+                return twin;
+            }
+            finally { CloseHandle(h); }
+        }
+
+        [StructLayout(LayoutKind.Sequential)] struct RECT { public int left, top, right, bottom; }
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT value, int size);
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+
         // The pointer is on the minimize, maximize, close or help button of one of TwinDesk's own windows.
+        // The buttons' bounds come from DWM (DWMWA_CAPTION_BUTTON_BOUNDS), which doesn't ask our app's main
+        // thread: WM_NCHITTEST does, and a main busy for its 100 ms missed the button (#209: minimize froze
+        // AMXLPDL for 3-5 s, until WatchSilence let go). WM_NCHITTEST stays for a window DWM has no bounds
+        // for. Every left press on TwinDesk's own window is logged with what was found, as long as that
+        // is still being checked on a real machine.
         static bool OnOwnCaptionButton()
         {
-            captionTarget = IntPtr.Zero;
-            CaptionAppPid = CaptionWindowPid = 0;
-            CaptionHit = -999; // not queried: no window, mismatched owner, or a timed-out hit test
             Native.POINT p;
             if (!Native.GetCursorPos(out p)) return false;
             IntPtr h = WindowFromPoint(p);
             if (h == IntPtr.Zero) return false;
             IntPtr root = GetAncestor(h, 2); // GA_ROOT
+            if (root == IntPtr.Zero) root = h;
             uint pid;
-            GetWindowThreadProcessId(root != IntPtr.Zero ? root : h, out pid);
-            uint app = AppPid();
-            CaptionAppPid = app;
-            CaptionWindowPid = pid;
-            if (app == 0 || pid != app) return false;
+            GetWindowThreadProcessId(root, out pid);
+            if (!IsTwinDesk(pid)) return false;
+            RECT win, btn;
+            if (GetWindowRect(root, out win) && DwmGetWindowAttribute(root, 5 /* DWMWA_CAPTION_BUTTON_BOUNDS */, out btn, Marshal.SizeOf(typeof(RECT))) == 0 && btn.right > btn.left)
+            {
+                bool on = p.x >= win.left + btn.left && p.x < win.left + btn.right && p.y >= win.top + btn.top && p.y < win.top + btn.bottom;
+                Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": buttons " + (win.left + btn.left) + "," + (win.top + btn.top) + "-" + (win.left + btn.right) + "," + (win.top + btn.bottom) + (on ? ", on them: held until the release" : ", not on them"));
+                if (on) return true;
+            }
             IntPtr hit;
             IntPtr l = new IntPtr(((p.y & 0xFFFF) << 16) | (p.x & 0xFFFF));
-            if (SendMessageTimeout(root != IntPtr.Zero ? root : h, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero) return false;
+            if (SendMessageTimeout(root, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero)
+            {
+                Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": its hit test didn't answer in 100 ms");
+                return false;
+            }
             int ht = (int)hit.ToInt64();
-            captionTarget = root != IntPtr.Zero ? root : h;
-            CaptionHit = ht;
+            Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": hit test " + ht);
             return ht == 8 || ht == 9 || ht == 20 || ht == 21; // HTMINBUTTON, HTMAXBUTTON, HTCLOSE, HTHELP
         }
 
@@ -434,12 +443,11 @@ namespace MacShare
 
         public void ReleaseAll()
         {
+            CursorShow.Reset(); // the drive ended: the next one checks the pointer again
             foreach (int s in new List<int>(heldScans)) SendScan(s, false);
             heldScans.Clear();
             tapDown.Clear();
             modsOnly = swallowSpace = false;
-            captionWindow = IntPtr.Zero;
-            captionDragging = false;
             if (captionHeld) { captionHeld = false; heldButtons.Remove(0); } // never pressed here: nothing to release
             foreach (int b in new List<int>(heldButtons)) Button(b, false);
             heldButtons.Clear();

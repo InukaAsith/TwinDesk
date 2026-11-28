@@ -34,7 +34,8 @@ class ImageOut {
 
   // A PNG (Buffer) to the other side. True once every piece went; false when a newer copy took
   // its place, the session went or it is too big.
-  async send(png, { w, h, shot } = {}) {
+  // stamp {ts, o}: when and where it was copied (shared/clipsync.js Latest, Multi-device).
+  async send(png, { w, h, shot, stamp } = {}) {
     if (!isPng(png) || png.length > MAX) return false;
     const me = { id: crypto.randomBytes(8).toString('hex') };
     this.current = me;
@@ -42,6 +43,7 @@ class ImageOut {
     const live = () => this.current === me && this.open();
     const head = { t: T.CLIP_IMAGE, id: me.id, w: dim(w), h: dim(h), bytes: png.length, parts };
     if (shot) head.shot = true;
+    if (stamp) Object.assign(head, { ts: stamp.ts, o: stamp.o });
     try {
       if (!live() || this.sendFn(head) === false) return this._done(me, false);
       for (let i = 0; i < parts; i++) {
@@ -84,15 +86,16 @@ class ImageIn {
   header(m) {
     this.cur = null;
     if (!m || typeof m.id !== 'string' || !m.id || m.id.length > MAX_ID) return null;
+    const stamp = Number.isFinite(m.ts) && typeof m.o === 'string' ? { ts: m.ts, o: m.o } : {}; // when and where it was copied
     if (typeof m.png === 'string') {
       if (!m.png || m.png.length > Math.ceil(MAX * 4 / 3) + 8) return null;
       const png = Buffer.from(m.png, 'base64');
-      return png.length <= MAX && isPng(png) ? { id: m.id, w: dim(m.w), h: dim(m.h), png, shot: m.shot === true } : null;
+      return png.length <= MAX && isPng(png) ? { id: m.id, w: dim(m.w), h: dim(m.h), png, shot: m.shot === true, ...stamp } : null;
     }
     const bytes = Number(m.bytes);
     const parts = Number(m.parts);
     if (!Number.isInteger(bytes) || bytes < 9 || bytes > MAX || parts !== Math.ceil(bytes / PART)) return null;
-    this.cur = { id: m.id, w: dim(m.w), h: dim(m.h), bytes, parts, shot: m.shot === true, bufs: [], got: 0, size: 0, at: this.now() };
+    this.cur = { id: m.id, w: dim(m.w), h: dim(m.h), bytes, parts, shot: m.shot === true, bufs: [], got: 0, size: 0, at: this.now(), ...stamp };
     return null;
   }
 
@@ -116,7 +119,7 @@ class ImageIn {
     if (c.got < c.parts) return null;
     this.cur = null;
     const png = Buffer.concat(c.bufs, c.size);
-    return png.length === c.bytes && isPng(png) ? { id: c.id, w: c.w, h: c.h, png, shot: c.shot } : null;
+    return png.length === c.bytes && isPng(png) ? { id: c.id, w: c.w, h: c.h, png, shot: c.shot, ...(c.o ? { ts: c.ts, o: c.o } : {}) } : null;
   }
 
   // A newer copy came (or the session ended): a picture half in is dropped.
@@ -297,11 +300,55 @@ class ClipImages {
 // Each device has its own clip.policy (images: it takes them), its own sender and receiver; a
 // picture goes straight to each device that takes pictures (not relayed by the pool), never over
 // Bluetooth. o, as ClipImages', with: ids() → connected device ids, send(id, msg), backlog(id),
-// ble(id), peerName(id), remember(dir, item, fromName).
+// ble(id), peerName(id), remember(dir, item, fromName), log(line) (default console.log), and the
+// text's Latest (shared/clipsync.js) so the latest copy wins between a text and a picture too:
+// copied() → {ts, o} for a picture copied here, newest(pic) → false for one older than the newest copy.
+// sendsTo(id) / takes(id), optional: our pair with that device (shared/consent.js), else the settings' Send
+// and Receive for every device.
+// Every picture copied here or come in is logged ([clip]): where it went, or why it stayed.
 class MeshClipImages extends ClipImages {
   constructor(o) {
     super({ ...o, send: () => false, connected: () => false, ble: () => true, peerName: () => '' });
+    // Those stubs are for the base class's one-device sender only; everything here asks per device.
+    // Kept as this.o, they made every device 'over Bluetooth' and every send fail: Multi-device never
+    // sent a picture, and named every sender 'another device'.
+    this.o = o;
     this.peers = new Map(); // id → {images, out: ImageOut, in: ImageIn}
+    this.log = o.log || ((line) => console.log(line));
+    this.kept = ''; // the last picture that stayed here (sigOf): logged once
+  }
+  _name(id) {
+    return this.o.peerName(id) || String(id).slice(0, 8);
+  }
+  _sendsTo(id) {
+    return this.o.sendsTo ? this.o.sendsTo(id) : !!this.o.cfg().send;
+  }
+  _takesFrom(id) {
+    return this.o.takes ? this.o.takes(id) : !!this.o.cfg().receive;
+  }
+  // Why a picture copied here doesn't go to a device (or to any): for the log.
+  why(id) {
+    const c = this.o.cfg();
+    if (!this.on) return 'Pictures is off here';
+    if (id === undefined ? !(this.o.sendsTo ? this.o.ids().some((x) => this._sendsTo(x)) : c.send) : !this._sendsTo(id)) return 'sending the clipboard is off here';
+    if (id === undefined) {
+      const ids = this.o.ids();
+      return ids.length ? ids.map((x) => `${this._name(x)}: ${this.why(x)}`).join('; ') : 'no connected device takes this computer’s clipboard';
+    }
+    if (this.o.ble(id)) return 'over Bluetooth';
+    return (this.peers.get(id) || {}).images ? 'takes pictures' : 'Pictures is off there (or an older TwinDesk)';
+  }
+  // No device takes it: the picture stays here, and the log says why (once per picture).
+  async offerClipboard(concealed) {
+    if (this.canSend) return super.offerClipboard(concealed);
+    const img = await this._read();
+    if (img.isEmpty()) return '';
+    const sig = sigOf(img);
+    if (sig === this.kept || sig === this.sig.sent || sig === this.sig.received) return '';
+    this.kept = sig;
+    const { width, height } = img.getSize();
+    this.log(`[clip] a picture copied here (${width}x${height}) stays here: ${this.why()}`);
+    return '';
   }
   _peer(id) {
     let p = this.peers.get(id);
@@ -313,9 +360,8 @@ class MeshClipImages extends ClipImages {
     return p;
   }
   _takes(id) {
-    const c = this.o.cfg();
     const p = this.peers.get(id);
-    return !!(this.on && c.send && p && p.images && this.o.ids().includes(id) && !this.o.ble(id));
+    return !!(this.on && this._sendsTo(id) && p && p.images && this.o.ids().includes(id) && !this.o.ble(id));
   }
   get targets() {
     return this.o.ids().filter((id) => this._takes(id));
@@ -347,26 +393,40 @@ class MeshClipImages extends ClipImages {
   }
   part(m, from) {
     if (!from) return;
-    this._gotFrom(this._peer(from).in.part(m), from).catch((e) => console.error('[clip] picture not copied:', e.message));
+    const p = this._peer(from);
+    const had = p.in.cur;
+    const pic = p.in.part(m);
+    if (had && !pic && !p.in.cur) this.log(`[clip] a picture from ${this._name(from)} was dropped at piece ${had.got + 1} of ${had.parts} (out of order, too slow or a wrong size)`);
+    this._gotFrom(pic, from).catch((e) => console.error('[clip] picture not copied:', e.message));
   }
   async _send(img) {
     const p = pngOf(img);
     if (!p) return 'skipped a picture over ' + Math.round(MAX / 1048576) + ' MB';
     const ids = this.targets;
-    const ok = (await Promise.all(ids.map((id) => this._peer(id).out.send(p.png, { w: p.w, h: p.h })))).some(Boolean);
+    const others = this.o.ids().filter((id) => !ids.includes(id));
+    const stamp = this.o.copied ? this.o.copied() : undefined;
+    const went = await Promise.all(ids.map((id) => this._peer(id).out.send(p.png, { w: p.w, h: p.h, stamp })));
+    const ok = went.some(Boolean);
+    this.log(`[clip] picture ${p.w}x${p.h}, ${Math.round(p.png.length / 1024)} KB: ` +
+      ids.map((id, i) => `${this._name(id)} ${went[i] ? 'sent' : 'not sent (a newer copy, or it left)'}`).join(', ') +
+      (others.length ? '; not to ' + others.map((id) => `${this._name(id)} (${this.why(id)})`).join(', ') : ''));
     if (!ok) return '';
     this.o.remember('out', this._item(p, img, false), '');
     this.o.onChange();
     return 'sent';
   }
   async _gotFrom(pic, from) {
-    if (!pic || !this.accept) return;
+    if (!pic) return;
+    const what = `[clip] ${pic.shot ? 'screenshot' : 'picture'} ${pic.w}x${pic.h}, ${Math.round(pic.png.length / 1024)} KB from ${this._name(from)}`;
+    if (!this.on || !this._takesFrom(from)) return void this.log(`${what}: not taken, ${this.on ? 'receiving the clipboard is off here' : 'Pictures is off here'}`);
     const img = this.nativeImage.createFromBuffer(pic.png);
-    if (img.isEmpty()) return;
+    if (img.isEmpty()) return void this.log(`${what}: not a picture this computer can read`);
+    if (this.o.newest && !this.o.newest(pic)) return void this.log(`${what}: older than the newest copy here, not applied`);
     for (const p of this.peers.values()) p.out.cancel(); // theirs is newer than a picture of ours still going
     this.sig.received = sigOf(img);
     await writeClipImage(this.clipboard, img, pic.png);
     this.sig.received = sigOf(await this._read()) || sigOf(img);
+    this.log(`${what}: on the clipboard`);
     const name = this.o.peerName(from) || 'another device';
     this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot), name);
     this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${name} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name, keys: this.o.pasteKeys || 'Ctrl+V' } });

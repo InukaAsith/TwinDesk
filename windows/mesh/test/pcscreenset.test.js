@@ -12,7 +12,7 @@ const { Server } = require('../server.js');
 const { Pairing } = require('../hostpair.js');
 const { LinkManager } = require('../links.js');
 const { Hub } = require('../hub.js');
-const { PcScreenSet } = require('../pcscreenset.js');
+const { PcScreenSet } = require('../../../shared/pcscreen-set.js');
 const { runTests } = require('./lib/run.js');
 const { loadTestCert } = require('./lib/testcert.js');
 const { close, waitFor, pairPhone, helloPhone, memoryStorage } = require('./lib/mesh.js');
@@ -110,6 +110,23 @@ test('one unit per device, each on its own scoped link', async () => {
     await set.setMode('off');
     assert.strictEqual(set.byId.get(p2.id).mode, 'off');
     assert.strictEqual(set.byId.get(p1.id).mode, 'mirror', 'the other target is untouched');
+
+    // #256: the tray's and the Mode's target is the device being shared to, else the one watching, not the
+    // selection (it follows the pointer's last crossing).
+    await set.setTarget(p1.id, { mode: 'off' });
+    A.hub.select(p1.id); // the pointer visited One last
+    set.byId.get(p2.id).mac = { accept: true, told: true }; // Two's Monitor 2 is open
+    assert.strictEqual(set.active, set.byId.get(p2.id), 'the device watching');
+    await set.setMode('extend');
+    assert.strictEqual(set.byId.get(p2.id).mode, 'extend', 'Extend went to the device watching');
+    assert.strictEqual(set.byId.get(p1.id).mode, 'off', 'not to the selected one');
+    set.byId.get(p2.id).mac = { accept: false, told: true };
+    assert.strictEqual(set.active, set.byId.get(p2.id), 'still sharing to it: Off from the tray turns that off');
+    await set.setMode('off');
+    assert.strictEqual(set.active, set.byId.get(p1.id), 'nothing shared or watched: the selected device');
+    set.byId.get(p1.id).mac = { accept: true, told: true };
+    set.byId.get(p2.id).mac = { accept: true, told: true };
+    assert.strictEqual(set.active, set.byId.get(p1.id), 'both watching: the selected one');
 
     // one leaves: its choice is dropped, the other stays
     p2.client.close();

@@ -167,24 +167,35 @@ class Smb extends EventEmitter {
 
   // ---- a folder of this Mac on the PC ----
 
+  // The share's password, decrypted once and kept in memory. The keychain may ask the person first (a
+  // new build is signed anew, and macOS asks again for its item): decryptString waits for that answer
+  // on the main thread, so a session that started (its 'client' offers our share) froze the whole app,
+  // every session with it, until someone answered on this Mac, and an update through the mesh never
+  // came back. The asynchronous decrypt waits without stopping anything.
   _secret() {
     const s = this.cfg.secret;
-    if (!s) return null;
-    try {
-      return safeStorage.decryptString(Buffer.from(s, 'base64'));
-    } catch {
-      return null;
-    }
+    if (!s) return Promise.resolve(null);
+    if (this.pw && this.pw.of === s) return this.pw.value;
+    const value = (safeStorage.decryptStringAsync
+      ? safeStorage.decryptStringAsync(Buffer.from(s, 'base64')).then((r) => (r && typeof r.result === 'string' ? r.result : null))
+      : Promise.resolve().then(() => safeStorage.decryptString(Buffer.from(s, 'base64'))))
+      .catch(() => null);
+    this.pw = { of: s, value, known: null };
+    value.then((v) => { if (this.pw && this.pw.of === s) this.pw.known = v; });
+    return value;
   }
 
-  // The share's password, for TwinDesk Web's Mount page (an iPhone signs in with it in Files).
+  // The share's password, for TwinDesk Web's Mount page (an iPhone signs in with it in Files): what's
+  // known now (the first ask starts the decrypt).
   password() {
-    return this.cfg.sharing ? this._secret() || '' : '';
+    if (!this.cfg.sharing) return '';
+    if (!this.pw || this.pw.of !== this.cfg.secret) this._secret();
+    return (this.pw && this.pw.known) || '';
   }
 
-  _offerOurs() {
-    const pw = this._secret();
-    if (this.cfg.sharing && pw) this.server.sendToClient({ t: P.T.SMB_OFFER, share: 'MacShare', user: 'macshare', password: pw, port: 445 });
+  async _offerOurs() {
+    const pw = await this._secret();
+    if (this.cfg.sharing && pw && this.server.current) this.server.sendToClient({ t: P.T.SMB_OFFER, share: 'MacShare', user: 'macshare', password: pw, port: 445 });
   }
 
   // One switch: share the chosen folder, or ~/TwinDesk (created if missing).
@@ -202,7 +213,8 @@ class Smb extends EventEmitter {
       const c = this.cfg;
       c.sharing = true;
       c.folder = folder;
-      c.secret = safeStorage.encryptString(pw).toString('base64');
+      c.secret = safeStorage.encryptString(pw).toString('base64'); // asked for here, with the person at the Mac
+      this.pw = { of: c.secret, value: Promise.resolve(pw), known: pw };
       this.saveSettings();
       this._offerOurs();
     } catch (e) {

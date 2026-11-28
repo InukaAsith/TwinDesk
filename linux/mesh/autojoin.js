@@ -5,6 +5,8 @@
 // Plain Node: no Electron. Everything is off when enabled() is false.
 'use strict';
 
+const RETRY_EVERY_MS = 5 * 60 * 1000; // the introducer's plan again, with nothing changing (see the constructor)
+
 const I = require('../../shared/intro.js');
 const P = require('../../shared/protocol.js');
 
@@ -28,12 +30,19 @@ class AutoJoin {
     hub.mesh.on('roster', again);
     hub.on('peerAdded', again);
     hub.on('peerRemoved', again);
+    // And again now and then: a pair asked within RETRY_MS is skipped (I.plan), and with nothing
+    // changing after it, a pair whose introduction got lost stayed apart (seen only 'via' another).
+    // Every 5 minutes, not every minute: a pair that can't reach each other (two networks) is asked
+    // each time, and each ask is a new token written on the host.
+    this.retry = setInterval(again, RETRY_EVERY_MS);
+    if (this.retry.unref) this.retry.unref();
     hub.bus.on(I.ASK, (m, from) => this.onAsk(m, from));
     hub.bus.on(I.REPLY, (m, from) => this.onReply(m, from));
     hub.bus.on(I.GRANT, (m, from) => this.onGrant(m, from));
   }
 
   close() {
+    clearInterval(this.retry);
     clearTimeout(this.timer);
     this.timer = null;
   }

@@ -105,7 +105,7 @@ async function setup() {
   bridge.adb = { available: false, wake() {}, devices: async () => [], shell: async () => ({ out: '' }) }; // no adb here
   bridge.state = 'ready';
   bridge.control = control;
-  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
+  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, anyPeerDrag: false, peerDragOf: () => false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
   const drop = { dragIn: { dragging: false, armDrag() {}, onDriven() {}, cancel() {}, release() {} }, cancelDrag() {}, release() {}, armDrag() {} };
   // The shared layout, from the edges the settings had (migrated once: right = the phone, top = B).
   const layoutSync = new LayoutSync({

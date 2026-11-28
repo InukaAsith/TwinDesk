@@ -45,6 +45,7 @@ UI.tab({
     const deviceRow = UI.row(t('Computer name'), t('How other computers see this one'), [deviceName]);
     const loginSw = UI.switch((v) => api.setApp({ openAtLogin: v }), { label: t('Open at login') });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: t('Keep the display awake') });
+    const lockSw = UI.switch((v) => api.setApp({ lockTogether: v }), { label: t('Lock together') }); // #322, shared/locksync.js
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: t('Show a popup when switching') });
     // Wake this Mac from the other computer; the Share menu entry.
     const wakeSw = UI.switch((v) => api.setWakeOnLan(v), { label: t('Wake from the network') });
@@ -111,6 +112,7 @@ UI.tab({
       UI.card(t('Startup'), [
         UI.row(t('Open at login'), '', [loginSw]),
         UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
+        UI.row(t('Lock together'), t('This computer locks when another connected computer locks, and the other way round. On each computer'), [lockSw]),
       ]),
       UI.card(t('Appearance'), [
         styleRow,
@@ -173,6 +175,7 @@ UI.tab({
       if (s.app) {
         loginSw.set(s.app.openAtLogin);
         awakeSw.set(s.app.keepAwake);
+        lockSw.set(s.app.lockTogether === true);
         hudSw.set(s.app.hud !== false);
         pingSw.set(s.app.keepPinging === true);
         apiRow.hidden = !s.localApi;

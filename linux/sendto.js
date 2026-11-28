@@ -5,6 +5,9 @@
 // of TwinDesk hands them to this one (second-instance) and they go with the Send files flow
 // (filedrop.js, drop:'send'). The entries follow the paired computer's name and go when nothing is
 // paired; only file managers that are installed get one.
+// Multi-device: one entry per paired computer, `--send-files --send-to=<id>`, and the files go to that
+// device whichever is selected. One entry for the selected device was renamed and rewritten on every
+// crossing, and sent to whichever device was selected by the time it ran (#313).
 'use strict';
 
 const { app } = require('electron');
@@ -13,6 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const ARG = '--send-files';
+const TO = '--send-to='; // the device, in Multi-device
 const HOME = os.homedir();
 const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
@@ -35,7 +39,7 @@ const xml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 // Nautilus and Caja pass the selection in an environment variable (full paths, one a line), else
 // as names relative to the folder: either way the script hands TwinDesk absolute paths.
-function script(name) {
+function script(name, id) {
   return `#!/bin/sh
 # TwinDesk: send the selected files to ${name.replace(/\n/g, ' ')} (made by TwinDesk, ${ARG})
 set -f
@@ -44,48 +48,62 @@ IFS='
 sel="\${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-\$CAJA_SCRIPT_SELECTED_FILE_PATHS}"
 [ -n "$sel" ] && set -- $sel
 for f; do case "$f" in /*) ;; *) f="$PWD/$f" ;; esac; set -- "$@" "$f"; shift; done
-exec ${launcher().map(sh).join(' ')} ${ARG} "$@"
+exec ${launcher().map(sh).join(' ')} ${ARG}${id ? ' ' + sh(TO + id) : ''} "$@"
 `;
 }
 
 class SendTo {
   // opts: fileDrop, link, peerName() → name | '', popup(kind, text, sub)
+  //   bus, nameOf(id): Multi-device (fileDrop is the FileDropSet: unit(id) sends to that device)
   constructor(opts) {
     Object.assign(this, opts);
-    this.name = null; // the peer name our entries have now ('' = none)
-    this.pending = null; // {paths, until}: started with --send-files before the link was up
-    this.link.on('welcome', () => {
+    this.key = null; // the entries we made last ('' = none)
+    this.pending = null; // {paths, until, to}: started with --send-files before the link was up
+    const flush = (id) => {
       const p = this.pending;
+      if (!p || (p.to && p.to !== id)) return;
       this.pending = null;
-      if (p && Date.now() < p.until) this._send(p.paths);
-    });
+      if (Date.now() < p.until) this._send(p.paths, p.to);
+    };
+    if (this.bus) this.bus.onPeer('welcome', (id) => flush(id));
+    else this.link.on('welcome', () => flush(null));
   }
 
-  // Keep the entries in step with the paired computer's name (called with every state push).
-  sync(peer) {
-    const name = peer ? String(peer).replace(/[/\\\x00-\x1f]/g, '_').replace(/^\.+/, '').slice(0, 80) : '';
-    if (name === this.name) return;
-    this.name = name;
-    const label = 'Send to ' + name + ' (TwinDesk)';
-    const exec = launcher().map(desk).join(' ') + ' ' + ARG + ' %F';
+  // Keep the entries in step with the paired computers (called with every state push): a name (one-to-one),
+  // or [{id, name}] (Multi-device, one each). Written only when they changed.
+  sync(peers) {
+    const list = (Array.isArray(peers) ? peers : peers ? [{ id: '', name: peers }] : [])
+      .map((p) => ({ id: String(p.id || '').replace(/[^A-Za-z0-9._-]/g, ''), name: String(p.name || '').replace(/[/\\\x00-\x1f]/g, '_').replace(/^\.+/, '').slice(0, 80) }))
+      .filter((p) => p.name);
+    const key = list.map((p) => p.id + '=' + p.name).join('|');
+    if (key === this.key) return;
+    this.key = key;
+    const entries = list.map((p, i) => ({
+      ...p, label: 'Send to ' + p.name + ' (TwinDesk)', n: i,
+      exec: launcher().map(desk).join(' ') + ' ' + ARG + (p.id ? ' ' + TO + p.id : '') + ' %F',
+    }));
     try {
       // Scripts menus: the file name is the label.
       for (const [dir, cmd] of [[path.join(DATA, 'nautilus', 'scripts'), 'nautilus'], [path.join(CONFIG, 'caja', 'scripts'), 'caja']]) {
         this._clear(dir, (f) => f.endsWith(' (TwinDesk)'));
-        if (name && installed(cmd)) write(path.join(dir, label), script(name), 0o755);
+        if (installed(cmd)) for (const e of entries) write(path.join(dir, e.label), script(e.name, e.id), 0o755);
       }
-      const nemo = path.join(DATA, 'nemo', 'actions', 'twindesk-send.nemo_action');
-      if (name && installed('nemo')) {
-        write(nemo, `[Nemo Action]\nName=${label}\nComment=Send the selected files with TwinDesk (${ARG})\nExec=${exec}\nIcon-Name=document-send\nSelection=notnone\nExtensions=any;\n`, 0o644);
-      } else rm(nemo);
+      const nemoDir = path.join(DATA, 'nemo', 'actions');
+      this._clear(nemoDir, (f) => /^twindesk-send(-\d+)?\.nemo_action$/.test(f));
+      if (installed('nemo')) {
+        for (const e of entries) {
+          write(path.join(nemoDir, e.n ? `twindesk-send-${e.n}.nemo_action` : 'twindesk-send.nemo_action'), `[Nemo Action]\nName=${e.label}\nComment=Send the selected files with TwinDesk (${ARG})\nExec=${e.exec}\nIcon-Name=document-send\nSelection=notnone\nExtensions=any;\n`, 0o644);
+        }
+      }
       // Dolphin: KDE Frameworks 6 and 5 look in different folders; service menus must be executable.
-      const service = `[Desktop Entry]\nType=Service\nMimeType=all/all;\nActions=twindeskSend;\nX-KDE-Priority=TopLevel\n\n[Desktop Action twindeskSend]\nName=${label}\nIcon=document-send\nExec=${exec}\n`;
+      const service = `[Desktop Entry]\nType=Service\nMimeType=all/all;\nActions=${entries.map((e) => 'twindeskSend' + e.n).join(';')};\nX-KDE-Priority=TopLevel\n`
+        + entries.map((e) => `\n[Desktop Action twindeskSend${e.n}]\nName=${e.label}\nIcon=document-send\nExec=${e.exec}\n`).join('');
       for (const dir of [path.join(DATA, 'kio', 'servicemenus'), path.join(DATA, 'kservices5', 'ServiceMenus')]) {
         const f = path.join(dir, 'twindesk-send.desktop');
-        if (name && installed('dolphin')) write(f, service, 0o755);
+        if (entries.length && installed('dolphin')) write(f, service, 0o755);
         else rm(f);
       }
-      this._thunar(name && installed('thunar') ? label : '', exec);
+      this._thunar(installed('thunar') ? entries : []);
     } catch (e) {
       console.warn('[sendto]', e.message);
     }
@@ -102,17 +120,17 @@ class SendTo {
     }
   }
 
-  // Thunar's custom actions (uca.xml): our <action> (by its unique-id) replaced, added or removed.
-  _thunar(label, exec) {
+  // Thunar's custom actions (uca.xml): ours (by their unique-id) replaced, added or removed.
+  _thunar(entries) {
     const file = path.join(CONFIG, 'Thunar', 'uca.xml');
     let text = '';
-    try { text = fs.readFileSync(file, 'utf8'); } catch (_) { if (!label) return; }
-    const ours = new RegExp('\\s*<action>(?:(?!</action>)[\\s\\S])*<unique-id>' + UCA_ID + '</unique-id>[\\s\\S]*?</action>', 'g');
+    try { text = fs.readFileSync(file, 'utf8'); } catch (_) { if (!entries.length) return; }
+    const ours = new RegExp('\\s*<action>(?:(?!</action>)[\\s\\S])*<unique-id>' + UCA_ID + '(?:-\\d+)?</unique-id>[\\s\\S]*?</action>', 'g');
     text = text.replace(ours, '');
-    if (label) {
-      const action = `\n<action>\n\t<icon>document-send</icon>\n\t<name>${xml(label)}</name>\n\t<unique-id>${UCA_ID}</unique-id>\n\t<command>${xml(exec)}</command>\n\t<description>Send the selected files with TwinDesk</description>\n\t<patterns>*</patterns>\n\t<directories/>\n\t<audio-files/>\n\t<image-files/>\n\t<other-files/>\n\t<text-files/>\n\t<video-files/>\n</action>`;
+    if (entries.length) {
+      const actions = entries.map((e) => `\n<action>\n\t<icon>document-send</icon>\n\t<name>${xml(e.label)}</name>\n\t<unique-id>${UCA_ID}${e.n ? '-' + e.n : ''}</unique-id>\n\t<command>${xml(e.exec)}</command>\n\t<description>Send the selected files with TwinDesk</description>\n\t<patterns>*</patterns>\n\t<directories/>\n\t<audio-files/>\n\t<image-files/>\n\t<other-files/>\n\t<text-files/>\n\t<video-files/>\n</action>`).join('');
       if (!/<\/actions>/.test(text)) text = '<?xml version="1.0" encoding="UTF-8"?>\n<actions>\n</actions>\n';
-      text = text.replace(/<\/actions>/, action + '\n</actions>');
+      text = text.replace(/<\/actions>/, actions + '\n</actions>');
     }
     write(file, text, 0o644);
   }
@@ -127,18 +145,26 @@ class SendTo {
     const paths = list.slice(at + 1).filter((a) => typeof a === 'string' && !a.startsWith('--') && path.isAbsolute(a)
       && !skip.has(path.resolve(a)) && fs.existsSync(a)).slice(0, 1000);
     if (!paths.length) return true;
-    if (this.link.status.state !== 'connected') {
-      this.pending = { paths, until: Date.now() + 30000 }; // sent once the link is up
-      this.popup('away', { key: 'Not connected yet' }, { key: 'Sending once {name} is connected', vars: { name: this.peerName() || { key: 'the other computer' } } });
+    const toArg = list.find((a) => typeof a === 'string' && a.startsWith(TO));
+    const to = toArg && this.bus ? toArg.slice(TO.length) : null;
+    if (!(to ? this.bus.connectedIds().includes(to) : this.link.status.state === 'connected')) {
+      this.pending = { paths, until: Date.now() + 30000, to }; // sent once the link is up
+      this.popup('away', { key: 'Not connected yet' }, { key: 'Sending once {name} is connected', vars: { name: this._who(to) } });
       return true;
     }
-    this._send(paths);
+    this._send(paths, to);
     return true;
   }
 
-  _send(paths) {
-    const r = this.fileDrop.sendBatch(paths, 'send');
-    const who = this.peerName() || { key: 'the other computer' };
+  _who(to) {
+    return (to && this.nameOf ? this.nameOf(to) : this.peerName()) || { key: 'the other computer' };
+  }
+
+  // to: the device (Multi-device); else the selected one.
+  _send(paths, to = null) {
+    const unit = to && this.fileDrop.unit ? this.fileDrop.unit(to) : null;
+    const r = unit ? unit.sendBatch(paths, 'send') : this.fileDrop.sendBatch(paths, 'send');
+    const who = this._who(to);
     if (!r) return this.popup('away', { key: 'Nothing to send' }, { key: paths.length === 1 ? 'Couldn’t read {file}' : 'Couldn’t read those items', vars: { file: path.basename(paths[0]) } });
     const n = r.items.length;
     this.popup('away', { key: 'Sending {item} to {name}', vars: { item: n === 1 ? r.name : { key: '{count} items', vars: { count: n } }, name: who } });

@@ -5,6 +5,8 @@
 // Messages come from the hub's bus, so only authenticated, mesh-speaking devices take part.
 'use strict';
 
+const RETRY_EVERY_MS = 5 * 60 * 1000; // the introducer's plan again, with nothing changing (see the constructor)
+
 const os = require('os');
 const I = require('../../shared/intro.js');
 const P = require('../../shared/protocol.js');
@@ -39,6 +41,12 @@ class AutoJoin {
     mesh.on('roster', () => this.schedule());
     links.on('add', () => this.schedule());
     links.on('remove', () => this.schedule());
+    // And again now and then: a pair asked within RETRY_MS is skipped (I.plan), and with nothing
+    // changing after it, a pair whose introduction got lost stayed apart (seen only 'via' another).
+    // Every 5 minutes, not every minute: a pair that can't reach each other (two networks) is asked
+    // each time, and each ask is a new token written on the host.
+    this.retry = setInterval(() => this.schedule(), RETRY_EVERY_MS);
+    if (this.retry.unref) this.retry.unref();
   }
 
   on() {
@@ -60,6 +68,7 @@ class AutoJoin {
   }
 
   stop() {
+    clearInterval(this.retry);
     clearTimeout(this.timer);
     this.timer = null;
   }

@@ -731,6 +731,12 @@ app.whenReady().then(() => {
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer’s window goes home there (pcapps.js); one of this Mac’s goes over
   // window by window, shared on its own (appsend.js, movewin.js), apart from how apps open.
+  // General › Lock together (#322, shared/locksync.js): this Mac locked, the other computer locks too.
+  const lockSync = new (require('../shared/locksync.js').LockSync)({
+    platform: 'mac', helper: svc.helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { const c = peer.current; if (c && !P.isPhoneOs(c.os)) peer.sendToClient(m); },
+  }).start();
+  peer.on('t:lock.now', (m, ctx) => !(ctx && P.isPhoneOs(ctx.os)) && lockSync.onMessage((ctx && ctx.name) || ''));
   svc.kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;

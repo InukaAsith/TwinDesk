@@ -45,6 +45,9 @@ async function load() {
   const idx = await pactl(['load-module', 'module-remap-source', 'master=' + sink + '.monitor', 'source_name=' + NAME,
     'source_properties=device.description=' + LABEL]);
   modIdx = idx;
+  // WirePlumber restores a mute it remembers for this source (muted once in the volume applet, where it
+  // shows like a microphone): it would send silence to every device, with nothing to say why.
+  await pactl(['set-source-mute', NAME, '0']).catch(() => {});
   return LABEL;
 }
 

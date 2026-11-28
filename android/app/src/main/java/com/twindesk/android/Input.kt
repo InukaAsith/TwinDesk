@@ -188,7 +188,7 @@ class InputService : AccessibilityService() {
     }
 
     // The computer's Enter in a chat app (phone.send): the app's own Send button, found by its id
-    // (WhatsApp, Instagram) or, in that app only, a button named Send (Telegram and Messenger have no ids we know); else
+    // (WhatsApp, Instagram) or, in that app only, a button named Send (Telegram and Messenger have no ids); else
     // the keyboard's Enter action on the field (it sends where the app makes Enter send).
     fun sendMessage() {
         val root = rootInActiveWindow ?: return

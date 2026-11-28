@@ -4,7 +4,7 @@
 
 const assert = require('assert');
 const P = require('../protocol.js');
-const { ImageOut, ImageIn, isPng } = require('../clipimage.js');
+const { ImageOut, ImageIn, MeshClipImages, isPng } = require('../clipimage.js');
 
 const T = P.T;
 const PART = P.CLIP_IMAGE_PART_BYTES;
@@ -108,6 +108,63 @@ function png(size) {
     const failed = new ImageOut({ send: () => { throw new Error('socket closed'); } });
     assert.strictEqual(await failed.send(png(100)), false, 'a closed transport fails without leaving a busy sender');
     assert.strictEqual(failed.busy, false);
+  }
+  // A picture carries when and where it was copied (Multi-device: the latest copy wins against text too).
+  {
+    const sent = [];
+    await new ImageOut({ send: (m) => sent.push(m) }).send(png(100), { w: 1, h: 1, stamp: { ts: 1234, o: 'dev-a' } });
+    assert.deepStrictEqual([sent[0].ts, sent[0].o], [1234, 'dev-a']);
+    const inn = new ImageIn();
+    inn.header(sent[0]);
+    const pic = inn.part(sent[1]);
+    assert.deepStrictEqual([pic.ts, pic.o], [1234, 'dev-a']);
+    const plain = [];
+    await new ImageOut({ send: (m) => plain.push(m) }).send(png(100));
+    assert.ok(!('ts' in plain[0]) && !('o' in plain[0]), 'no stamp: none on the wire');
+  }
+
+  // Multi-device: a picture older than the newest copy here (a text copied after it) isn't applied;
+  // a newer one is; one that stays here says why in the log.
+  {
+    const { Latest } = require('../clipsync.js');
+    const fakeImg = (png) => ({
+      isEmpty: () => !png, getSize: () => ({ width: 2, height: 2 }), toPNG: () => png,
+      resize: () => ({ toBitmap: () => Buffer.from(png ? png.subarray(0, 16) : []), toDataURL: () => 'data:' }),
+    });
+    const clipboard = { img: fakeImg(null), writes: 0, readImage() { return this.img; }, writeImage(i) { this.img = i; this.writes++; } };
+    const latest = new Latest({ selfId: 'here' });
+    const logs = [];
+    const settings = { enabled: true, images: true, send: true, receive: true };
+    const imgs = new MeshClipImages({
+      cfg: () => settings, clipboard, ids: () => ['A'], send: () => true, backlog: () => 0, ble: () => false,
+      peerName: () => 'PC-A', remember: () => {}, popup: () => {}, onChange: () => {}, log: (l) => logs.push(l),
+      copied: () => latest.copied('image'), newest: (pic) => latest.accept(pic, 'image'),
+    });
+    Object.defineProperty(imgs, 'nativeImage', { value: { createFromBuffer: (b) => fakeImg(b), createEmpty: () => fakeImg(null) } });
+    const inline = (ts, fill) => ({ t: T.CLIP_IMAGE, id: 'p' + ts, w: 2, h: 2, png: Buffer.concat([png(9), Buffer.alloc(40, fill)]).toString('base64'), ts, o: 'A' });
+    const textStamp = latest.copied('text');
+    imgs.header(inline(textStamp.ts - 1000, 0x10), 'A');
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(clipboard.writes, 0, 'older than the text copied here');
+    assert.ok(/older than the newest copy here/.test(logs.pop()));
+    imgs.header(inline(textStamp.ts + 1000, 0x20), 'A');
+    await new Promise((r) => setTimeout(r, 10));
+    assert.strictEqual(clipboard.writes, 1, 'newer: on the clipboard');
+    const got = logs.pop();
+    assert.ok(/from PC-A: on the clipboard/.test(got), got);
+
+    clipboard.img = fakeImg(Buffer.concat([png(9), Buffer.alloc(40, 0x30)])); // copied here; A takes no pictures
+    assert.strictEqual(await imgs.offerClipboard(false), '');
+    const why = logs.pop();
+    assert.ok(/stays here: PC-A: Pictures is off there/.test(why), why);
+    assert.strictEqual(await imgs.offerClipboard(false), '');
+    assert.strictEqual(logs.length, 0, 'once per picture');
+    imgs.policy({ images: true }, 'A');
+    const out = [];
+    imgs.o.send = (id, m) => out.push(m);
+    assert.strictEqual(await imgs.offerClipboard(false), 'sent', 'it takes pictures now: the same picture goes');
+    assert.ok(Number.isFinite(out[0].ts) && out[0].o === 'here', 'stamped');
+    assert.ok(/PC-A sent/.test(logs.pop()));
   }
   console.log('clipimage: ok');
 })().catch((e) => {

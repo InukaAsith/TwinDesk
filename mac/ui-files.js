@@ -25,6 +25,18 @@ UI.tab({
     const pcSw = UI.switch((v) => api.setSmb({ connectPc: v }), { label: I18n.t('Connect the shared folder') });
     const openBtn = UI.button(I18n.t('Open'), () => api.openPcShare(), 'small');
     const pcRow = UI.row(I18n.t('Open {name}’s shared folder'), '', [openBtn, pcSw], { literalHint: true });
+    // Multi-device: every other device's folder connected here, each with its Open (smb view().drives).
+    const drivesBox = el('div');
+    let drivesKey = '';
+    const drawDrives = (list) => {
+      const key = JSON.stringify(list);
+      if (key === drivesKey) return;
+      drivesKey = key;
+      drivesBox.replaceChildren(...list.map((d) => {
+        const r = UI.row(I18n.t('Open {device}’s shared folder', { device: d.name }), d.drive || d.path || '', [UI.button(I18n.t('Open'), () => api.openDrive(d.id), 'small')], { literal: true });
+        return r;
+      }));
+    };
     // shared
     const dragSw = UI.switch((v) => api.setFiles({ dragEdge: v }), { label: I18n.t('Drag files across the screen edge') });
     const dragRow = UI.row(I18n.t('Drag files between computers'), I18n.t('Drag through the screen edge and drop anywhere'), [dragSw], { literalHint: true });
@@ -76,7 +88,7 @@ UI.tab({
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       UI.pair(
         UI.dir('m2w', [shareRow]),
-        UI.dir('w2m', [acceptRow, pcRow]),
+        UI.dir('w2m', [acceptRow, pcRow, drivesBox]),
       ),
       UI.card('', [dragRow, encryptRow], { cls: 'keep-on' }),
       ...(drive ? [drive.card] : []),
@@ -139,6 +151,7 @@ UI.tab({
       acceptSw.set(f.acceptDrops);
       pcSw.set(m.connectPc);
       openBtn.hidden = !m.mounted && !m.wifi;
+      drawDrives(api.openDrive && Array.isArray(m.drives) ? m.drives.filter((d) => (d.drive || d.path) && !d.selected) : []);
       pcRow.setHint(!m.connectPc ? ''
         : m.mounted ? I18n.t('In Finder’s sidebar')
           : m.mounting ? I18n.t('Connecting…')

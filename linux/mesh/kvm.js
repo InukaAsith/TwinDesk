@@ -26,7 +26,6 @@ const { KeyLayout } = require('../../shared/keylayout.js');
 const inputMethods = require('../inputmethod.js');
 const pointerAccel = require('../pointeraccel.js');
 const CL = require('../../shared/cursorlock.js');
-const { pairFor } = require('../../shared/pairfor.js');
 
 const T = P.T;
 const K_TYPES = new Set([T.K_MOVE, T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP]);
@@ -110,6 +109,12 @@ class Kvm {
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
       const side = E.SIDES.includes(m.side) ? m.side : this._sideOf(from); // the monitor map says which side
+      // The other device's files follow as a drag here (its drag.start next), as the one-to-one kvm.js.
+      const d = m.drag && typeof m.drag === 'object' ? m.drag : null;
+      if (d && d.count && this.dragRecv) {
+        console.log('[drag] in from ' + this._dragName(from) + ': ' + (Number(d.count) || 0) + ' item(s), with the pointer home');
+        this.dragRecv.expectHome(from);
+      }
       // kept on the part of that side that touches the device (an offset it never mapped went to another monitor)
       this.helper.send('capture', has && side ? { on: false, side, offset: this.layoutSync.land(side, m.offset, from) } : { on: false });
       this._setMode('home', '');
@@ -125,6 +130,7 @@ class Kvm {
       if (this.mode !== 'home' && from === this.partner) this.setLocked(m.on === true, false);
     });
     bus.on(T.DRAG_POLICY, (m, from) => {
+      if (this.dragPolicyBy.get(from) !== (m.accept !== false)) console.log('[drag] ' + this._dragName(from) + (m.accept !== false ? ' takes' : ' doesn’t take') + ' file drags');
       this.dragPolicyBy.set(from, m.accept !== false);
       this.applyConfig();
     });
@@ -220,14 +226,14 @@ class Kvm {
   }
 
   // Drive other devices / Let other devices drive this one, for one device. The settings hold the selected
-  // device's pair (pair.sync); every other device goes by its own (shared/pairfor.js), so selecting a
+  // device's pair (pair.sync); every other device goes by its own (hub.consent, shared/consent.js), so selecting a
   // device whose side doesn't share its mouse and keyboard doesn't stop the others (#245).
   _driveOtherFor(id) {
-    return !!pairFor(this.settings, this.hub.selectedId, id, 'cursor', 'out', !!this.cfg.driveOther);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'out') : !!this.cfg.driveOther;
   }
 
   _beDrivenFor(id) {
-    return !!pairFor(this.settings, this.hub.selectedId, id, 'cursor', 'in', !!this.cfg.beDriven);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'in') : !!this.cfg.beDriven;
   }
 
   // The side that leads to this device, or null.
@@ -341,6 +347,20 @@ class Kvm {
     return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._linkedFor(id) && !this._pausedFor(id) && this._driveOtherFor(id));
   }
 
+  _dragName(id) {
+    const s = id ? this.hub.sessions.get(id) : null;
+    return s ? s.displayName() : String(id || '?').slice(0, 8);
+  }
+
+  // Why a drag that crossed isn't sent (the log).
+  _dragWhyNot(id, paths) {
+    const f = this.settings.files;
+    if (!f.edgeDrag) return 'Drag across the edge is off here';
+    if (!f.dropToMac) return 'Send files is off here';
+    if (this.dragPolicyBy.get(id) === false) return this._dragName(id) + ' doesn’t take drags: its Drag across the edge or Receive files is off';
+    return paths.length ? 'nothing that can be sent' : 'no file paths';
+  }
+
   _dragsOut(id) {
     const f = this.settings.files;
     return !!(f.edgeDrag && f.dropToMac) && this.dragPolicyBy.get(id) !== false;
@@ -365,6 +385,13 @@ class Kvm {
       this._note('Cursor sharing is off over Bluetooth');
     }
     const f = this.settings.files;
+    const dragSides = sides.filter((s) => this._dragsOut(this.edges[s]));
+    const dragKey = dragSides.join() + '|' + sides.join();
+    if (dragKey !== this.dragKey) {
+      this.dragKey = dragKey;
+      console.log('[drag] the edge strip: ' + (dragSides.length ? dragSides.map((s) => s + ' (' + this._dragName(this.edges[s]) + ')').join(', ')
+        : 'none (' + (!sides.length ? 'no side leads to a device' : !f.edgeDrag ? 'Drag across the edge is off here' : !f.dropToMac ? 'Send files is off here' : 'no device there takes drags') + ')'));
+    }
     this.helper.send('kvmConfig', {
       side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
       sides,
@@ -382,7 +409,10 @@ class Kvm {
       dwellMs: P.KVM_EDGE_DWELL_MS,
       // the same sides for linux-helper, whose JSON reader skips arrays: its -multi build reads this one
       sideList: sides.join(','),
-      dragFiles: this._dragsOut(sides.length ? this.edges[sides[0]] : null), // the edge strip that picks up file drags (X11)
+      // The edge strip that picks up file drags (drop.c on X11, wlstrip.c on Wayland): our own switches; at
+      // home on the sides whose device takes them (dragSideList), and on the way back when driven.
+      dragFiles: !!(f.edgeDrag && f.dropToMac),
+      dragSideList: dragSides.join(','),
       shortcuts: !!f.shortcuts && this.hub.bus.connectedIds().length > 0, // the copy/paste-files shortcuts at home (fclip.js), while connected
       copyKeys: f.copyKeys,
       pasteKeys: f.pasteKeys,
@@ -576,6 +606,7 @@ class Kvm {
     // A file/folder drag crossed: the other device shows it as its own drag; the data follows.
     const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut(id) ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
     const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
+    if (msg.drag) console.log('[drag] out to ' + this._dragName(id) + ': ' + (drag ? drag.count + ' item(s)' : 'not sent (' + this._dragWhyNot(id, paths) + ')'));
     this._take({ side: P.opposite(side), offset: r.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id, before);
     if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg, id); // a window grabbed with the move key (main.js)
     if (drag) { // order: kvm.take, drag.start, then the files
@@ -731,6 +762,7 @@ class Kvm {
   // ---- driven (a device drives this computer) ----
 
   _onTake(m, from) {
+    if (m.drag) console.log('[drag] in from ' + this._dragName(from) + ': ' + (Number(m.drag.count) || 0) + ' item(s)');
     console.log('[kvm] take from ' + from + ' route ' + m.route + ' side ' + m.side + ' (this computer is ' + this.mode + ')');
     const route = Number(m.route) || 0;
     if (this.mode === 'driving') {
@@ -803,7 +835,7 @@ class Kvm {
     // The way back: the side of the device that drives us (judged by who is there, not only by the side we expect).
     if (!side || to === this.partner || (!to && side === this.layoutSync.sideTo(this.partner))) {
       if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner); // a window grabbed with the move key (main.js)
-      return this._sendHome(to === this.partner ? r.offset : msg.offset, '', side ? P.opposite(side) : null);
+      return this._sendHome(to === this.partner ? r.offset : msg.offset, '', side ? P.opposite(side) : null, msg.drag);
     }
     if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, r.offset);
     if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
@@ -927,13 +959,33 @@ class Kvm {
 
   // Row 8c: we send the input home (return edge or hotkey).
   // side: the driver's side the pointer comes back through (the monitor map: it can be any of them).
-  _sendHome(offset, message = '', side = null) {
+  // drag (a return with the button held): the driver's own drag carries on there (back), or a drag here
+  // ended at the edge and its files follow as a drag there (paths).
+  _sendHome(offset, message = '', side = null, drag = null) {
     const msg = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute };
     if (side && typeof offset === 'number') msg.side = side;
     const to = this.partner;
+    const out = this._dragHome(msg, drag, to);
     this._send(to, msg);
     this.caps.handOver((c) => this._send(to, c)); // our Caps Lock, home
+    if (out) this.fileDrop.beginDrag(out); // after kvm.home: drag.start, then the files
     this._drivenHome(message, true);
+  }
+
+  // kvm.home's `drag` for a return with the button held; the drag to begin after it, if any.
+  _dragHome(msg, drag, to) {
+    if (!drag || typeof drag !== 'object' || !to) return null;
+    const held = this.dragRecv && this.dragRecv.cur; // its drag, not dropped yet: the button that drags it is still held
+    if (held && this.dragRecv.dragging) {
+      msg.drag = { back: held.drag };
+      console.log('[drag] back home to ' + this._dragName(to) + ': its own drag, still held');
+      return null;
+    }
+    const paths = Array.isArray(drag.paths) && this._dragsOut(to) ? drag.paths.filter((p) => typeof p === 'string') : [];
+    const out = paths.length ? this.fileDrop.prepareDrag(paths, to) : null;
+    console.log('[drag] back home to ' + this._dragName(to) + ': ' + (out ? out.count + ' item(s)' : 'not sent (' + this._dragWhyNot(to, paths) + ')'));
+    if (out) msg.drag = { count: out.count };
+    return out;
   }
 
   // Rows 8b, 8c, 9b.

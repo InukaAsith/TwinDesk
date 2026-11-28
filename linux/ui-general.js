@@ -28,6 +28,7 @@ UI.tab({
     const recvRow = UI.row(t('Received files'), '', [recvOpen, recvReset, recvChange], { literal: true });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: t('Show a popup when switching') });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: t('Keep the display awake') }); // #240, shared/keepawake.js
+    const lockSw = UI.switch((v) => api.setApp({ lockTogether: v }), { label: t('Lock together') }); // #322, shared/locksync.js
     const fwPill = el('span', { class: 'pill' });
     const fwCheck = UI.button(t('Check again'), () => api.checkFirewall(), 'small');
     const fwFix = UI.button(t('Fix'), () => api.fixFirewall(), 'small primary');
@@ -112,6 +113,7 @@ UI.tab({
         UI.row(t('Open at login'), t('Starts in the tray'), [startup]),
         recvRow,
         UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
+        UI.row(t('Lock together'), t('This computer locks when another connected computer locks, and the other way round. On each computer'), [lockSw]),
       ]),
       UI.card(t('Appearance'), [
         styleRow,
@@ -163,6 +165,7 @@ UI.tab({
       startup.set(s.startup);
       hudSw.set(s.app.hud);
       awakeSw.set(s.app.keepAwake !== false);
+      lockSw.set(s.app.lockTogether === true);
       pingSw.set(s.app.keepPinging === true);
       apiRow.hidden = !s.localApi;
       if (s.localApi) {

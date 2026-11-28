@@ -31,6 +31,21 @@ function addTo(map, key, fn) {
   map.get(key).push(fn);
 }
 
+// Debug › Verbose log › bus (shared/applog.js v()): a message's type, sender and size, once per type and
+// sender every 10 s (not every move: the log would be the moves).
+const busSaid = new Map();
+function busVerbose(s, msg) {
+  const applog = require('../../shared/applog.js');
+  if (!applog.verboseOn || (!applog.verboseOn('bus'))) return;
+  const key = s.id + msg.t;
+  const now = Date.now();
+  if (now - (busSaid.get(key) || 0) < 10000) return;
+  busSaid.set(key, now);
+  let size = 0;
+  try { size = JSON.stringify(msg).length; } catch (_) { /* not plain */ }
+  applog.v('bus', `${s.displayName ? s.displayName() : s.id}: ${msg.t} (${size} bytes)`);
+}
+
 class Hub extends EventEmitter {
   // device {id, name}; links: LinkManager (links.js); mesh: Mesh (shared/mesh.js), whose selfId is
   // device.id; server, pairing: optional here (attachHost() gives them later).
@@ -49,6 +64,7 @@ class Hub extends EventEmitter {
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
     this._audioSticky = {};
+    this._inputPeer = null; // the device using this Mac (setInputPeer), for the microphone
     this.facade = this.route(() => this.selectedId);
     this._addFacadeApi(this.facade);
     this._host = { on: false, error: '' };
@@ -62,9 +78,16 @@ class Hub extends EventEmitter {
     if (server) this.attachHost(server, pairing);
   }
 
+  // The device the net hook serves (netlink.js: Bluetooth to Wi-Fi): the one main binds it to (netId),
+  // else the selected one. Its messages go to netTap; files to it on any route wait in netHold.
+  get netTarget() {
+    return this.netId !== undefined ? this.netId : this.selectedId;
+  }
+
   // A route for a feature: pick(hub) -> the device id it follows.
-  route(pick) {
-    const r = new Route(this, pick);
+  // opts.remember: the state messages its features need again when it moves (shared/link-memory.js).
+  route(pick, opts = {}) {
+    const r = new Route(this, pick, opts);
     this.routes.push(r);
     r.refresh();
     return r;
@@ -72,12 +95,12 @@ class Hub extends EventEmitter {
 
   // The phone's route: the connected phone, whichever computer is selected.
   phoneRoute() {
-    return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)));
+    return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)), { remember: ['hub.state', 'call.state'] }); // the phone's permissions, its call
   }
 
   // Sound and microphone: stay on the device of an active session until it ends (mesh #194).
   audioRoute() {
-    if (!this._audioRoute) this._audioRoute = this.route((hub) => hub._pickAudioRoute());
+    if (!this._audioRoute) this._audioRoute = this.route((hub) => hub._pickAudioRoute(), { remember: ['audio.policy', 'mic.policy'] }); // whether that device takes our microphone
     return this._audioRoute;
   }
 
@@ -89,11 +112,21 @@ class Hub extends EventEmitter {
     if (this._audioRoute) this._audioRoute.refresh();
   }
 
+  // The microphone's graph (docs/mesh-graph.md, step 3): one device, the one using this computer (the input
+  // peer, from MeshShadow) before the selection; a live microphone stays where it is.
+  setInputPeer(id) {
+    if ((this._inputPeer || null) === (id || null)) return;
+    this._inputPeer = id || null;
+    if (this._audioRoute) this._audioRoute.refresh();
+  }
+
   _pickAudioRoute() {
     for (const id of Object.values(this._audioSticky)) {
       const s = id ? this.sessions.get(id) : null;
       if (s && s.connected) return id;
     }
+    const p = this._inputPeer ? this.sessions.get(this._inputPeer) : null;
+    if (p && p.connected && !P.isPhoneOs(p.peerOs)) return p.id; // a phone's microphone has its own stack
     return this.selectedId;
   }
 
@@ -293,6 +326,9 @@ class Hub extends EventEmitter {
       if (this.mesh && this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
+    busVerbose(s, msg); // Debug › Verbose log › bus
+    // The net hook's device's messages reach it first (netlink.js: its net.* and file chunks).
+    if (this.netTap && s.id === this.netTarget) this.netTap(msg);
     let consumed = false;
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
@@ -410,6 +446,12 @@ class Hub extends EventEmitter {
 
   _change() {
     this.emit('change');
+  }
+
+  // A message as if device `id` had sent it (a phone's copy that scrcpy reported for it).
+  receive(id, msg) {
+    const s = id ? this.sessions.get(id) : null;
+    if (s && s.connected) this._fromDevice(s, msg);
   }
 
   _makeBus() {

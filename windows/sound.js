@@ -6,7 +6,6 @@
 const { BrowserWindow, ipcMain, session, desktopCapturer } = require('electron');
 const path = require('path');
 const P = require('../shared/protocol.js');
-const { pairFor } = require('../shared/pairfor.js');
 
 const T = P.T;
 
@@ -24,20 +23,28 @@ class Sound {
 
     const link = this.link;
     this.meshHub = opts.meshHub || null;
-    link.on('welcome', () => { this.macAccepts = false; this.apply(); this._syncAudioSticky(); });
-    link.on('closed', () => { this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
+    this.lastApply = '';      // the last apply() decision logged
+    link.on('welcome', () => { this._log('with', this._who()); this.macAccepts = false; this.apply(); this._syncAudioSticky(); });
+    link.on('closed', (v) => { this._log('left', (v && v.name) || this._who()); this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
     link.on(T.AUDIO_POLICY, (m) => {
       const accept = m.accept === true;
+      this._log('policy from', this._who(), 'accept', accept);
       if (accept === this.macAccepts) return; // apply() answers with our policy: only on a change, or the two sides echo forever
       this.macAccepts = accept;
       this.apply();
     });
     link.on(T.AUDIO_OFFER, (m) => {
-      if (m.dir === 'm2w' && this._on('receive') && typeof m.sdp === 'string') this._toWin({ ...m, ice: this._ice() });
+      const take = m.dir === 'm2w' && this._on('receive') && typeof m.sdp === 'string';
+      this._log('offer from', this._who(), 'dir', m.dir, 'session', m.session, take ? 'answering' : 'ignored (Play is off for it)');
+      if (take) this._toWin({ ...m, ice: this._ice() });
     });
-    link.on(T.AUDIO_ANSWER, (m) => { if (m.dir === 'w2m' && this.sending && m.session === this.sending.session) this._toWin(m); });
+    link.on(T.AUDIO_ANSWER, (m) => {
+      const take = m.dir === 'w2m' && this.sending && m.session === this.sending.session;
+      this._log('answer from', this._who(), 'session', m.session, take ? '' : '(not ours: ignored)');
+      if (take) this._toWin(m);
+    });
     link.on(T.AUDIO_ICE, (m) => this._toWin(m));
-    link.on(T.AUDIO_STOP, (m) => { if (m.dir === 'm2w') this._toWin(m); });
+    link.on(T.AUDIO_STOP, (m) => { this._log('stop from', this._who(), 'dir', m.dir); if (m.dir === 'm2w') this._toWin(m); });
 
     ipcMain.on('sound-out', (e, m) => {
       if (!this.win || e.sender !== this.win.webContents || !m) return;
@@ -45,7 +52,11 @@ class Sound {
     });
     ipcMain.on('sound-state', (e, s) => {
       if (!this.win || e.sender !== this.win.webContents || !s) return;
-      Object.assign(this.status, { receiving: !!s.receiving, sending: !!s.sending, error: String(s.error || '') });
+      const next = { receiving: !!s.receiving, sending: !!s.sending, error: String(s.error || '') };
+      if (next.receiving !== this.status.receiving || next.sending !== this.status.sending || next.error !== this.status.error) {
+        this._log('state with', this._who(), 'receiving', next.receiving, 'sending', next.sending, next.error ? 'error ' + next.error : '');
+      }
+      Object.assign(this.status, next);
       this._syncAudioSticky();
       this.onChange();
     });
@@ -57,9 +68,11 @@ class Sound {
     });
 
     // getDisplayMedia in the sound window → the system sound (loopback), optionally muting it here.
+    // One handler for the app: in Multi-device every device's Sound sets it (shared/sound-mesh.js), and
+    // the last one answers for all, so it reads the setting they share, not its own sender.
     session.defaultSession.setDisplayMediaRequestHandler((req, cb) => {
       desktopCapturer.getSources({ types: ['screen'] }).then((s) => {
-        const mute = this.sending && this.sending.muteLocal;
+        const mute = !!this.cfg.muteLocal;
         cb({ video: s[0], audio: mute ? 'loopbackWithMute' : 'loopback' });
       }).catch(() => cb({}));
     });
@@ -73,13 +86,15 @@ class Sound {
   // device's pair; sound that stays with another device (the sticky route) goes by that device's own (#245).
   _on(key) {
     const c = this.link.current;
-    const sel = this.meshHub ? this.meshHub.selectedId : null;
-    return !!pairFor(this.settings, sel, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', !!this.cfg[key]);
+    const consent = this.meshHub && this.meshHub.consent; // Multi-device: this device's own pair (shared/consent.js)
+    return consent && c ? !!consent.get(c.deviceId, 'audio', key === 'send' ? 'out' : 'in') : !!this.cfg[key];
   }
 
+  // Mesh (#196): while sound plays, its route stays on that device when another one is selected. Only
+  // sound that plays: an offer the device never answers must not keep the route on it.
   _syncAudioSticky() {
     if (!this.meshHub) return;
-    const live = !!(this.sending || this.status.receiving);
+    const live = !!(this.status.sending || this.status.receiving);
     const c = this.link.current;
     this.meshHub.setAudioSticky('sound', live && c ? c.deviceId : null);
   }
@@ -92,6 +107,8 @@ class Sound {
     if (!receive) this._toWin({ t: T.AUDIO_STOP, dir: 'm2w' });
     this._toWin({ t: 'volume', volume: this.cfg.volume });
     const want = connected && this._on('send') && this.macAccepts;
+    const line = `with ${this._who()}: connected ${connected}, play ${receive}, send ${this._on('send')}, they accept ${this.macAccepts} -> ${want ? 'sending' : 'not sending'}`;
+    if (line !== this.lastApply) this._log((this.lastApply = line));
     if (want && this.sending && this.sending.muteLocal !== this.cfg.muteLocal) this._stopSend(true); // restart with the new mute
     if (want && !this.sending) {
       this.sending = { session: ++this.session, muteLocal: this.cfg.muteLocal };
@@ -99,6 +116,16 @@ class Sound {
     } else if (!want && this.sending) this._stopSend(true);
     this._syncAudioSticky();
     this.onChange();
+  }
+
+  _who() {
+    const c = this.link.current;
+    if (c && c.deviceId) return `${c.name || '?'} (${String(c.deviceId).slice(0, 8)})`;
+    return this.link.id ? `(${String(this.link.id).slice(0, 8)}, not connected)` : 'nobody'; // Multi-device: the device this Sound is for
+  }
+
+  _log(...a) {
+    console.log('[sound]', ...a.filter((x) => x !== ''));
   }
 
   _stopSend(tellMac) {

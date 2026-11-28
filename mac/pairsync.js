@@ -47,8 +47,9 @@ const VALUES = {
 class PairSync {
   // only: the features this app has (else all of them)
   // bus (mesh hub): pair.sync from every connected device; peerRole / peerOs name them for stash + welcome
-  constructor({ server, getSettings, saveSettings, apply, only, bus, peerRole, peerOs }) {
-    Object.assign(this, { server, getSettings, saveSettings, apply, bus: bus || null, peerRole, peerOs });
+  // onPair(id): a pair stashed for a device that isn't selected (shared/consent.js)
+  constructor({ server, getSettings, saveSettings, apply, only, bus, peerRole, peerOs, onPair }) {
+    Object.assign(this, { server, getSettings, saveSettings, apply, bus: bus || null, peerRole, peerOs, onPair });
     this.features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => !only || only.includes(f)));
     this.last = null; // values as both sides agree on them now
     this.peerId = null;
@@ -61,7 +62,7 @@ class PairSync {
       if (ctx.role !== 'host') server.send(ctx, { t: P.T.PAIR_SYNC, all: this.last }); // we are the host
     });
     // Before the selection moves on (or the device goes): that pair is kept as it is now, so a device that
-    // isn't selected goes by its own up-to-date pair (shared/pairfor.js, #245). The route has no target
+    // isn't selected goes by its own up-to-date pair (shared/consent.js, #245). The route has no target
     // any more here, so nothing is sent; values only the pair had (a phone's) stay as they were saved.
     server.on('closed', () => {
       if (this.last && this.peerId) {
@@ -122,6 +123,7 @@ class PairSync {
 
   _stash(peerId, m) {
     this._mergeSaved(peerId, this._wireToSaved(m, peerId));
+    if (this.onPair) this.onPair(peerId); // shared/consent.js: what serves that device reads its pair again
   }
 
   // A device connected while not selected: push what we remember for that pair (host only).
@@ -251,4 +253,4 @@ class PairSync {
   }
 }
 
-module.exports = { PairSync, FEATURES };
+module.exports = { PairSync, FEATURES, VALUES };

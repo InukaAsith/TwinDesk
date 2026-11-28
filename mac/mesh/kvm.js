@@ -12,6 +12,7 @@
 // Events: 'change' — this.view changed.
 'use strict';
 
+const { WheelScale } = require('../../shared/wheelscale.js');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { CapsSync } = require('../../shared/capsync.js');
@@ -21,7 +22,6 @@ const { KvmMoves } = require('../../shared/kvm-moves.js');
 const { LaneMesh, LANE_TYPES, meshNative } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
-const { pairFor } = require('../../shared/pairfor.js');
 const store = require('./store');
 // Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
 // and the emergency return (#178).
@@ -267,14 +267,14 @@ class Kvm extends EventEmitter {
   }
 
   // Drive other devices / Let other devices drive this Mac, for one device. The settings hold the selected
-  // device's pair (pair.sync); every other device goes by its own (shared/pairfor.js), so selecting a
+  // device's pair (pair.sync); every other device goes by its own (hub.consent, shared/consent.js), so selecting a
   // device whose side doesn't share its mouse and keyboard doesn't stop the others (#245).
   _driveOtherFor(id) {
-    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'out', !!this.cfg.driveOther);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'out') : !!this.cfg.driveOther;
   }
 
   _beDrivenFor(id) {
-    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'in', !!this.cfg.beDriven);
+    return this.hub.consent ? !!this.hub.consent.get(id, 'cursor', 'in') : !!this.cfg.beDriven;
   }
 
   _connectedTo(id) {
@@ -358,7 +358,7 @@ class Kvm extends EventEmitter {
         dwellMs: P.KVM_EDGE_DWELL_MS,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
         takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
-        dragFiles: this.fileSend.dragOn && this.fileSend.peerDrag, // drag.policy, both sides
+        dragFiles: this.fileSend.dragOn && this.fileSend.anyPeerDrag, // drag.policy, both sides; each crossing checks its device (_take)
       })
       .then(() => this._setTapError(null), (e) => this._setTapError(e.message));
   }
@@ -533,7 +533,10 @@ class Kvm extends EventEmitter {
     this._setMode('driving', '');
     this.input.releaseAll();
     const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard, ...fields.where, ...(via ? { via } : {}) };
-    const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
+    // Only to a device that takes drags (its drag.policy; the helper picks one up if any device does).
+    const takes = this.fileSend.peerDragOf(this.partner);
+    const plan = fields.paths && fields.paths.length && takes ? this.fileSend.planDrag(fields.paths) : null;
+    if (fields.paths && fields.paths.length && !takes) console.log('[drag] out: not sent (' + this._them('{them} doesn’t take file drags') + ')');
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);
     const to = this.partner;
@@ -541,7 +544,7 @@ class Kvm extends EventEmitter {
     if (plan) {
       this.dragOut = this.fileSend.startDrag(plan); // drag.start right after kvm.take
       console.log(`[drag] out ${this.dragOut}: ${plan.items.length} item(s), ${plan.files} file(s), ${plan.bytes} bytes`);
-    } else if (fields.paths && fields.paths.length) console.log('[drag] out: nothing sendable in', fields.paths);
+    } else if (fields.paths && fields.paths.length && takes) console.log('[drag] out: nothing sendable in', fields.paths);
     this.clipboard.sendIfChanged('switch');
     clearTimeout(this.acceptTimer);
     const route = this.route;
@@ -832,7 +835,11 @@ class Kvm extends EventEmitter {
         break;
       case P.T.K_WHEEL: {
         const s = k.reverseScroll ? -1 : 1;
-        ev = { t: m.t, dx: num(m.dx) * s, dy: num(m.dy) * s, mode: m.mode === 'line' ? 'line' : 'pixel' };
+        const mode = m.mode === 'line' ? 'line' : 'pixel';
+        if (!this.wheel || this.wheel.mode !== mode) this.wheel = Object.assign(new WheelScale(), { mode }); // Scrolling speed here (#315)
+        const w = this.wheel.scale(num(m.dx) * s, num(m.dy) * s, k.scrollSpeed);
+        if (!w.dx && !w.dy) return; // less than a line so far: it adds up
+        ev = { t: m.t, dx: w.dx, dy: w.dy, mode };
         break;
       }
       default:

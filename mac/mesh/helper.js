@@ -16,6 +16,13 @@ const MULTI = path.join(RELEASE, 'macshare-helper-multi');
 const BIN = fs.existsSync(MULTI) ? MULTI : path.join(RELEASE, 'macshare-helper');
 
 class MeshHelper extends Helper {
+  // Every feature listens to the helper, and Multi-device has some per device (shared/files-mesh.js):
+  // past Node's 10 by design ('MaxListenersExceededWarning' at every start). 100 still flags a leak.
+  constructor(...args) {
+    super(...args);
+    this.setMaxListeners(100);
+  }
+
   // ../helper.js's start() with this BIN.
   start() {
     if (this.proc) return true;

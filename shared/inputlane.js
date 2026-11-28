@@ -571,6 +571,10 @@ class InputLane extends EventEmitter {
     const ping = () => {
       if (!this.keys) return;
       if (this.up && performance.now() - this.lastPong > DOWN_AFTER * this.pingEvery + 50) this._setUp(false);
+      if (this.up && performance.now() - (this.vSaid || 0) > 10000) { // Debug › Verbose log › lane
+        this.vSaid = performance.now();
+        try { require('./applog.js').v('lane', `up, rtt ${this.rttMs == null ? '–' : this.rttMs.toFixed(1)} ms, last pong ${Math.round(performance.now() - this.lastPong)} ms ago, pinging every ${this.pingEvery} ms`); } catch (_) { /* no log */ }
+      }
       writeU64(this.pingBody, 0, nowUs());
       this._send(TYPE.PING, this.pingBody);
       // Driving: the latest totals again with each ping, so the pointer ends in the right place

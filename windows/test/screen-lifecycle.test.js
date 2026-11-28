@@ -151,6 +151,19 @@ test('a remote state arriving before the viewer is shown starts sharing once it 
   screen.win.show();
   assert.equal(f.sent.some(m => m.t === P.T.SCREEN_CTL && m.share), true);
 });
+test('Multi-device: a share another computer asked for opens no Monitor 2 here; ours or its own menu does', () => {
+  const opened = (by) => {
+    const f = fixture(); f.opts.selfId = 'me';
+    const screen = new Screen(f.opts);
+    screen._onState({ on: false, remote: true });
+    screen._onState({ on: true, remote: true, ...(by === undefined ? {} : { by }) });
+    return !!screen.win;
+  };
+  assert.equal(opened('someone-else'), false, 'it watches that one, not us (every computer opened one)');
+  assert.equal(opened('me'), true, 'we asked');
+  assert.equal(opened(''), true, 'its own menu');
+  assert.equal(opened(undefined), true, 'an older sharer, as before');
+});
 test('receive input disabling releases the keys and buttons forwarded to the peer', () => {
   const f = fixture(); let allowed = true; f.opts.inputAllowed = () => allowed;
   const screen = new Screen(f.opts); screen.open(); screen.ready = true;

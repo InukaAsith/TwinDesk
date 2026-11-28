@@ -1,5 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// hub.audioRoute + setAudioSticky: three-device selection must not close an active sound target.
+// hub.audioRoute + setAudioSticky: three-device selection must not close an active sound target; the
+// microphone's route follows the input peer (setInputPeer) before the selection.
 // Run: node shared/test/hub-audio-route.test.js
 'use strict';
 
@@ -61,6 +62,21 @@ async function main() {
     assert.strictEqual(route.targetId, C.id);
     assert.strictEqual(closed.length, 1);
     console.log('passed: audio route sticky across three devices');
+
+    // Step 3 (docs/mesh-graph.md): the microphone goes to the device using this computer, before the selection;
+    // a live microphone still stays; a device that left is no longer it.
+    A.hub.setInputPeer(B.id);
+    assert.strictEqual(route.targetId, B.id, 'the input peer, not the selection (C)');
+    A.hub.setAudioSticky('mic', B.id);
+    A.hub.setInputPeer(C.id);
+    assert.strictEqual(route.targetId, B.id, 'a live microphone stays');
+    A.hub.setAudioSticky('mic', null);
+    assert.strictEqual(route.targetId, C.id, 'then the new input peer');
+    A.hub.select(B.id);
+    assert.strictEqual(route.targetId, C.id, 'a new selection doesn’t move it');
+    A.hub.setInputPeer(null);
+    assert.strictEqual(route.targetId, B.id, 'no input peer: the selection');
+    console.log('passed: the microphone follows the input peer');
   } finally {
     close(A, B, C);
   }

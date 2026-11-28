@@ -116,7 +116,9 @@ namespace TwinDesk.FullKvm
     class KvmService : ServiceBase
     {
         static readonly HashSet<string> Allowed = new HashSet<string>(new string[] {
-            "ping", "keepalive", "kvmConfig", "screens", "capture", "place", "armReturn", "inject", "pen", "touch", "releaseAll", "watchRelease", "moveTo", "info" });
+            "ping", "keepalive", "kvmConfig", "screens", "capture", "place", "armReturn", "inject", "pen", "touch", "releaseAll", "watchRelease", "moveTo", "info",
+            "dragCross", "dragHold", // a file drag the user's helper caught on its strip (windows-helper/src/DragRelay.cs)
+            "unswallow" }); // …and one that came home with the button held: its release goes through (route.js)
         // Kept and given again to an agent started on another desktop, in this order.
         static readonly string[] Replayed = new string[] { "kvmConfig", "armReturn", "capture" };
 
@@ -320,6 +322,7 @@ namespace TwinDesk.FullKvm
                         if (c == null) continue;
                         object cmdObj;
                         string cmd = c.TryGetValue("cmd", out cmdObj) ? cmdObj as string : null;
+                        if (cmd == "serviceLog") { ToClient(ServiceLog(c)); continue; } // Debug: its own log, answered here
                         if (cmd == null || !Allowed.Contains(cmd))
                         {
                             object id;
@@ -335,6 +338,37 @@ namespace TwinDesk.FullKvm
                 catch (Exception) { }
                 Stop();
                 svc.ClientGone(this);
+            }
+
+            // Debug > Logs > Full KVM service (docs/debug.md): a piece (128 KB at most) of fullkvm.log or the
+            // machine node's node.log, which only administrators may read on disk. Nothing else is read.
+            static string ServiceLog(Dictionary<string, object> c)
+            {
+                object idObj, fileObj, fromObj, lenObj;
+                string id = c.TryGetValue("id", out idObj) ? Win.Json.Serialize(idObj) : "null";
+                string which = c.TryGetValue("file", out fileObj) ? fileObj as string : null;
+                string f = which == "node" ? Path.Combine(Paths.Machine, "node.log") : Path.Combine(Paths.Data, "fullkvm.log");
+                long from = 0;
+                int len = 131072;
+                try { if (c.TryGetValue("from", out fromObj) && fromObj != null) from = Convert.ToInt64(fromObj); } catch (Exception) { }
+                try { if (c.TryGetValue("len", out lenObj) && lenObj != null) len = Math.Max(0, Math.Min(131072, Convert.ToInt32(lenObj))); } catch (Exception) { }
+                try
+                {
+                    using (FileStream s = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        long size = s.Length;
+                        if (from < 0 || from > size) from = 0;
+                        int n = (int)Math.Min((long)len, size - from);
+                        byte[] b = new byte[n];
+                        s.Seek(from, SeekOrigin.Begin);
+                        int got = 0;
+                        while (got < n) { int k = s.Read(b, got, n - got); if (k <= 0) break; got += k; }
+                        return "{\"id\":" + id + ",\"ok\":true,\"size\":" + size + ",\"from\":" + from + ",\"data\":\"" + Convert.ToBase64String(b, 0, got) + "\"}";
+                    }
+                }
+                catch (FileNotFoundException) { return "{\"id\":" + id + ",\"ok\":true,\"size\":0,\"from\":0,\"data\":\"\"}"; }
+                catch (DirectoryNotFoundException) { return "{\"id\":" + id + ",\"ok\":true,\"size\":0,\"from\":0,\"data\":\"\"}"; }
+                catch (Exception e) { return "{\"id\":" + id + ",\"ok\":false,\"error\":" + Win.Json.Serialize(e.Message) + "}"; }
             }
 
             // Ctrl+Alt+Del: Windows never takes it from SendInput; SendSAS from a service it does.

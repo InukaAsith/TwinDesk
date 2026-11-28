@@ -31,6 +31,8 @@ namespace MacShare
         static Smoother smoother; // the phone Remote's moves, eased out (k.mm with smooth)
         static ClipWatch clipWatch; // "clipboard" events: something was copied (ClipWatch.cs)
         static DropEdge dropEdge;
+        static LocalEdge localEdge; // the strip's view of our capture (DropEdge.cs)
+        static DragRelay dragRelay; // …or, with Full KVM, of the service's (DragRelay.cs)
         static DragSession drag; // the drag from the Mac on this PC
 
         [STAThread]
@@ -74,12 +76,6 @@ namespace MacShare
                 e["event"] = "letGo";
                 e["buttons"] = string.Join(",", buttons.ConvertAll(b => b.ToString()).ToArray());
                 e["silentMs"] = (double)silentMs;
-                if (buttons.Contains(0))
-                {
-                    e["captionAppPid"] = (double)Injector.CaptionAppPid;
-                    e["captionWindowPid"] = (double)Injector.CaptionWindowPid;
-                    e["captionHit"] = (double)Injector.CaptionHit;
-                }
                 Emit(e);
             };
             capture.ReleaseInjected = delegate { smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); }; // the emergency return (Crossing.cs)
@@ -99,7 +95,15 @@ namespace MacShare
             capture.Start();
             capture.Flash = new Flash();
             if (!agent) AppWindows.Watch(delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "winShown"; Emit(e); }); // Menus
-            dropEdge = new DropEdge(capture, Emit);
+            localEdge = new LocalEdge(capture, Emit);
+            // The agent (Full KVM, as SYSTEM) shows no strip: Explorer can't drop onto a SYSTEM window, and
+            // it would cover the user's helper's, which has it then (DragRelay.cs). Its capture still
+            // crosses with the drags that one catches (dragCross).
+            if (!agent)
+            {
+                dragRelay = new DragRelay(localEdge, Emit);
+                dropEdge = new DropEdge(dragRelay);
+            }
             if (!agent) { try { clipWatch = new ClipWatch(Emit); } catch (Exception) { /* no clipboard events: clip.js polls */ } }
             if (!agent) Notifs.Emit = Emit; // // file drags across the edge (shown only while dragging)
 
@@ -291,7 +295,7 @@ namespace MacShare
             catch (Exception) { return; }
             if (c == null) return;
             capture.Touch(); // any command resets the dead-man timer
-            Injector.Heard(); // main is responsive (Inject.cs WatchSilence)
+            Injector.Heard(); // … and says main isn't frozen (Inject.cs WatchSilence)
             string cmd = Json.Str(c, "cmd", "");
             string error = null;
             try
@@ -299,9 +303,8 @@ namespace MacShare
                 switch (cmd)
                 {
                     case "ping": break;
-                    case "keepalive": if (Json.Bool(c, "driven", false)) injector.Heartbeat(); break;
+                    case "keepalive": if (Json.Bool(c, "driven", false)) injector.Heartbeat(); break; // driven: main is alive (WatchSilence)
                     case "kvmConfig":
-                        Injector.SetAppPid(Json.Num(c, "appPid", 0));
                         capture.TakeBack = Json.Bool(c, "takeBack", true);
 #if MULTI
                         // sides: every side that leads to a connected device (CaptureMulti.cs); without it, the one side.
@@ -324,6 +327,7 @@ namespace MacShare
                         capture.DriveOther = Json.Bool(c, "driveOther", false);
                         capture.EdgeKeyboard = Json.Bool(c, "keyboard", true);
                         capture.DragFiles = Json.Bool(c, "dragFiles", true);
+                        capture.DragSides = Json.Strs(c, "dragSides");
                         capture.DeadmanMs = (int)Json.Num(c, "deadmanMs", 1500);
                         capture.DoubleTapMs = (int)Json.Num(c, "doubleTapMs", 400);
                         capture.Gestures = Json.Bool(c, "gestures", true);
@@ -331,6 +335,25 @@ namespace MacShare
                         capture.Emergency = new EmergencyShortcut(Json.Str(c, "emergencyKeys", EmergencyShortcut.Fallback));
                         break;
                     case "crossingWatch": capture.WatchCrossingFlags(); break; // hold-to-cross (Crossing.cs)
+                    case "dragStrip": if (dragRelay != null) dragRelay.Update(c); break; // Full KVM: the service's capture (DragRelay.cs)
+                    case "dragHold": capture.HoldReturn = Json.Bool(c, "on", false); break; // Full KVM: a drag on the way back, caught by the user's helper
+                    case "unswallow": c["held"] = capture.Unswallow((int)Json.Num(c, "button", 0)); break; // Full KVM: a drag that came home starts in the user's helper (dragStart home, dragLocal): its button's release must reach it; held false: already let go
+                    case "dragCross": // Full KVM: a file drag the user's helper caught on its strip: our capture crosses with it
+                        {
+                            List<string> dragPaths = Json.Strs(c, "paths");
+                            string dragSide = Json.Str(c, "side", null);
+                            bool dragBack = Json.Bool(c, "back", false);
+                            // Why not, in the answer (route.js logs it) and here (our stderr reaches the app's log).
+                            string dragWhy = dragPaths == null || dragPaths.Count == 0 ? "no paths" : dragSide == null ? "no side"
+                                : !capture.DragFiles ? "file drags are off here"
+                                : dragBack ? (capture.ReturnStops().Contains(dragSide) ? null : "not driven through the " + dragSide + " edge")
+                                : capture.Capturing ? "already capturing"
+                                : !localEdge.HomeSides().Contains(dragSide) ? "the " + dragSide + " edge takes no drags (" + string.Join(",", localEdge.HomeSides().ToArray()) + ")" : null;
+                            Console.Error.WriteLine("[drag] agent: " + (dragWhy == null ? "crossing through the " + dragSide + " edge with " + dragPaths.Count + " item(s)" : "not crossing: " + dragWhy));
+                            if (dragWhy != null) { capture.HoldReturn = false; error = dragWhy; break; }
+                            localEdge.Cross(new Point((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)), dragSide, dragBack, dragPaths.ToArray());
+                        }
+                        break;
                     case "crossingFlags": capture.RemoteCrossingBits = (int)Json.Num(c, "flags", 0) & 15; break;
                     case "emergencyActive": capture.SetEmergencyActive(Json.Bool(c, "on", false)); break;
                     case "capture":
@@ -437,7 +460,10 @@ namespace MacShare
                         if (nl != null) foreach (object o in nl) dnames.Add(Convert.ToString(o));
                         string into = Json.Str(c, "into", ""); // Paste = drop onto this folder
                         if (into != "") drag.DropDir = into;
-                        if (Json.Bool(c, "home", false)) capture.Unswallow(0); // came home with our button held: its release drops it
+                        // Came home with our button held: its release drops it. Already let go (our capture swallowed
+                        // the release before the drag got here): it drops now, at the pointer, not at the next click.
+                        // svc: Full KVM, the service's capture has the button and route.js asks it instead.
+                        if (Json.Bool(c, "home", false) && !Json.Bool(c, "svc", false) && !capture.Unswallow(0)) drag.DropRequested = true;
                         drag.Start(dnames);
                         break;
                     case "dragLocal": // our own files, dragged back home with the button still held: Explorer's kind of drag of them
@@ -584,6 +610,7 @@ namespace MacShare
             reply["ok"] = error == null;
             if (error != null) reply["error"] = error;
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
+            if (cmd == "unswallow" && c.ContainsKey("held")) reply["held"] = c["held"];
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];

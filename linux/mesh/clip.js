@@ -12,6 +12,7 @@ const { MeshClipImages, trimPictures, itemView } = require('../../shared/clipima
 
 const electronClipboard = electron.clipboard; // undefined under plain node (tests inject one)
 const POLL_MS = 500; // instant mode: how often the clipboard is checked for a new copy
+const IMAGE_POLL_EVERY = 6; // … and, without the helper's word on a copy, for a new picture (every 3 s)
 const PREVIEW = 300; // characters kept per history item for the UI
 
 // Password managers mark secrets so clipboard tools leave them alone: shared/eclip.js (Electron 44
@@ -20,13 +21,14 @@ const { isConcealed, formats } = require('../../shared/eclip.js');
 
 // The Pool's view of the mesh for the clipboard. Items from a device are always applied (its
 // clip.policy says what it wants from us, not what it sends); items go only to devices whose
-// clip.policy accepted (mesh entry .pool), which is checked in send().
-function clipPeers(mesh) {
+// clip.policy accepted (mesh entry .pool) and that our pair with sends to (consent), checked in send().
+// One we don't send to stays in the item's `d`, so no device relays it there either.
+function clipPeers(mesh, clip) {
   return mesh.peers().map((e) => ({
     id: e.id,
     mesh: e.mesh,
     pool: true,
-    send: (msg) => e.pool !== false && e.send(msg),
+    send: (msg) => e.pool !== false && clip._sendsTo(e.id) && e.send(msg),
   }));
 }
 
@@ -36,6 +38,7 @@ class Clip {
   //              selectedId() -> string|null, connectedIds() -> string[] }
   //   mesh     shared/mesh.js Mesh (entries: {id, name, send, mesh, pool})
   //   getSettings()  -> settings.clipboard
+  //   consent        optional shared/consent.js: each device's own Send / Receive (else the settings' for all)
   //   onChange()     the view changed
   //   clipboard      optional; default Electron's clipboard
   //   session(id)    optional: hub.js's session of a device (bufferedAmount, transport), for pictures
@@ -46,7 +49,8 @@ class Clip {
     this.getSettings = opts.getSettings;
     this.onChange = opts.onChange;
     this.clipboard = opts.clipboard || electronClipboard;
-    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh) });
+    this.consent = opts.consent || null;
+    this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh, this) });
     this.latest = new Latest({ selfId: this.mesh.selfId }); // the latest copy wins (shared/clipsync.js)
     this.lastSync = { sent: null, received: null };
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size, from}
@@ -54,16 +58,23 @@ class Clip {
     this.poll = null;
     this.seen = null; // last clipboard text the instant poll saw
     this.formats = ''; // the clipboard's formats at the last poll: a picture is looked at when they change
+    this.watched = false; // the helper says when anything is copied (useHelper: Windows' ClipWatch.cs)
+    this.copied = false; // … and it did since the last poll
+    this.ticks = 0;
     const sess = (id) => (opts.session ? opts.session(id) : null);
     this.images = new MeshClipImages({
       cfg: () => this.cfg, clipboard: this.clipboard,
       ids: () => this.bus.connectedIds().filter((id) => this._accepts(id)),
+      sendsTo: (id) => this._sendsTo(id), takes: (id) => this._takes(id),
       send: (id, m) => this.bus.send(id, m),
       backlog: (id) => { const x = sess(id); return (x && x.bufferedAmount) || 0; },
       ble: (id) => { const x = sess(id); return !!x && x.transport === 'ble'; },
       peerName: (id) => { const e = this.mesh.get(id); return (e && e.name) || ''; },
       remember: (dir, item, from) => this._remember(dir, item, from),
       popup: (kind, text, presentation) => opts.popup && opts.popup(kind, presentation || text),
+      log: (line) => console.log(line),
+      copied: () => this.latest.copied('image'), // a picture is a copy as text is: the latest wins
+      newest: (pic) => this.latest.accept(pic, 'image'),
       onChange: () => this.onChange(),
       pasteKeys: 'Ctrl+V',
     });
@@ -78,6 +89,7 @@ class Clip {
     bus.on(P.T.CLIP_POLICY, (m, from) => {
       const e = this.mesh.get(from);
       if (e) e.pool = m.accept !== false;
+      console.log(`[clip] ${this._name(from)} takes ${m.accept !== false ? 'the clipboard' : 'no clipboard'}, ${m.images === true ? 'pictures too' : 'no pictures'}`);
       this.images.policy(m, from);
       this.away.policy(from, m);
       this.onChange();
@@ -103,6 +115,37 @@ class Clip {
     return this.getSettings();
   }
 
+  // Our pair with that device: our clipboard goes there / theirs is taken here (shared/consent.js).
+  _sendsTo(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'out') : !!c.send);
+  }
+
+  _takes(id) {
+    const c = this.cfg;
+    return !!c.enabled && (this.consent ? this.consent.get(id, 'clipboard', 'in') : !!c.receive);
+  }
+
+  _anySend() {
+    return this.bus.connectedIds().some((id) => this._sendsTo(id));
+  }
+
+  _name(id) {
+    const e = this.mesh.get(id);
+    return (e && e.name) || String(id).slice(0, 8);
+  }
+
+  // Windows' helper says when anything is copied (pictures too: ClipWatch.cs), so a picture copied
+  // after another one, whose formats are the same, still goes. Without it the poll looks now and then.
+  useHelper(helper) {
+    helper.on('exit', () => { this.watched = false; });
+    helper.on('event', (name) => {
+      if (name !== 'clipboard') return;
+      this.watched = true;
+      this.copied = true;
+    });
+  }
+
   // True when some connected device accepts clipboard from us (true with nobody connected, as before).
   get peerAccepts() {
     const ids = this.bus.connectedIds();
@@ -112,7 +155,7 @@ class Clip {
 
   _accepts(id) {
     const e = this.mesh.get(id);
-    return !!e && e.pool !== false;
+    return !!e && e.pool !== false && this._sendsTo(id);
   }
 
   _othersConnected(id) {
@@ -130,7 +173,7 @@ class Clip {
 
   _applyPoll() {
     const c = this.cfg;
-    if (c.enabled && c.send && c.mode === 'instant' && this.bus.connectedIds().length) this._startPoll();
+    if (c.mode === 'instant' && this._anySend()) this._startPoll();
     else this._stopPoll();
   }
 
@@ -140,8 +183,7 @@ class Clip {
   }
 
   _sendPolicy(id) {
-    const c = this.cfg;
-    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
+    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: this._takes(id), images: !!(this.images.on && this._takes(id)), queue: true }); // queue: clip.queue understood here
   }
 
   _startPoll() {
@@ -158,13 +200,18 @@ class Clip {
 
   // One instant-mode check: a new clipboard text is published to the pool; with no text, a new
   // picture (the clipboard's formats changed) goes to the devices that take pictures.
+  // A picture is looked at when the helper saw a copy, the formats changed, or (no helper) every 3 s:
+  // the formats alone miss a picture copied after another. offerClipboard() sends
+  // each picture once (sigOf), so looking again costs a read, nothing more.
   async pollOnce() {
     const t = await this._readText();
+    const copied = this.copied;
+    this.copied = false;
     let picture = false;
-    if (!t && this.images.canSend) {
+    if (!t) {
       const list = await formats(this.clipboard).catch(() => []);
       const f = list.join();
-      picture = f !== this.formats && list.some((x) => /^image\//.test(x));
+      picture = list.some((x) => /^image\//.test(x)) && (copied || f !== this.formats || (this.images.canSend && !this.watched && ++this.ticks % IMAGE_POLL_EVERY === 0));
       this.formats = f;
     }
     if (t === this.seen && !picture) return;
@@ -208,14 +255,16 @@ class Clip {
 
   async _onClip(m, from) {
     const c = this.cfg;
-    if (!c.enabled || !c.receive || !m || !P.clipAllowed(m.text)) return;
+    if (!c.enabled || !this._takes(from) || !m || !P.clipAllowed(m.text)) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh) return;
+    if (r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose clipboard we don't take
     // An older copy than the newest this device knows (its own last copy counts): not applied. The pool
     // relayed it anyway, so each device decides for itself.
-    if (!this.latest.accept(r.msg, 'text')) return;
-    const text = m.text;
     const name = this._nameOf(r.msg.o, m.on, from);
+    if (!this.latest.accept(r.msg, 'text')) return void console.log(`[clip] text from ${name} (${m.text.length} characters, by ${this._name(from)}) is older than the newest copy here: not applied`);
+    const text = m.text;
+    console.log(`[clip] text from ${name} (${text.length} characters, by ${this._name(from)}): on the clipboard`);
     this.images.text(); // a picture still on its way either way is out of date
     this.lastSync.received = text;
     this.seen = text; // so instant mode doesn't publish it back
@@ -230,7 +279,7 @@ class Clip {
   // device's pool sequence numbers at the receiver, so there is none.
   async sendIfChanged(why) {
     const c = this.cfg;
-    if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
+    if (!this._anySend()) return;
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
     // Read together: one await before the checks below, so no other copy or clip runs in between.
     const [text, concealed] = await Promise.all([this._readText(), c.skipConcealed && isConcealed(this.clipboard)]);
@@ -248,7 +297,9 @@ class Clip {
     }
     this.images.text();
     const stamp = this.latest.copied('text'); // when the copy happened; the pool adds where (o)
-    if (!this.pool.publish({ t: P.T.CLIP, text, ts: stamp.ts }).sent.length) return;
+    const { sent } = this.pool.publish({ t: P.T.CLIP, text, ts: stamp.ts });
+    console.log(`[clip] text copied here (${text.length} characters, ${why}): ${sent.length ? 'to ' + sent.map((id) => this._name(id)).join(', ') : 'nobody took it'}`);
+    if (!sent.length) return;
     this.lastSync.sent = text;
     this._remember('out', text);
     this.lastSkip = '';
@@ -275,6 +326,7 @@ class Clip {
   _skip(why) {
     if (this.lastSkip === why) return;
     this.lastSkip = why;
+    console.log('[clip] not sent:', why.replace('{name}', 'no connected device').replace('{me}', 'this computer'));
     this.onChange();
   }
 
@@ -297,6 +349,8 @@ class Clip {
     return {
       peerAccepts: this.peerAccepts,
       peerImages: this.images.peerImages,
+      // The connected devices that take our clipboard but not pictures (the Pictures hint names them).
+      noPictures: this.bus.connectedIds().filter((id) => this._accepts(id) && !(this.images.peers.get(id) || {}).images).map((id) => this._name(id)),
       imageSupport: true,
       lastSkip: this.lastSkip,
       queued: this.away.size,

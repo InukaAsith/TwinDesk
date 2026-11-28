@@ -66,7 +66,17 @@ class FileRecv {
       this.expected.clear();
       this.target = null;
     });
-    try { fs.rmSync(this.dir, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    // Leftovers of an earlier run, once: Multi-device has a FileRecv per device (shared/files-mesh.js),
+    // made when each one comes, and their parts share this folder.
+    if (!FileRecv.cleaned) {
+      FileRecv.cleaned = true;
+      try { fs.rmSync(this.dir, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    }
+  }
+
+  // Receive files from this link's device: its pair's switch (opts.accepts, shared/consent.js), else the settings'.
+  _accepts() {
+    return this.accepts ? !!this.accepts() : !!this.settings.files.acceptFromMac;
   }
 
   // The phone was asked for files here (Photos › Save, Files › Save: PhoneHub 'asked'): a Send batch
@@ -80,7 +90,7 @@ class FileRecv {
     if (this.claims && this.claims(m)) return; // a paste Windows copies itself (dragrecv.js)
     const refuse = (why) => this.link.send({ t: T.FILE_REFUSE, id: m.id, why });
     if (m.drop === 'send' || m.drop === 'paste' || m.drop === 'rezume') return this._offerBatch(m, refuse); // rezume: a document taken here (shared/rezume.js)
-    if (!this.settings.files.acceptFromMac) return refuse('not_allowed');
+    if (!this._accepts()) return refuse('not_allowed');
     const size = Number(m.size);
     if (!Number.isSafeInteger(size) || size < 0 || size > P.FILE_MAX_BYTES) return refuse('too_big');
     const name = safeName(m.name);
@@ -227,7 +237,7 @@ class FileRecv {
     if (!b) {
       const pasted = this.expected.get(m.batch);
       if ((m.drop === 'paste' || m.drop === 'rezume') && !pasted) return refuse('not_allowed'); // we never asked for it
-      if (m.drop === 'send' && !this.settings.files.acceptFromMac && !(Date.now() < this.askedUntil)) return refuse('not_allowed');
+      if (m.drop === 'send' && !this._accepts() && !(Date.now() < this.askedUntil)) return refuse('not_allowed');
       // total: the whole batch's bytes (file.offer `bytes`, or what fclip.offer said); 0 = unknown.
       const total = Number(m.bytes) > 0 ? Number(m.bytes) : pasted ? pasted.bytes : 0;
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one

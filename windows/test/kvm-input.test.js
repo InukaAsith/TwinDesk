@@ -86,16 +86,3 @@ test('driven: keepalive {driven} for the helper (it lets go of a held button if 
   f.kvm.link.lastRx = Date.now(); f.kvm._setMode('driving', ''); t.mock.timers.tick(P.HELPER_KEEPALIVE_MS);
   assert.equal(alive().length, 1); assert.equal(alive()[0].driven, undefined); // driving: the capture's dead-man, as before
 });
-
-test('watchdog caption diagnostics are numeric, optional and do not change input mode', t => {
-  const f = fixture(t), lines = [];
-  t.mock.method(console, 'log', line => lines.push(line));
-  f.kvm._onHelper('letGo', { buttons: '0', silentMs: 1600, captionAppPid: 1234, captionWindowPid: 1234, captionHit: 2 });
-  assert.match(lines[0], /caption app 1234, window 1234, hit 2/);
-  assert.equal(f.kvm.mode, 'driven');
-  f.kvm._onHelper('letGo', { buttons: '0', silentMs: 1600, captionAppPid: 'private', captionWindowPid: 1234, captionHit: 2 });
-  assert.doesNotMatch(lines[1], /private|caption app/);
-  f.kvm._onHelper('letGo', { buttons: '0', silentMs: 1600 });
-  assert.match(lines[2], /after 1600 ms/);
-  assert.equal(f.injected.length, 0);
-});

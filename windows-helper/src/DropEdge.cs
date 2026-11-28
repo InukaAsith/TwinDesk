@@ -8,17 +8,90 @@
 // While the Mac drives this PC the strip covers the way back instead, for the Mac's button held in
 // an Explorer drag here: caught the same way, the input goes home with it (`return {offset,
 // drag:{paths}}`, Capture.ReturnWithDrag) and the Mac carries the drag on.
+// What it knows of the capture comes through IDragEdge: this helper's own (LocalEdge), or with Full
+// KVM the service's, which can't have the strip (DragRelay.cs).
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 
 namespace MacShare
 {
-    class DropEdge : Form
+    // What the strip needs of a capture.
+    interface IDragEdge
+    {
+        bool Capturing { get; }
+        bool DragFiles { get; }
+        List<string> HomeSides(); // the sides a drag crosses at home (none: edge crossing off)
+        List<string> ReturnStops(); // the way back while driven (none: not driven)
+        DateTime LastCross { get; }
+        void Hold(bool on); // a drag caught on the way back: the return waits for its drop
+        void Cross(Point at, string side, bool back, string[] paths); // Explorer's drag ended on the strip
+    }
+
+    // This helper's own capture: the drag crosses here.
+    class LocalEdge : IDragEdge
     {
         readonly Capture capture;
         readonly Action<Dictionary<string, object>> emit;
+
+        public LocalEdge(Capture capture, Action<Dictionary<string, object>> emit)
+        {
+            this.capture = capture;
+            this.emit = emit;
+        }
+
+        public bool Capturing { get { return capture.Capturing; } }
+        public bool DragFiles { get { return capture.DragFiles; } }
+        public DateTime LastCross { get { return capture.LastCross; } }
+        public List<string> ReturnStops() { return capture.ReturnStops(); }
+        public void Hold(bool on) { capture.HoldReturn = on; }
+
+        public List<string> HomeSides()
+        {
+            List<string> l = new List<string>();
+            if (!capture.DriveOther) return l;
+#if MULTI
+            l.AddRange(capture.Sides); // every watched side, each to its device
+#else
+            if (capture.Side != null) l.Add(capture.Side);
+#endif
+            if (capture.DragSides != null) l.RemoveAll(delegate (string s) { return !capture.DragSides.Contains(s); }); // those whose device takes drags
+            return l;
+        }
+
+        // Capture starts (the user's real button-up is swallowed from here and goes to the Mac) and
+        // main gets the paths with the crossing; on the way back the input goes home with them.
+        public void Cross(Point at, string side, bool back, string[] paths)
+        {
+            if (back) { capture.ReturnWithDrag(at, side, paths); return; }
+            capture.HoldReturn = false;
+            if (capture.Capturing) return;
+            capture.Begin(true, capture.EdgeKeyboard);
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            d["event"] = "edge";
+            d["offset"] = Math.Round(Screens.Offset(at.X, at.Y, side), 4);
+            d["side"] = side;
+            Dictionary<string, object> drag = new Dictionary<string, object>();
+            drag["paths"] = paths;
+            d["drag"] = drag;
+            emit(d);
+        }
+    }
+
+    class DropEdge : Form
+    {
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+        readonly IDragEdge edge;
+        bool looked; // what's under the pointer on the strip was logged, for this showing
+        string told = ""; // why there's no strip, as last logged (again only when it changes)
         readonly Timer timer = new Timer();
         const int STRIP = 3; // px
         bool taken; // a drag entered and is being handed to the Mac
@@ -37,10 +110,9 @@ namespace MacShare
                 : (e.AllowedEffect & DragDropEffects.Link) != 0 ? DragDropEffects.Link : DragDropEffects.None;
         }
 
-        public DropEdge(Capture capture, Action<Dictionary<string, object>> emit)
+        public DropEdge(IDragEdge edge)
         {
-            this.capture = capture;
-            this.emit = emit;
+            this.edge = edge;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             TopMost = true;
@@ -74,22 +146,35 @@ namespace MacShare
         // while driven the way back (the button is the Mac's then).
         void Follow()
         {
-            List<string> back = capture.Capturing ? new List<string>() : capture.ReturnStops();
+            List<string> back = edge.Capturing ? new List<string>() : edge.ReturnStops();
             bool held = (Native.GetAsyncKeyState(0x01) & 0x8000) != 0;
             if (taken) return; // stays while Explorer's drag ends on it
-            if (!held || !capture.DragFiles || capture.Capturing || (back.Count == 0 && (capture.Side == null || !capture.DriveOther))) { if (Visible) Hide(); return; }
+            if (DragSession.Running) { if (Visible) Hide(); return; } // a drag of ours: its press, not the strip's
+            List<string> sides = back.Count > 0 ? back : edge.HomeSides();
+            if (held && !edge.Capturing)
+            {
+                string why = !edge.DragFiles ? "file drags are off here (Send files or Drag across the edge, or no device takes them)"
+                    : sides.Count == 0 ? "no side leads to a device that takes drags" : "";
+                if (why != told) { told = why; if (why != "") Console.Error.WriteLine("[drag] no strip: " + why); }
+            }
+            if (!held || !edge.DragFiles || edge.Capturing || sides.Count == 0) { if (Visible) Hide(); return; }
             Native.POINT p;
             Native.GetCursorPos(out p);
             Rectangle m = Screen.FromPoint(new Point(p.x, p.y)).Bounds;
+            // The nearest of them to the pointer: on a monitor with two (Ryzen9's right one: the Mac to the
+            // right, AMXLPDL above) the first in the list took the strip, and a drag to the other never got one.
             string side = null;
-            foreach (string s in back.Count > 0 ? back : new List<string> { capture.Side })
+            int nearest = int.MaxValue;
+            foreach (string s in sides)
             {
                 Point probe = s == "left" ? new Point(m.Left, p.y) : s == "right" ? new Point(m.Right - 1, p.y)
                     : s == "top" ? new Point(p.x, m.Top) : new Point(p.x, m.Bottom - 1);
-                if (Screens.OnOuterEdge(probe.X, probe.Y, s)) { side = s; break; }
+                if (!Screens.OnOuterEdge(probe.X, probe.Y, s)) continue;
+                int d = s == "left" ? p.x - m.Left : s == "right" ? m.Right - 1 - p.x : s == "top" ? p.y - m.Top : m.Bottom - 1 - p.y;
+                if (d < nearest) { nearest = d; side = s; }
             }
             if (side == null) { if (Visible) Hide(); return; }
-            if (capture.LastCross != seenCross) { seenCross = capture.LastCross; away = false; }
+            if (edge.LastCross != seenCross) { seenCross = edge.LastCross; away = false; }
             int dist = side == "left" ? p.x - m.Left : side == "right" ? m.Right - 1 - p.x : side == "top" ? p.y - m.Top : m.Bottom - 1 - p.y;
             if (dist > 16) away = true;
             if (!away) { if (Visible) Hide(); return; }
@@ -100,21 +185,42 @@ namespace MacShare
                 : side == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
                 : new Rectangle(m.Left, m.Bottom - STRIP, m.Width, STRIP);
             if (Bounds != r) Bounds = r;
-            if (!Visible) Show();
+            // On top again, every tick: the taskbar, top-most too, came up over the strip at the bottom edge
+            // (AMXLPDL: 'under the pointer is Shell_TrayWnd') and Explorer's drag went onto it.
+            if (Visible) SetWindowPos(Handle, new IntPtr(-1) /* HWND_TOPMOST */, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE, NOMOVE, NOACTIVATE */);
+            if (!Visible) { Show(); looked = false; Console.Error.WriteLine("[drag] strip on the " + side + " edge (" + (stripBack ? "the way back" : "out") + "), " + r.X + "," + r.Y + " " + r.Width + "x" + r.Height); }
+            else if (!looked && r.Contains(p.x, p.y)) Look(p);
+        }
+
+        // The pointer is on the strip and no drag came: what Windows has there (another window on top of
+        // it, the agent's or a top-most app's), once per showing.
+        void Look(Native.POINT p)
+        {
+            looked = true;
+            IntPtr w = GetAncestor(WindowFromPoint(p), 2); // GA_ROOT
+            if (w == Handle) { Console.Error.WriteLine("[drag] strip: the pointer is on it (" + p.x + "," + p.y + ")"); return; }
+            StringBuilder cls = new StringBuilder(128);
+            GetClassName(w, cls, cls.Capacity);
+            uint pid;
+            GetWindowThreadProcessId(w, out pid);
+            string proc = "?";
+            try { proc = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { /* gone, or not ours to open */ }
+            Console.Error.WriteLine("[drag] strip: under the pointer (" + p.x + "," + p.y + ") is " + cls + " of " + proc + " (" + pid + "), not the strip");
         }
 
         void OnDragEnter(object sender, DragEventArgs e)
         {
             e.Effect = DragDropEffects.None;
-            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || capture.Capturing) return;
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || edge.Capturing) { Console.Error.WriteLine("[drag] strip: a drag came that isn't files"); return; }
             string[] paths = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (paths == null || paths.Length == 0) return;
             e.Effect = Copy(e);
-            if (e.Effect == DragDropEffects.None) return;
+            if (e.Effect == DragDropEffects.None) { Console.Error.WriteLine("[drag] strip: the drag can't be copied"); return; }
+            Console.Error.WriteLine("[drag] strip: " + paths.Length + " item(s) caught, ending Explorer's drag here");
             taken = true;
             pending = paths;
             pendingBack = stripBack;
-            if (pendingBack) capture.HoldReturn = true; // the input goes home with the drag, at the drop
+            if (pendingBack) edge.Hold(true); // the input goes home with the drag, at the drop
             Native.POINT p;
             Native.GetCursorPos(out p);
             pendingAt = new Point(p.x, p.y);
@@ -123,38 +229,23 @@ namespace MacShare
             BeginInvoke((MethodInvoker)delegate { Native2.Button(false); });
             System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
             t.Interval = 600;
-            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; capture.HoldReturn = false; Hide(); } }; // no drop came
+            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; edge.Hold(false); Hide(); Console.Error.WriteLine("[drag] strip: Explorer didn't drop in 600 ms"); } }; // no drop came
             t.Start();
         }
 
-        // Explorer's drag ended on the strip: now cross. Capture starts (the user's real button-up
-        // is swallowed from here and goes to the Mac) and main gets the paths.
+        // Explorer's drag ended on the strip: now cross, through the side the strip covers.
         void OnDrop()
         {
             string[] paths = pending;
             pending = null;
             taken = false;
             Hide();
-            if (paths == null || capture.Capturing) { capture.HoldReturn = false; return; }
-            if (pendingBack)
-            {
-                Point at = pendingAt;
-                string side = stripSide;
-                BeginInvoke((MethodInvoker)delegate { capture.ReturnWithDrag(at, side, paths); });
-                return;
-            }
-            BeginInvoke((MethodInvoker)delegate
-            {
-                double offset = Screens.Offset(pendingAt.X, pendingAt.Y, capture.Side);
-                capture.Begin(true, capture.EdgeKeyboard);
-                Dictionary<string, object> d = new Dictionary<string, object>();
-                d["event"] = "edge";
-                d["offset"] = Math.Round(offset, 4);
-                Dictionary<string, object> drag = new Dictionary<string, object>();
-                drag["paths"] = paths;
-                d["drag"] = drag;
-                emit(d);
-            });
+            if (paths == null || edge.Capturing) { edge.Hold(false); return; }
+            Point at = pendingAt;
+            string side = stripSide;
+            bool back = pendingBack;
+            Console.Error.WriteLine("[drag] strip: dropped, crossing through the " + side + " edge");
+            BeginInvoke((MethodInvoker)delegate { edge.Cross(at, side, back, paths); });
         }
     }
 }

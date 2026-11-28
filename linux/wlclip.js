@@ -67,6 +67,12 @@ function wlClipboard(opts = {}) {
   };
 }
 
+// Wayland where wl-clipboard is needed (not GNOME) but isn't installed: Electron's clipboard is used,
+// which doesn't see other apps' copies (#97). The Clipboard tab says so, and the log.
+function missing(env = process.env, has = onPath) {
+  return !!env.WAYLAND_DISPLAY && !/gnome/i.test(String(env.XDG_CURRENT_DESKTOP || '')) && !(has('wl-paste') && has('wl-copy'));
+}
+
 let chosen = null;
 // The clipboard to use here (decided once).
 function clipboard() {
@@ -74,4 +80,4 @@ function clipboard() {
   return chosen;
 }
 
-module.exports = { clipboard, wlClipboard, wanted };
+module.exports = { clipboard, wlClipboard, wanted, missing };

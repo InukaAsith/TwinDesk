@@ -82,6 +82,15 @@ class Peer {
     this.route.inject(msg);
   }
 
+  // A message as if the device had sent it on its socket: the bus (the clipboard pool) as well as the
+  // routes that follow it. inject() reaches only this route (#257: the phone's copies never reached Clip).
+  receive(msg) {
+    const hub = this.route.hub;
+    const id = this.route.targetId;
+    if (id && hub && typeof hub.receive === 'function') hub.receive(id, msg);
+    else this.inject(msg);
+  }
+
   on(event, fn) {
     this.route.on(event, fn);
     return this;

@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith, Erdoğan Yeşil. GPL-3.0, see LICENSE.
 // Selecting a device on the Mac no longer turns off what runs with another one (#245): real Kvm instances
 // (mac/mesh/kvm.js) with fake helpers on real sockets, C - A - B in a row. The settings hold the selected
-// device's pair (PairSync); every other device goes by settings.pairSync[id] (shared/pairfor.js).
+// device's pair (PairSync); every other device goes by settings.pairSync[id] (hub.consent, shared/consent.js).
 // Run with: node mac/mesh/test/kvm-selection.test.js
 'use strict';
 
@@ -14,6 +14,8 @@ const P = require('../../../shared/protocol.js');
 const store = require('../store.js');
 const { Kvm } = require('../kvm.js');
 const LayoutSync = require('../layout-sync.js');
+const { FEATURES } = require('../../pairsync.js');
+const { consent } = require('../../../shared/consent.js');
 const { runTests } = require('../../../windows/mesh/test/lib/run.js');
 const { node: baseNode, close, waitFor, pair, hello, memoryStorage } = require('./lib/mesh.js');
 
@@ -43,6 +45,7 @@ async function node(name, opts = {}) {
   n.log = [];
   n.extra = [];
   n.settings = settingsObj();
+  n.hub.consent = consent({ features: FEATURES, settings: () => n.settings, selectedId: () => n.hub.selectedId }); // as mesh/main.js
   n.ls = new LayoutSync({
     bus: n.hub.bus,
     mesh: n.mesh,
@@ -99,7 +102,7 @@ class RecHelper extends EventEmitter {
 // A real Kvm on node n, with a recording helper and the kvm messages of its bus recorded.
 function kvmOn(n) {
   n.helper = new RecHelper();
-  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
+  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, anyPeerDrag: false, peerDragOf: () => false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
   const drop = { dragIn: { dragging: false, armDrag() {}, onDriven() {}, cancel() {}, release() {} }, cancelDrag() {}, release() {}, armDrag() {} };
   n.kvm = new Kvm({
     hub: n.hub,

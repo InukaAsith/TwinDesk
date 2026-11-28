@@ -13,7 +13,9 @@ const net = require('net');
 const fs = require('fs');
 const { EventEmitter } = require('events');
 
-const KVM = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info']);
+const KVM = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info',
+  'dragCross', 'dragHold', 'unswallow', // Windows: file drags our helper's strip catches (shared/fullkvm/route.js); _write sends nothing else
+  'serviceLog']); // Debug (docs/debug.md): a piece of the service's own log, which only it may read; it answers itself
 const RETRY_MS = 2000;
 const REQUEST_MS = 3000;
 
@@ -84,7 +86,7 @@ class SvcLink extends EventEmitter {
       this.buf = this.buf.slice(i + 1);
       if (!line) continue;
       let msg;
-      try { msg = JSON.parse(line); } catch (_) { continue; }
+      try { msg = JSON.parse(line); } catch (_) { console.log('[fullkvm] ' + line.slice(0, 300)); continue; } // the service's helper's stderr (it shares the pipe)
       if (msg.event === 'ready') {
         this.ready = true;
         this.backend = msg.backend || '';

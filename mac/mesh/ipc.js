@@ -20,7 +20,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'debug', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -38,11 +38,11 @@ const SCHEMA = {
   virtual: { enabled: bool, width: (v) => Math.round(clamp(640, 3840, 1920)(v)), height: (v) => Math.round(clamp(480, 2160, 1080)(v)), hiDPI: bool, hz: oneOf([30, 60], 60) },
   kvm: {
     pcSide: oneOf(P.SIDES, 'right'), mouse: bool, keyboard: bool, driveOther: bool, beDriven: bool,
-    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
+    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), scrollSpeed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: Crossing.emergency },
-  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
-  mesh: { autoJoin: bool },
+  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool, lockTogether: bool }, // localApi: General › Local API (Debug's MCP server too)
+  mesh: { autoJoin: bool, shareLogs: bool, collectLogs: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
@@ -53,7 +53,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool, direct: bool, lowLatency: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, hover: bool, uhid: bool, direct: bool, lowLatency: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -91,9 +91,10 @@ function setupIpc(ctx) {
     }
     return sessionIsUp(id, { current: ctx.server && ctx.server.current, clients, authedHostIds });
   };
-  // The pending "Asked … / Connecting …" hint ends when that device's session is up.
-  ctx.server.on('client', (client) => {
-    const next = settleConnect(connect, client);
+  // The pending "Asked … / Connecting …" hint ends when that device's session is up (any device: it
+  // needn't be the selected one).
+  if (ctx.hub) ctx.hub.bus.onPeer('welcome', (deviceId) => {
+    const next = settleConnect(connect, { deviceId });
     if (!next) return;
     Object.assign(connect, next);
     pushState();
@@ -178,10 +179,18 @@ function setupIpc(ctx) {
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);
     },
-    phoneScreen(open) {
+    // open: true | false, or {open, id}: that phone's screen (#263), else the active phone's.
+    phoneScreen(arg) {
+      const { open, id } = arg && typeof arg === 'object' ? arg : { open: arg };
+      const u = id && ctx.phone.unit ? ctx.phone.unit(String(id)) : null;
+      const views = u ? u.views : ctx.phoneViews;
       if (open === false) {
-        for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
-      } else ctx.phoneViews.openScreen();
+        for (const v of views.list()) if (v.kind === 'screen') views.close(v.id);
+      } else views.openScreen();
+    },
+    // The phone the Phone pages show (Mirroring's phone picker, #263).
+    phonePick(id) {
+      if (typeof id === 'string' && ctx.phone.pick) ctx.phone.pick(id);
     },
     phoneCamera(m) {
       const { open, opts } = m && typeof m === 'object' ? m : { open: m }; // preload-control: {open, opts}
@@ -314,7 +323,7 @@ function setupIpc(ctx) {
       settings.streamInput = !!on;
       save();
       if (!on) ctx.input.releaseAll();
-      ctx.server.sendToClient({ t: P.T.STREAM_INPUT, on: !!on }); // Windows goes view-only when off
+      for (const pid of ctx.hub.bus.connectedIds()) ctx.hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: !!on }); // every viewer goes view-only when off
     },
     // Share this Mac's screen with one device its own way: { mode: 'default'|'none'|'mirror'|'virtual', displayId? }.
     setStreamTarget(id, choice) {
@@ -494,6 +503,9 @@ function setupIpc(ctx) {
     openPcShare() {
       ctx.smb.openPc();
     },
+    openDrive(id) { // another device's folder, connected here (Files)
+      if (typeof id === 'string' && ctx.smb.openDevice) ctx.smb.openDevice(id);
+    },
     setApps(partial) {
       setGroup('apps', partial);
       ctx.apps.applySettings();
@@ -656,6 +668,18 @@ function setupIpc(ctx) {
       ctx.stream.restart('screen sound');
     },
     // "Join every device automatically" (autojoin.js): off = no introductions asked, granted or accepted.
+    // The matrix (shared/ui-matrix.js): one of this Mac's own cells, its pair with a device one way. The
+    // selected device's pair is the settings (pairsync-mesh.js tells it), any other's its saved pair
+    // (shared/consent.js tells it).
+    setConsent(o) {
+      const c = ctx.consent && ctx.consent();
+      const F = require('../pairsync').FEATURES;
+      const { id, feature, dir, on } = o || {};
+      if (!c || typeof id !== 'string' || !F[feature] || !F[feature][dir] || typeof on !== 'boolean') return;
+      if (ctx.hub && id === ctx.hub.selectedId) return ctx.syncAction && ctx.syncAction(feature, dir, on);
+      c.set(id, feature, dir, on);
+      pushState();
+    },
     setMesh(partial) {
       setGroup('mesh', partial);
       if (settings.mesh.autoJoin !== false && ctx.autoJoin) ctx.autoJoin.schedule();
@@ -664,6 +688,7 @@ function setupIpc(ctx) {
       setGroup('app', partial);
       ctx.login.apply(settings.app.openAtLogin);
       ctx.updateAwake();
+      if (ctx.applyLocalApi) ctx.applyLocalApi(); // General › Local API
     },
     setUpdates(partial) {
       setGroup('updates', partial);
@@ -789,6 +814,23 @@ function setupIpc(ctx) {
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  // Debug (shared/debug-start.js, docs/debug.md): ask any device of the mesh; who may debug this Mac.
+  ipcMain.handle('debugAsk', (_e, to, op, args) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || typeof to !== 'string' || typeof op !== 'string') return { ok: false, error: 'off' };
+    return d.ask(to, op, args && typeof args === 'object' ? args : {});
+  });
+  ipcMain.handle('setDebug', (_e, o) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || !o || typeof o !== 'object') return;
+    settings.mesh.debug = require('../../shared/debug-settings.js').normalizeDebug(d.next(o));
+    save();
+  });
+  ipcMain.handle('debugShow', (_e, p) => { // only what Debug kept, in the log folder
+    const path = require('path');
+    const dir = require('../../shared/applog.js').dir();
+    if (typeof p === 'string' && dir && path.resolve(p).startsWith(path.resolve(dir) + path.sep)) shell.showItemInFolder(p);
+  });
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker

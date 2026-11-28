@@ -4,6 +4,9 @@
 //   GET  /v1/status                      → {connected, device}
 //   POST /v1/send       {"paths": [...]} → the files go as Send files does (or wait for the device)
 //   POST /v1/clipboard  {"text": "…"}    → on this computer's clipboard, shared by Clipboard's rules
+// Multi-device, with Debug (docs/debug.md; the code agent's MCP server, tools/twindesk-mcp):
+//   GET  /v1/debug/devices               → [{id, name, os, state, via, hello}] every device of the mesh
+//   POST /v1/debug/ask  {to, op, args}   → {ok, data, bin?: base64} (to: a device's id or name, or 'self')
 // Only this computer: it listens on 127.0.0.1, on a port of its own, and wants the key with every
 // request (Authorization: Bearer <key>). Both are written to local-api.json in TwinDesk's own folder
 // (readable by this user only), and the key is new each time it starts. A web page can't use it:
@@ -22,7 +25,8 @@ const FILE = 'local-api.json';
 
 class LocalApi {
   // dir: TwinDesk's own folder (userData). actions: {status() → {connected, device}, send(paths) →
-  // 'sent'|'queued'|null, clipboard(text)}.
+  // 'sent'|'queued'|null, clipboard(text)}, and in Multi-device debug: {devices() → Promise<[…]>,
+  // ask(to, op, args) → Promise<{ok, data, bin?}>}. Any of them may answer a promise.
   constructor({ dir, actions }) {
     this.dir = dir;
     this.actions = actions;
@@ -80,7 +84,9 @@ class LocalApi {
     const auth = /^Bearer ([0-9a-f]{48})$/i.exec(String(h.authorization || ''));
     if (!auth || !this.token || !crypto.timingSafeEqual(Buffer.from(auth[1].toLowerCase()), Buffer.from(this.token))) return send(401, { error: 'key' });
     const route = `${req.method} ${String(req.url || '').split('?')[0]}`;
-    if (route === 'GET /v1/status') return send(200, this.actions.status());
+    const answer = (p) => Promise.resolve(p).then((v) => send(200, v), (e) => send(500, { error: e.message || String(e) }));
+    if (route === 'GET /v1/status') return answer(this.actions.status());
+    if (route === 'GET /v1/debug/devices') return this.actions.debug ? answer(this.actions.debug.devices()) : send(404, { error: 'not in Multi-device' });
     if (req.method !== 'POST') return send(404, { error: 'not found' });
     if (!/^application\/json\b/i.test(String(h['content-type'] || ''))) return send(415, { error: 'JSON only' });
     let size = 0;
@@ -99,8 +105,21 @@ class LocalApi {
         if (route === 'POST /v1/send') {
           const paths = (Array.isArray(body.paths) ? body.paths : []).filter((p) => typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p)).slice(0, 1000);
           if (!paths.length) return send(400, { error: 'no files' });
-          const r = this.actions.send(paths);
-          return send(200, { ok: r !== null && r !== false, status: r || 'not sent' });
+          return answer(Promise.resolve(this.actions.send(paths)).then((r) => ({ ok: r !== null && r !== false, status: r || 'not sent' })));
+        }
+        if (route === 'POST /v1/debug/ask') {
+          if (!this.actions.debug) return send(404, { error: 'not in Multi-device' });
+          if (typeof body.to !== 'string' || typeof body.op !== 'string') return send(400, { error: 'to and op' });
+          return answer(this.actions.debug.ask(body.to, body.op, body.args && typeof body.args === 'object' ? body.args : {}));
+        }
+        if (route === 'POST /v1/debug/update') { // an installer of this computer, sent and installed there (docs/debug.md)
+          if (!this.actions.debug || !this.actions.debug.update) return send(404, { error: 'not in Multi-device' });
+          if (typeof body.to !== 'string' || typeof body.path !== 'string' || !path.isAbsolute(body.path) || !fs.existsSync(body.path)) return send(400, { error: 'to and an absolute path' });
+          return answer(this.actions.debug.update(body.to, body.path, body.force === true));
+        }
+        if (route === 'POST /v1/debug/job') {
+          if (!this.actions.debug || !this.actions.debug.job) return send(404, { error: 'not in Multi-device' });
+          return answer(this.actions.debug.job(body.job));
         }
         if (route === 'POST /v1/clipboard') {
           if (typeof body.text !== 'string' || body.text.length > 200000) return send(400, { error: 'text' });

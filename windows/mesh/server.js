@@ -148,14 +148,18 @@ class Server extends EventEmitter {
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
     ws.on('close', (code, reason) => this._onSocketClose(ws, code, String(reason || '')));
     ws.on('error', (err) => console.error(`[server] socket ${ws.address}: ${err.message}`));
+    // Once open, ws destroys the socket on a TCP error without passing it on (the close says only
+    // 1006): its code (ECONNRESET, ETIMEDOUT, EPIPE…) is kept for the close's line (#327).
+    if (ws._socket) ws._socket.on('error', (err) => { ws.sockErr = err.code || err.message; });
   }
 
   _onSocketClose(ws, code, reason) {
     const ctx = ws.ctx;
     if (ws.detached) return;
-    if (ctx.authed) { // which path went, and how (1000/1001: closed on purpose there; 1006: the connection dropped, #327)
+    if (ctx.authed) { // which path went, and how (1000/1001: closed on purpose there; 1006: the connection dropped)
       const path = ws.transport === 'ble' ? 'Bluetooth' : ws.address;
-      console.log(`[server] ${ctx.name}: ${ctx.alt === ws ? 'fallback' : 'session'} socket on ${path} closed (${code || '?'}${reason ? ` ${reason}` : ''}) after ${Math.round((Date.now() - ctx.connectedAt) / 1000)} s`);
+      const heard = ws.lastRx ? `, last heard ${((Date.now() - ws.lastRx) / 1000).toFixed(1)} s before` : '';
+      console.log(`[server] ${ctx.name}: ${ctx.alt === ws ? 'fallback' : 'session'} socket on ${path} closed (${code || '?'}${reason ? ` ${reason}` : ''}${ws.sockErr ? `, ${ws.sockErr}` : ''}) after ${Math.round((Date.now() - ctx.connectedAt) / 1000)} s${heard}`);
     }
     if (ctx.alt === ws) {
       ctx.alt = null;

@@ -59,6 +59,7 @@ const DEFAULT_SETTINGS = {
     crossingModifier: '', // optional modifier held while leaving this Mac at an edge
     speed: 1.0,
     reverseScroll: false,
+    scrollSpeed: 1, // Scrolling speed here: another computer's wheel on this Mac (shared/wheelscale.js, #315)
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
     linkedBy: {}, // The last `linked` per paired device id, restored on connect
     portalsByPeer: {}, // opt-in directional display-edge portals, stored per paired device
@@ -86,7 +87,7 @@ const DEFAULT_SETTINGS = {
   // setupSkipped: the missing items when Setup was skipped; setupDone: Setup has been through once
   // (everything allowed, or skipped), so it never takes over the window again (General shows the rest).
   ui: { tab: 'overview', setupSkipped: '', setupDone: false, language: '', style: 'glass', theme: 'system', accent: '' }, // style/theme/accent: General › Appearance
-  app: { openAtLogin: false, keepAwake: true, hud: true, inputProtocol: 'udp', keepPinging: false, localApi: false }, // localApi: General › Local API (shared/localapi.js), off // inputProtocol: udp = tdv2 input lane, tcp = tdv1 // hud = popup when switching computers
+  app: { openAtLogin: false, keepAwake: true, hud: true, inputProtocol: 'udp', keepPinging: false, localApi: false, lockTogether: false }, // lockTogether: General › Lock together (shared/locksync.js) // localApi: General › Local API (shared/localapi.js), off // inputProtocol: udp = tdv2 input lane, tcp = tdv1 // hud = popup when switching computers
   updates: { auto: true, notified: '', skipped: '', install: false }, // check GitHub for new releases; notified = last version announced, skipped = version ignored
   audio: { send: false, receive: false, muteLocal: false, engine: 'helper', volume: 1, phoneMedia: false, micSend: false, micReceive: false, micDevice: '', micOut: '' }, // Independent, both ways; phoneMedia: a phone's media controls on Overview
   rezume: require('../shared/rezume.js').DEFAULTS, // ReZume tab (shared/rezume.js): off until turned on; what goes, which ways, where it shows
@@ -102,7 +103,7 @@ const DEFAULT_SETTINGS = {
   apps: { offer: false, onVirtual: false, moveWindows: false, moveKey: 'MetaRight' }, // The PC can list and open this Mac's apps; onVirtual: they open on the virtual display, in Mirror mode too (off: on the shared display, as always); moveWindows: a window dragged past the edge with moveKey held moves there (movewin.js)
   papps: { on: false }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.
-  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, uhid: false, direct: false, lowLatency: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
+  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, hover: true, uhid: false, direct: false, lowLatency: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
   mount: { on: false }, // the phone in Finder (phonedrive.js), only when Mount is clicked
   drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.

@@ -17,6 +17,7 @@ const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
 const I18n = require('../../shared/i18n.js');
 const Look = require('../../shared/look.js');
+let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
 const store = require('../store');
@@ -38,13 +39,20 @@ const firewall = require('../firewall');
 const Terminal = require('../terminal');
 const FileDrop = require('../filedrop');
 const Smb = require('../smb');
+const { SmbSet } = require('../../shared/smb-mesh.js');
+const { MeshShadow } = require('../../shared/mesh-shadow.js');
+const { SoundSet } = require('../../shared/sound-mesh.js');
+const { PeerLogs } = require('../../shared/peerlogs.js');
+const { startDebug } = require('../../shared/debug-start.js');
 const Apps = require('../apps');
 const Sound = require('../sound');
 const FileRecv = require('../filerecv');
 const DragRecv = require('../dragrecv');
+const { FilesSet } = require('../../shared/files-mesh.js');
+const { FileDropSet } = require('../../shared/filedrop-mesh.js');
 const Sshd = require('../sshd');
 const PcScreen = require('./pcscreen');
-const { PcScreenSet } = require('./pcscreenset');
+const { PcScreenSet } = require('../../shared/pcscreen-set.js');
 const PcApps = require('../pcapps');
 const PeerApps = require('../peerapps');
 const Sender = require('./sender');
@@ -53,9 +61,10 @@ const Vdd = require('../vdd');
 const Hud = require('../hud');
 const Notifs = require('./notifs');
 const FileClip = require('../fclip');
+const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip);
 const Wake = require('../wake');
 const SendTo = require('../sendto');
-const { PairSync } = require('../pairsync');
+const { FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { Phone } = require('./phone');
@@ -140,6 +149,7 @@ let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
+let viewers = null; // Monitor 2 per device (shared/screen-viewers.js, #256)
 let clip = null;
 let helper = null;
 let terminal = null;
@@ -162,12 +172,16 @@ let updates = null;
 let updateNote = null; // the update notification, kept so it isn't collected before a click
 let sendTo = null;
 let pairSync = null;
+let consent = null; // each device's own two-way switches (shared/consent.js)
+let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
 let fileRecv = null;
 let notifs = null;
 let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
 let fileClip = null;
 let sshd = null;
 let kvm = null;
+let dbg = null; // Debug (shared/debug-start.js): this computer's tools and the mesh's
+let localApi = null; // General › Local API (shared/localapi.js), with Debug's calls
 let lockKey = null; // the cursor lock key at home (shared/cursorlock.js)
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let wired = null; // wired.js, with the phone
@@ -240,14 +254,25 @@ function start() {
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
   const { DevLocal } = require('../../shared/devlocal.js');
-  devctl = new DevCtl({
-    watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
-    link, local: new DevLocal(), version: app.getVersion(), adb: () => {
-    const br = phone && phone.bridge;
-    return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
-  } });
+  // A DevCtl per device (shared/devctl-mesh.js): each device's Overview can reach this computer, whichever
+  // device is selected here; Overview shows the selected device's.
+  const watching = () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()); // Overview may show the other side's controls (shared/devctl.js Looking)
+  const devLocal = new DevLocal();
+  devctl = require('../../shared/devctl-mesh.js').onHub(hub, {
+    local: devLocal,
+    make: (dl, pid) => new DevCtl({
+      link: dl, local: devLocal, sharedLocal: true, version: app.getVersion(),
+      watching: () => watching() && hub.selectedId === pid, // asks only for the device Overview shows
+      adb: () => { // the phone's wireless debugging, for that phone only
+        if (hub.selectedId !== pid) return null;
+        const br = phone && phone.bridge;
+        return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
+      },
+    }),
+  });
   devctl.on('change', pushState);
   app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
+  hub.on('selected', () => devctl.look()); // Overview shows another device: its fresh state
   // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
   devctl.on('outdated', (o) => {
     const { FEATURES } = require('../../shared/appinfo.js');
@@ -258,47 +283,108 @@ function start() {
     try { new Notification({ title, body }).show(); } catch {}
   });
   const { Chats } = require('../../shared/chats.js');
-  chats = new Chats({ link, dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
+  chats = new Chats({ // every phone's conversations, each under its own id; the Messages page's phone answered (#313)
+    mesh: { bus: hub.bus, isPhone: (id) => { const s = hub.sessions.get(id); return !!s && P.isPhoneOs(s.peerOs); } },
+    who: () => (phoneLink && phoneLink.current && phoneLink.current.deviceId) || '',
+    dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
   hub.on('change', () => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected
     pushState();
   });
   startHost();
   autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
-  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
+  // Each device's own two-way switches (shared/consent.js): the settings are the selected device's pair,
+  // every other device's is its saved one. The clipboard, notifications and files serve them all at once.
+  consent = require('../../shared/consent.js').consent({
+    features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
+    send: (to, m) => hub.bus.send(to, m), save: saveSettings,
+  });
+  hub.consent = consent; // sound and the pointer read each device's own pair from the hub (shared/sound-mesh.js, kvm.js)
+  clip = new Clip({ bus: hub.bus, mesh, consent, getSettings: () => settings.clipboard, onChange: pushState, session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) });
+  // Monitor 2: the selected device's screen, but while its window is open it stays with the device it shows
+  // (#256: the pointer's next crossing moved the selection, and the picture with it). hub.sticky.
+  const screenLink = hub.sticky(() => !!(screen && screen.win && !screen.win.isDestroyed() && screen.win.isVisible()), { remember: ['screen.state'] }); // whether that device shares its screen
   screen = new Screen({
-    link,
+    link: screenLink,
     clip,
     inputAllowed: () => !kvm || kvm.mode === 'home', // no Monitor 2 input while driving or driven
     settings,
     saveSettings,
-    onChange: pushState,
-    isQuitting: () => quitting,
+    onChange: () => { screenLink.follow(); pushState(); }, // closed: it follows the selection again
+    isQuitting: () => quitting, selfId: device.id,
   });
-  terminal = new Terminal({ link, settings, onChange: pushState });
-  sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
-  fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress({ ...v, peerName: peerName() }); pushState(); } });
+  // Monitor 2 per device (#256, shared/screen-viewers.js): Open for a device the first one isn't showing,
+  // while it shows another, opens one of that device's own; files dropped on it go to that device.
+  viewers = require('../../shared/screen-viewers.js').screenViewers({
+    hub, primary: () => screen, primaryLink: screenLink,
+    make: (l, pid) => {
+      const v = new Screen({ link: l, clip, inputAllowed: () => !kvm || kvm.mode === 'home', settings, saveSettings, onChange: pushState, isQuitting: () => quitting, selfId: device.id });
+      v.fileDrop = { drop: (...a) => { const u = fileDrop.unit(pid); if (u) u.drop(...a); } };
+      return v;
+    },
+  });
+  // Terminal, this computer to another: one per computer (shared/papps-mesh.js), each with its own alias,
+  // `ssh twindesk-<name>`, and its own pair's switch; `ssh twindesk` is the selected device's (#313).
+  const SshConfig = require('../../shared/sshconfig.js');
+  terminal = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => hub.selectedId, empty: { status: 'no_mac', message: '', user: null, command: 'ssh ' + SshConfig.ALIAS },
+    all: ['apply'], selected: ['open'],
+  });
+  require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => {
+    const x = hub.sessions.get(pid);
+    if (!x || P.isPhoneOs(x.peerOs)) return;
+    terminal.ensure(pid, () => new Terminal({
+      link: l, settings, onChange: pushState, alias: SshConfig.aliasFor(x.displayName(), pid),
+      enabled: () => consent.get(pid, 'terminal', 'in'), isDefault: () => hub.selectedId === pid,
+      address: () => (l.current && l.current.address) || '', peerName: () => (l.current && l.current.name) || '',
+    }));
+  });
+  hub.on('selected', (pid) => { // `ssh twindesk`: the selected device's, or none
+    const u = terminal.byId.get(pid);
+    if (u) u.takeDefault();
+    else try { SshConfig.setHost(null); } catch (_) { /* config not writable */ }
+  });
+  sshd = new Sshd({ link, bus: hub.bus, consent, settings, save: saveSettings, onChange: pushState }); // every device's key, by its own pair
+  // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
+  fileDrop = new FileDropSet({
+    hub, FileDrop, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'),
+    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, sends: () => consent.get(id, 'files', 'out'), onProgress: () => { screen.sendDropProgress({ ...fileDrop.view(), peerName: peerName() }); pushState(); } }),
+  });
   screen.fileDrop = fileDrop;
-  // Monitor 2 shows the selected device's screen. Open and showing nothing, it follows a device that
-  // starts sharing (#256: a PC driving this one shared its Extend screen while another device was
-  // selected, and nothing came).
+  // Monitor 2 open and showing nothing follows a device that starts sharing (#256: a PC driving this one
+  // shared its Extend screen while another device was selected, and nothing came).
   hub.bus.on(P.T.SCREEN_STATE, (m, from) => {
-    if (m.on !== true || from === hub.selectedId || screen.state.state === 'on') return;
+    if (m.on !== true || from === screenLink.id || screen.state.state === 'on') return;
+    if (m.by && m.by !== device.id) return; // another computer asked it to share: it's watching it, not us
+    if (viewers && viewers.showing(from)) return; // a Monitor 2 of its own shows it already
     const w = screen.win;
     if (!w || w.isDestroyed() || !w.isVisible()) return;
     console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
     hub.select(from);
+    screenLink.moveTo(from); // open, it doesn't follow the selection by itself
   });
-  apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
+  // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
+  // or windows from the selected device while Monitor 2 showed another were the wrong device's.
+  apps = new Apps({ link: screenLink, allowed: () => consent.get(screenLink.id, 'apps', 'in'), getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
+  sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
-  smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
+  smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   helper = new Helper();
   require('../../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
-  fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
-  const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
+  clip.useHelper(helper); // its "clipboard" event: something was copied (a picture after a picture too)
+  // Files from every device, each on its own link: the computer driving this one isn't selected here
+  // (shared/files-mesh.js). fileRecv and dragRecv are the set's single-receiver API.
+  const files = new FilesSet({
+    hub, partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
+    make: (scoped) => ({
+      fileRecv: new FileRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), onChange: pushState }),
+      dragRecv: new DragRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState }),
+    }),
+  });
+  fileRecv = files.fileRecv;
+  const dragRecv = files.dragRecv;
   // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.
   if (migrateKvm(settings, hub.peers().map((p) => p.id))) saveSettings();
   // The shared layout: one map of the paired devices for the whole mesh (its own pool, docs/mesh.md).
@@ -320,6 +406,24 @@ function start() {
   });
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  const shadow = new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
+    app, hub, device, settings, save: saveSettings, kvm: () => kvm, shadow, helper, onChange: () => pushState(),
+    fullkvm: require('../../shared/edition.js').fullKvm() ? require('../fullkvm/manager.js') : null,
+    ps: require('../ps').script,
+    updates: () => updates, // its SelfUpdate: an update sent through the mesh installs as the app's own would
+  });
+  { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
+    const { LocalApi } = require('../../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => { const s = hub.selectedId && hub.sessions.get(hub.selectedId); return { connected: !!(s && s.connected), device: s && s.connected ? s.displayName() : '' }; },
+      send: () => null, // Send files of the selected device is the window's; not here yet
+      clipboard: (text) => require('electron').clipboard.writeText(text), // then Clipboard shares it by its rules
+      debug: dbg.api,
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
+  new PeerLogs({ bus: hub.bus, nameOf: (id) => { const s = hub.sessions.get(id); return s ? s.displayName() : id; }, dir: () => require('../../shared/applog.js').dir(), share: () => settings.mesh.shareLogs !== false, collect: () => settings.mesh.collectLogs !== false }).start(); // the other devices' logs, copied here (docs/peer-logs.md)
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   hud = new Hud(() => settings);
   // Cursor sharing switched on/off (hotkey double-tap, tray, or the other computer): the big card.
@@ -334,7 +438,9 @@ function start() {
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : ble ? 'Cursor sharing off over Bluetooth' : 'Cursor sharing off' }, sub);
   };
   kvm.onWhere = (mode) => { // the switching popup
-    const name = peerName();
+    // The device the pointer is with (the input peer, docs/mesh-graph.md), not the selected one.
+    const p = kvm.partner ? hub.sessions.get(kvm.partner) : null;
+    const name = p ? p.displayName() : peerName();
     if (mode === 'driving') hud.show('away', { key: kvm.keyboardOnly ? 'Typing on {name}' : 'Using {name}', vars: { name } });
     else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: device.name } });
     else hud.show('home', { key: 'Back on {me}', vars: { me: device.name } });
@@ -351,16 +457,26 @@ function start() {
   vdd = new Vdd({ helper, onChange: pushState });
   // Notifications both ways, Send files, copy/paste files with shortcuts
   notifs = new Notifs({
+    consent,
     bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  fileClip = new FileClip({ link, helper, fileDrop, fileRecv, dragRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
-  // A paste Windows copies itself (dragrecv.js) — its files skip filerecv.js.
-  fileRecv.claims = (m) => dragRecv._pasteOf(m);
+  consent.on('change', () => { // a device's pair: its policies (and its keys) again
+    clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply();
+    if (peerApps) peerApps.apply();
+    if (pcApps) pcApps.apply();
+    pushState();
+  });
+  // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
+  // device asks for goes to it through a sender of its own.
+  fileClip = new MeshFileClip({
+    hub, files, helper, fileDrop, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
+    makeSender: (id) => fileDrop.unit(id),
+  });
   dragRecv.onPasted = (b) => fileClip.pasted(b);
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
-  sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
+  sendTo = new SendTo({ link, bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : ''; }, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
   // Copy/paste and Send files show progress in the popup, like a drag. Receiving: every
   // batch that takes longer than a moment; sending: batches over 5 MB.
   const pct = (n, total) => Math.min(99, Math.floor((n / total) * 100));
@@ -383,39 +499,46 @@ function start() {
     live[tag] = 0;
     helper.send('toastDone', { aumid: AUMID, tag, title, text });
   };
+  // The device a batch came from (shared/files-mesh.js: b.from), not the selected one.
+  const fromName = (b) => { const x = b && b.from ? hub.sessions.get(b.from) : null; return x ? x.displayName() : peerName(); };
+  const liveFor = { recv: null, send: null }; // the device each progress notification is about
   fileRecv.onBatchProgress = (b) => {
+    liveFor.recv = b.from || null;
     if (Date.now() - b.at < 400) return; // small batches: only the "Pasted" / "Received" popup
     const part = b.total ? pct(b.got, b.total) : pct(b.done, b.count);
     const key = b.kind === 'paste'
       ? b.count === 1 ? 'Pasting {count} file from {name}' : 'Pasting {count} files from {name}'
       : b.count === 1 ? 'Receiving {count} file from {name}' : 'Receiving {count} files from {name}';
-    const vars = { count: b.count, name: peerName(), percent: part };
+    const vars = { count: b.count, name: fromName(b), percent: part };
     progressPopup('driven', { key: key + ' · {percent} %', vars });
     liveToast('recv', t(key, vars), b.total ? b.got : b.done, b.total || b.count);
   };
-  fileDrop.onBatchProgress = (b) => {
+  // Sending: Send files, drags and pastes other devices asked for, each named by the device it goes to.
+  const sendProgress = (b, name = peerName()) => {
     if (!(b.bytes > 5 * 1024 * 1024)) return;
     const file = b.itemCount > 1 ? { key: '{count} items', vars: { count: b.itemCount } } : b.name;
     const label = b.itemCount > 1 ? t('{count} items', { count: b.itemCount }) : b.name;
     if (b.done) {
-      liveDone('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t(b.ok ? 'On {name}' : 'On {name}: some files didn’t make it', { name: peerName() }));
-      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name: peerName() } }, true);
+      liveDone('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t(b.ok ? 'On {name}' : 'On {name}: some files didn’t make it', { name }));
+      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name } }, true);
     }
-    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name: peerName(), percent: pct(b.sent, b.bytes) } });
+    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name, percent: pct(b.sent, b.bytes) } });
     liveToast('send', t('Sending {file}', { file: label }), b.sent, b.bytes);
   };
-  link.on('closed', () => {
-    liveDone('recv', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
-    liveDone('send', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
+  fileDrop.onBatchProgress = (b) => { liveFor.send = b.to || null; const x = b.to ? hub.sessions.get(b.to) : null; sendProgress(b, x ? x.displayName() : peerName()); }; // b.to: the device it goes to
+  // A device that really left (not the selection moving on: its files go on, shared/filedrop-mesh.js).
+  hub.bus.onPeer('closed', (id) => {
+    const x = hub.sessions.get(id);
+    const name = x ? x.displayName() : peerName();
+    for (const tag of ['recv', 'send']) if (!liveFor[tag] || liveFor[tag] === id) liveDone(tag, t('Files stopped'), t('{name} disconnected', { name }));
   });
   fileRecv.onBatch = (b) => {
-    liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerName() }) : '');
+    liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: fromName(b) }) : '');
     if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
-    else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
+    else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: fromName(b) } });
   };
-  wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
-  const sender = new Sender(link); // every rtc2 video session we send (screen, app windows)
+  wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   let senders = 0; // one per sharing target (a link of its own each), numbers far from the selected-device sender's
   pcScreen = new PcScreenSet({
     hub, model: PcScreen.displayModel, onChange: pushState,
@@ -425,8 +548,30 @@ function start() {
       return pc;
     },
   });
-  pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
-  peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
+  // Apps from this PC and Move windows: a PcApps per device, each on its own link and sender (shared/papps-mesh.js
+  // pcAppsSet), so windows go to several devices at once and each lists and opens this PC's apps itself (#313).
+  let appSenders = 0;
+  pcApps = require('../../shared/papps-mesh.js').pcAppsSet({
+    hub,
+    empty: () => ({ allow: false, macAccepts: false, open: 0, streaming: 0, moved: 0, moveWindows: settings.pcApps.moveWindows, moveKey: settings.pcApps.moveKey, message: '' }),
+    make: (l, pid) => new PcApps({
+      link: l, allows: () => consent.get(pid, 'apps', 'out'), helper, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState,
+      sender: new Sender(l, 500000000 + 1000000 * ++appSenders), // its windows' rtc2 sessions, numbered apart from the screens'
+    }),
+  });
+  // Another computer's apps here: a PeerApps per device, each on its own link (shared/papps-mesh.js), so
+  // windows from several computers stay open and a crossing closes none of them (#313).
+  peerApps = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => hub.selectedId,
+    empty: { list: [], loading: false, message: '', open: 0, peerPc: true },
+    merge: (v, all) => ({ ...v, open: all.reduce((n, x) => n + (x.open || 0), 0) }), // the Apps tab: the selected device's list, every window
+    all: ['apply', 'acceptReZume', 'shutdown'], selected: ['refresh', 'launch'], any: ['returnWindow'],
+  });
+  require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => peerApps.ensure(pid, () => new PeerApps({
+    link: l, settings, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
+    peerName: () => { const x = hub.sessions.get(pid); return x ? x.displayName() : peerName(); },
+    allowed: () => consent.get(pid, 'apps', 'in'), // its own pair's "Open its apps here"
+  })));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   // In Multi-device it goes to the device the pointer went to, selected first, with what that
@@ -436,10 +581,19 @@ function start() {
     const wid = Number(m.moving);
     if (!wid || peerApps.returnWindow(wid)) return;
     if (!settings.pcApps.moveWindows) return;
-    if (!meshMoves.ready(to, (v) => { pcApps.macAccepts = v; })) return;
-    pcApps.moveOut(wid, { x: Number(m.fromX), y: Number(m.fromY) }).then((ok) => ok || console.log(`[apps] window not moved: ${pcApps.macAccepts ? 'it can’t go (Bluetooth, gone, already there)' : 'Move windows is off on the other computer'}`));
+    const unit = pcApps.unit(to); // the device the pointer went to: its own PcApps (windows may be on others too)
+    if (!unit) return;
+    if (!meshMoves.ready(to, (v) => { unit.macAccepts = v; })) return;
+    unit.moveOut(wid, { x: Number(m.fromX), y: Number(m.fromY) }).then((ok) => ok || console.log(`[apps] window not moved: ${unit.macAccepts ? 'it can’t go (Bluetooth, gone, already there)' : 'Move windows is off on the other computer'}`));
   };
   helper.on('exit', pushState);
+  // General › Lock together (#322, shared/locksync.js): this computer locked, every connected computer locks too.
+  const isPc = (id) => { const s = hub.sessions.get(id); return !!s && s.connected && !P.isPhoneOs(s.peerOs); };
+  const lockSync = new (require('../../shared/locksync.js').LockSync)({
+    platform: 'win', helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { for (const id of hub.bus.connectedIds()) if (isPc(id)) hub.bus.send(id, m); },
+  }).start();
+  hub.bus.on('lock.now', (m, from) => isPc(from) && lockSync.onMessage(hub.sessions.get(from).displayName()));
   setupNet();
   helper.start();
   helper.once('ready', () => vdd.check()); // switches a virtual monitor left on by a crash off
@@ -464,21 +618,43 @@ function start() {
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
-  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
-    devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
+  const ipc = setupIpc({ dbg: () => dbg, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+    devctl: () => devctl, chats: () => chats, consent: () => consent, viewers: () => viewers, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
-    checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
+    checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
-    bus: hub.bus,
-    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
-    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)
+  // Two-way switches per pair (shared/pairsync-mesh.js): every device's pair on its own session; the
+  // settings hold the pair of the device the pages show (no ReZume or Remote here).
+  {
+    const { VALUES } = require('../pairsync');
+    const only = ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'];
+    const features = Object.fromEntries(Object.entries(PAIR_FEATURES).filter(([f]) => only.includes(f)));
+    pairSync = require('../../shared/pairsync-mesh.js').pairSyncMesh({
+      bus: hub.bus, hub, features, values: VALUES, settings: () => settings, save: saveSettings,
+      setFeature: (f, dir, on) => { const [sec, key] = features[f][dir]; ipc.set(sec, { [key]: on }); },
+      setValue: (k, v) => { const [sec, key] = VALUES[k].path; ipc.set(sec, { [key]: v }); },
+      peerRole: (id) => { const x = hub.sessions.get(id); return x ? x.role : null; },
+      peerOs: (id) => { const x = hub.sessions.get(id); return x ? x.peerOs : null; },
+      onPair: (pid) => consent.changed(pid),
+    });
+  }
+  // The whole mesh's two-way switches, every device telling the others (shared/mesh-edges.js): the
+  // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
+  edges = require('../../shared/mesh-edges.js').meshEdges({
+    bus: hub.bus, mesh, selfId: device.id, consent,
+    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal', 'apps'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+    names: (pid) => (pid === device.id ? device.name : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).name || '')),
+    os: (pid) => (pid === device.id ? P.OS.WIN : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).os || '')),
+    connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+  });
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
   link.start();
 
-  link.on('welcome', () => { // a pinned Mac app started while the Mac wasn't connected
-    if (pendingMacApp && Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
+  hub.bus.onPeer('welcome', (pid) => { // a pinned Mac app started while the Mac wasn't connected: a Mac connects
+    const x = hub.sessions.get(pid);
+    if (!pendingMacApp || !x || x.peerOs !== P.OS.MAC) return;
+    if (Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
     pendingMacApp = null;
   });
   createTray();
@@ -618,11 +794,12 @@ function startPhone(server, pairing) {
       phoneRemote.unit(u);
       anyPhone.unit(u);
       if (loadDeck()) deck.add(u.link); // that phone's Deck runs here
-      new PcNow({ server: u.link, key: (code) => {
+      const now = new PcNow({ server: u.link, key: (code) => {
         if (!helper) return;
         helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
         helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
       } });
+      if (!pcNowRef) pcNowRef = now; // what plays here, for Calls › Pause what plays here (one is enough: it's this computer's)
     },
   });
   loadBtAudio();
@@ -689,8 +866,12 @@ function setupHub(pl) {
 function loadHub() {
   if (phoneHub || !phoneLink) return phoneHub || { act() {} };
   const { PhoneHub } = require('../../shared/phonehub.js');
+  // One phone at a time, the active one, kept while it has a call (shared/phonehub-link.js, step 4).
+  const hubLink = require('../../shared/phonehub-link.js').hubLink({
+    phones: phoneLink, ctxOf: (id) => phoneLink.ctxOf(id), sendTo: (id, m) => hub.bus.send(id, m), held: () => !!(phoneHub && phoneHub.call),
+  });
   phoneHub = new PhoneHub({
-    server: phoneLink, getSettings: () => settings, save: saveSettings,
+    server: hubLink, getSettings: () => settings, save: saveSettings,
     // The calls' sound over Bluetooth; not in the Store's MSIX (Partner Center doesn't grant its phone line capabilities).
     audio: Store.STORE ? null : (opts) => require('../callaudio.js').create({ helper, ...opts }),
     audioLimit: Store.STORE ? '' : require('../callaudio.js').LIMIT,
@@ -718,8 +899,13 @@ function loadHub() {
     callwin.update(phoneHub, { corner: 'bottom', open: goTab, getLanguage: () => i18n.locale });
   };
   phoneHub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this computer pauses for a call (shared/callpause.js, #293).
+  const callPause = new (require('../../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
+  phoneHub.on('call', (c) => callPause.onCall(c));
   phoneHub.on('change', popup);
-  if (phoneLink.current && P.isPhoneOs(phoneLink.current.os)) phoneHub.started();
+  phoneHub.on('call', () => hubLink.refresh()); // a call that ended lets it go to the active phone
+  hub.on('change', () => hubLink.refresh()); // a phone selected
+  if (hubLink.current) phoneHub.started();
   return phoneHub;
 }
 
@@ -747,46 +933,66 @@ function setupNet() {
     applyNet();
     recheck();
   });
+  // The net hook's own link (not the facade): the selected device's, kept while Wi-Fi is being set up or
+  // used for it, so a crossing doesn't cut a transfer through the network it was moved onto (hub.netId).
+  const netLink = require('../../shared/scoped-link.js').scopedLink(hub, null);
+  hub.netId = null;
+  // Each device's last net.caps (what it can do to leave Bluetooth): the hook gets it when it binds there.
+  const netCaps = new Map();
+  hub.bus.on(P.T.NET_CAPS, (m, from) => netCaps.set(from, m));
+  hub.bus.onPeer('closed', (id) => netCaps.delete(id));
   net = new NetLink({
     os: P.OS.WIN,
-    send: (m) => link.sendNow(m),
-    current: () => link.current,
+    send: (m) => !!netLink.id && hub.bus.send(netLink.id, m),
+    current: () => netLink.current,
     host: { can: () => wifi.canHost(), start: (ssid, pass) => wifi.host(ssid, pass), stop: () => wifi.unhost() },
     join: { can: () => wifi.can(), start: (ssid, pass) => wifi.join(ssid, pass), stop: () => wifi.leave() },
     // Connect with hotspot (a phone): it switches its hotspot on, this PC joins it (the Overview asks
     // for its name and password once; joinHotspot).
     hotspot: (why, peerOs) => peerOs === P.OS.ANDROID && why === 'hotspot',
     cable: () => {
-      const c = link.current;
+      const c = netLink.current;
       return !!c && c.os === P.OS.ANDROID && !!wired && wired.toCable(c.deviceId);
     },
   });
   net.on('change', pushState);
   net.on('dropped', () => pcScreen.mode !== 'off' && pcScreen.setMode('off')); // Back to Bluetooth on the phone: it can't carry the screen
-  hub.netHold = (m) => net.holdOut(m, (x) => link.sendNow(x)); // files wait for Wi-Fi (netlink.js)
-  link.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
-  hub.netTap = (m) => net.onMessage(m); // every message of the selected device (net.*)
-  link.on('welcome', () => {
-    net.started();
-    recheck();
+  hub.netHold = (m) => net.holdOut(m, (x) => !!netLink.id && hub.bus.send(netLink.id, x)); // files wait for Wi-Fi (netlink.js)
+  netLink.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+  hub.netTap = (m) => net.onMessage(m); // every message of the net hook's device (net.*)
+  // Bound to a device: the selected one, unless it's busy with another (hosting, joining, asking).
+  const bindNet = (id) => {
+    if (netLink.id === id) return;
+    if (netLink.id && netLink.current) net.ended();
+    netLink.bind(id);
+    hub.netId = id;
+    if (id && netLink.current) { net.started(); recheck(); }
+    if (id && netCaps.has(id)) net.onMessage(netCaps.get(id));
+  };
+  const netBusy = () => ['asking', 'hosting', 'joining', 'joined', 'hotspot'].includes(net.state); // Wi-Fi up or on its way for it
+  hub.on('selected', (id) => { if (!netBusy() || !netLink.current) bindNet(id || null); });
+  net.on('change', () => setImmediate(() => { if (!netBusy() && netLink.id !== (hub.selectedId || null)) bindNet(hub.selectedId || null); })); // done: the selection's again
+  hub.bus.onPeer('welcome', (id) => {
+    if (id === netLink.id) { net.started(); recheck(); } else if (!netLink.current && id === hub.selectedId) bindNet(id);
   });
-  link.on('closed', () => net.ended());
-  link.on('transport', () => {
+  hub.bus.onPeer('closed', (id) => {
+    if (id !== netLink.id) return;
+    net.ended();
+    if (hub.selectedId && hub.selectedId !== id) bindNet(hub.selectedId);
+  });
+  hub.bus.onPeer('transport', (id) => {
+    if (id !== netLink.id) return;
     pushState();
     screen.policy();
     if (!net.onBle && settings.files.mountMac && smb.mac && !smb.drive) smbMount(); // on Wi-Fi now: the folder too
   });
+  bindNet(hub.selectedId || null);
   // The other computer's folder through Bluetooth: not mapped there (its address is the pipe's);
   // Open moves the session onto Wi-Fi Direct and maps it then, kept up while it's mapped.
-  const smbMount = smb.mount.bind(smb);
+  const smbMount = () => smb.mountNow();
   let smbWait = false;
-  smb.canWifi = () => net.onBle;
-  smb.mount = () => {
-    if (!net.onBle) return smbMount();
-    smb.mountMessage = '';
-    smb.onChange();
-    return Promise.resolve();
-  };
+  // Each device's folder waits for Wi-Fi while that device is reached through Bluetooth (shared/smb-mesh.js).
+  smb.canMount = (id) => { const s = hub.sessions.get(id); return !(s && s.transport === 'ble'); };
   smb.openOverWifi = () => {
     if (smbWait) return;
     smbWait = true;
@@ -976,6 +1182,11 @@ function openMacApp(id) {
 let pushQueued = false;
 // Queued: one state push per tick. It never throws (an exception here became an Electron error
 // dialog, or a window that stopped updating): a failure is logged and the next push tries again.
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
+
 function pushState() {
   if (pushQueued) return;
   pushQueued = true;
@@ -990,8 +1201,9 @@ function pushState() {
       }
       if (fileClip) fileClip.syncConnected(kvm.hub.bus.connectedIds().length > 0); // the file shortcuts too
       if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
-      if (sendTo) sendTo.sync(s.peer && s.peer.name);
-      if (pairSync) pairSync.check(); // Tell the other computer what changed here // the Send to entry follows the peer's name
+      if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
+      if (pairSync) pairSync.check(); // Tell the other computer what changed here
+      if (edges) edges.tick(); // the matrix: ours to every device when it changed
       // A pairing code to compare: bring the window to the front.
       const phase = s.pairing ? s.pairing.phase : null;
       if (phase === 'code' && lastPairPhase !== 'code') showMain();
@@ -1145,15 +1357,18 @@ function buildState() {
     peer: peerView(),
     // Every paired device (connected or not), and the mesh's selection and live links.
     peers: hub.peers({ indirect: true }),
-    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin !== false },
+    matrix: edges ? edges.view() : null, // the Multi-device tab's matrix (shared/mesh-edges.js)
+    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin !== false, shareLogs: settings.mesh.shareLogs !== false, collectLogs: settings.mesh.collectLogs !== false },
+    debug: dbg ? dbg.view() : null, // Debug tab (shared/debug-start.js)
+    localApi: localApi ? localApi.view() : null, // General › Local API
     found: discovery.list(),
     discovery: { ...discovery.status },
     addresses: ownAddresses(),
-    stream: { ...screen.state, remote: screen.remote, watching: screen.sentAccept === true },
+    stream: ((sv) => ({ ...sv.state, remote: sv.remote, watching: sv.sentAccept === true }))((viewers && viewers.of(hub.selectedId)) || screen), // the page's device's Monitor 2
     wake: wake.view(),
     macInput: screen.macInput, // the Mac's "Receive input" switch
     input: kvm.mode,
-    kvmState: kvm.view(),
+    kvmState: { ...kvm.view(), partnerName: kvm.partner && hub.sessions.get(kvm.partner) ? hub.sessions.get(kvm.partner).displayName() : '' }, // who the pointer is with (the Overview's sentence)
     kvm: { ...settings.kvm },
     layout: layoutSync.state(), // the shared layout: { rev, by, cells (this device's view), grid, targets }
     keys: settings.keys,
@@ -1173,7 +1388,7 @@ function buildState() {
     pcScreen: pcScreen.view(),
     pcApps: pcApps.view(),
     macApps: settings.macApps,
-    terminal: { ...settings.terminal, ...terminal.view(), installedKey: undefined, server: sshd.view() },
+    terminal: { ...settings.terminal, ...terminal.view(), installedKey: undefined, installedKeys: undefined, server: sshd.view() },
     files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
     phoneMedia: nowPlaying ? nowPlaying.view : null,
@@ -1458,17 +1673,21 @@ function loadCamera() {
   if (camShare || !settings.camera.on) return camShare;
   const { CamShare } = require('../../shared/camshare.js');
   loadVcam();
-  const computer = () => link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os));
+  // Its own link: it stays with the computer the camera runs with, goes to a computer that opens this one's
+  // camera, else follows the selection (shared/cam-mesh.js). Made first, so it hears cam.open first.
+  const cl = require('../../shared/cam-mesh.js').camLink(hub, () => camShare);
+  const computer = () => cl.status.state === 'connected' && !(cl.current && P.isPhoneOs(cl.current.os));
   camShare = new CamShare({
     getLanguage: () => i18n.locale,
-    link: { on: (t, fn) => link.on(t, fn), send: (m) => link.send(m), connected: computer, ble: () => !!(link.current && link.current.transport === 'ble'), closed: (fn) => link.on('closed', fn) },
+    link: { on: (t, fn) => cl.on(t, fn), send: (m) => cl.send(m), connected: computer, ble: () => !!(cl.current && cl.current.transport === 'ble'), closed: (fn) => cl.on('closed', fn) },
     cfg: () => settings.camera,
     save: saveSettings,
     popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
-    peerName,
-    onChange: pushState,
+    peerName: () => (cl.current && cl.current.name) || peerName(),
+    onChange: () => { pushState(); cl.settle(); },
   });
-  camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+  cl.shareWithAll(); // every connected computer hears whether it's shared, not only the selected one
+  camShare.sendPolicy(); // connected already: they hear it now
   return camShare;
 }
 

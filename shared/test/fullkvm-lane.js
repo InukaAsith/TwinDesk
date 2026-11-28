@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Full KVM: no native input lane on our own helper, not even before the service is up (#311: the moves
+// Full KVM: no native input lane on our own helper, not even before the service is up (the moves
 // went past the service's return watch and the pointer never came back).
 'use strict';
 const assert = require('assert');

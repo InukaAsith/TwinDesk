@@ -17,6 +17,8 @@ UI.tab({
     const { el, api } = UI;
     const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
     const WHERE = { driving: t('You’re using {there}'), driven: t('{There} is using {me}') };
+    // The device the pointer is with, not the selected one (docs/mesh-graph.md, the input peer).
+    const where = (s) => { const w = WHERE[s.input]; const n = s.kvmState && s.kvmState.partnerName; return w && n ? w.replace(/\{[Tt]here\}/g, n) : w; };
 
     const linkLine = el('div', { class: 'hero-link' }, [el('span', { class: 'hero-pulse' })]);
     const linkText = el('div', { class: 'hero-link-text' });
@@ -191,7 +193,7 @@ UI.tab({
         : s.pairing ? t('Pairing…') : s.paired ? t('Connecting…') : t('Not connected');
       const bad = l.state === 'identity_changed';
       status.textContent = bad ? t('This {kind} looks different now. Forget it and pair again.', { kind: t(p.kind) })
-        : connected ? UI.fill(t(s.kvmState.message || '') || WHERE[s.input] || t('Connected'))
+        : connected ? UI.fill(t(s.kvmState.message || '') || where(s) || t('Connected'))
           : s.peer ? t('Open TwinDesk on {name}.', { name: s.peer.name })
             : t('Pick a computer below, or connect by address.');
       status.classList.toggle('bad', bad);

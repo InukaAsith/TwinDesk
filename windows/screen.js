@@ -17,7 +17,8 @@ const FROM_RENDERER = new Set([T.RTC_ANSWER, T.RTC_ICE, T.APP_FOCUS, T.APP_CLOSE
 const INPUT = new Set([T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL, T.IN_KEY_DOWN, T.IN_KEY_UP]);
 
 class Screen {
-  // opts: link, clip, settings (shared object, .windows.monitor bounds), saveSettings(), onChange(),
+  // opts: link, clip, settings (shared object, .windows.monitor bounds), saveSettings(), onChange(), selfId
+  //   (Multi-device: this computer, to tell its own screen.ctl from another's in screen.state by),
   // isQuitting(), inputAllowed() (false while KVM drives or is driven)
   constructor(opts) {
     Object.assign(this, opts);
@@ -229,7 +230,9 @@ class Screen {
     // The other computer just started sharing (its menu, its window): watch it here. Not on
     // connecting to one that already shares (was: null), which would pop the window every time.
     const shown = !!(this.win && !this.win.isDestroyed() && this.win.isVisible());
-    if (this.remote.on && was && !was.on && !this.test && !shown) this.open(false);
+    // In Multi-device only when it was this computer that asked (by), or the sharer's own menu (no by).
+    const ours = !m.by || !this.selfId || m.by === this.selfId;
+    if (this.remote.on && was && !was.on && !this.test && !shown && ours) this.open(false);
   }
 
   _startIfWatching() {

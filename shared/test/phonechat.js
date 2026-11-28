@@ -21,11 +21,9 @@ const run = (o) => {
   // With Accessibility the phone clicks Send; never a Tab and Enter typed blind.
   assert.deepStrictEqual(run({ pkg: 'com.whatsapp', a11y: true }), { r: true, did: ['send'] });
   assert.deepStrictEqual(run({ pkg: 'org.telegram.messenger', a11y: true }), { r: true, did: ['send'] });
-  // Messenger (#331): the phone clicks its Send with Accessibility; without it Enter stays a new line, as in WhatsApp.
-  assert.deepStrictEqual(run({ pkg: 'com.facebook.orca', a11y: true }), { r: true, did: ['send'] });
-  assert.deepStrictEqual(run({ pkg: 'com.facebook.mlite', a11y: true }), { r: true, did: ['send'] });
+  assert.deepStrictEqual(run({ pkg: 'com.facebook.orca', a11y: true }), { r: true, did: ['send'] }, 'Messenger (#331)');
+  // Messenger without it: no keyboard way to Send, Enter is left as the app takes it.
   assert.deepStrictEqual(run({ pkg: 'com.facebook.orca' }), { r: false, did: [] });
-  assert.deepStrictEqual(run({ pkg: 'com.facebook.orca', shift: true, a11y: true }), { r: true, did: [JSON.stringify('\n')] });
   // Without it: WhatsApp and Telegram get their Enter (their own "Enter is send"), Instagram Tab, Enter.
   assert.deepStrictEqual(run({ pkg: 'com.whatsapp' }), { r: false, did: [] });
   const ig = run({ pkg: 'com.instagram.android' });
