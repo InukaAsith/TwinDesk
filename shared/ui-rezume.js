@@ -41,41 +41,19 @@
   }
 
   // Multi-device, turned on with no device picked: which one (ReZume is with one device at a time).
-  // One connected: that one, without asking. Several: a sheet; Cancel leaves ReZume off. True when
-  // it took over turning ReZume on.
+  // One connected: that one, without asking. Several: the tab itself asks, at its top (drawAsk in
+  // build); Cancel leaves ReZume off. True when it took over turning ReZume on.
+  let asking = false;
+  let drawAsk = () => {};
+  const goWith = (id) => { asking = false; UI.api.rezumeDo({ a: 'with', id }); UI.api.setReZume({ on: true }); drawAsk(); };
   function askWith(on) {
     const mw = on && UI.state && UI.state.rezume && UI.state.rezume.meshWith;
     if (!mw || mw.with) return false;
     const devs = mw.devices || [];
     if (!devs.length) return false;
-    const go = (id) => { UI.api.rezumeDo({ a: 'with', id }); UI.api.setReZume({ on: true }); };
-    if (devs.length === 1) { go(devs[0].id); return true; }
-    const { el } = UI;
-    if (!document.getElementById('rz-ask-style')) {
-      const st = document.createElement('style');
-      st.id = 'rz-ask-style';
-      st.textContent = '.rz-shade{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:24px}'
-        + '.rz-sheet{width:min(420px,100%);max-height:100%;overflow:auto;border-radius:14px;background:#fff;color:var(--text);box-shadow:0 24px 64px rgba(0,0,0,.35),0 0 0 1px var(--line);padding:18px 18px 14px}'
-        + '@media (prefers-color-scheme: dark){.rz-sheet{background:#252527}}'
-        + '.rz-sheet h2{margin:0 0 4px;font-size:16px;font-weight:600}.rz-sheet p{margin:0 0 12px;color:var(--muted);font-size:12px}'
-        + '.rz-foot{display:flex;justify-content:flex-end;margin-top:12px}';
-      document.head.append(st);
-    }
-    let shade = null;
-    const close = (id) => {
-      shade.remove();
-      if (id) go(id);
-      else UI.api.setReZume({ on: false }); // the switch goes back off
-    };
-    const rows = devs.map((d) => UI.row(d.name, '', [UI.osIcon(d.os), UI.button(tr('Choose'), () => close(d.id), 'small primary')], { literal: true }));
-    shade = el('div', { class: 'rz-shade' }, [el('div', { class: 'rz-sheet', attrs: { role: 'dialog', 'aria-modal': 'true' } }, [
-      el('h2', { text: tr('ReZume with which device?') }),
-      el('p', { text: tr('ReZume goes on with one device at a time. A computer you choose chooses this one too.') }),
-      ...rows,
-      el('div', { class: 'rz-foot' }, [UI.button(tr('Cancel'), () => close(''))]),
-    ])]);
-    shade.addEventListener('click', (e) => { if (e.target === shade) close(''); });
-    document.body.append(shade);
+    if (devs.length === 1) { goWith(devs[0].id); return true; }
+    asking = true;
+    drawAsk();
     return true;
   }
 
@@ -144,6 +122,25 @@
       const withRow = UI.row(tr('ReZume with'), tr('The device to go on with. It picks this computer there too, and the one either was with before lets go.'), [withPick.el], { literal: true });
       const withCard = UI.card(tr('Multi-device'), [withRow]);
       withCard.hidden = true;
+      // Turned on with no device picked (askWith): the choice, at the top of the tab.
+      const askList = UI.el('div');
+      const askCancel = UI.button(tr('Cancel'), () => { asking = false; UI.api.setReZume({ on: false }); drawAsk(); }, 'small');
+      const askCard = UI.card(tr('ReZume with which device?'), [
+        UI.row(tr('One device at a time'), tr('ReZume goes on with one device at a time. A computer you choose chooses this one too.'), [askCancel]),
+        askList,
+      ], { cls: 'keep-on' });
+      askCard.hidden = true;
+      let askKey = '';
+      drawAsk = () => {
+        const mw = UI.state && UI.state.rezume && UI.state.rezume.meshWith;
+        if (asking && (!mw || mw.with)) asking = false; // picked meanwhile (the picker below, or the other computer)
+        const devs = asking ? mw.devices || [] : [];
+        const k = asking ? JSON.stringify(devs) : '';
+        askCard.hidden = !asking;
+        if (k === askKey) return;
+        askKey = k;
+        askList.replaceChildren(...devs.map((d) => UI.row(d.name, '', [UI.osIcon(d.os), UI.button(tr('Choose'), () => goWith(d.id), 'small primary')], { literal: true })));
+      };
       const status = UI.row('{name}', '');
       const out = UI.row('', '', [], { literal: true });
       const push = UI.button(tr('Send'), () => api.rezumeDo({ a: 'push' }), 'small');
@@ -206,7 +203,7 @@
       const tabRow = UI.row(tr('Apps and Phone pages'), '', [sw.tab.el]);
       const where = UI.card(tr('Show in'), [notifyRow, barRow, trayRow, tabRow]);
 
-      body.append(withCard, note, offer.el, now, info, what, ways, winList.el, fileList.el, where);
+      body.append(askCard, withCard, note, offer.el, now, info, what, ways, winList.el, fileList.el, where);
 
       return (s) => {
         const h = s.rezume || {};
@@ -214,6 +211,7 @@
         const p = mw ? partnerPeer(s, mw) : UI.peer(s);
         const fill = (t) => String(t).replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m));
         withCard.hidden = !mw;
+        drawAsk();
         if (mw) {
           body.setAttribute('data-literal', '');
           const opts = [{ value: '', label: tr('No device') }, ...(mw.devices || []).map((d) => ({ value: d.id, label: d.name }))];

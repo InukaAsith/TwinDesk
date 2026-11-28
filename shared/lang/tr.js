@@ -2412,5 +2412,6 @@
   "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Seçtiğiniz cihazlarda aynı tutulan klasörler, bulut olmadan. Her biri kendi kopyasını tutar ve çevrimdışı çalışır. Dosya Paylaşımı'nda açana kadar kapalıdır.",
   "Choose": "Seç",
   "ReZume with which device?": "ReZume hangi cihazla?",
-  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume aynı anda tek bir cihazla devam eder. Seçtiğiniz bilgisayar da bunu seçer."
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume aynı anda tek bir cihazla devam eder. Seçtiğiniz bilgisayar da bunu seçer.",
+  "One device at a time": "Aynı anda tek cihaz"
 });

@@ -2413,5 +2413,6 @@
   "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.",
   "Choose": "Choose",
   "ReZume with which device?": "ReZume with which device?",
-  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume goes on with one device at a time. A computer you choose chooses this one too."
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume goes on with one device at a time. A computer you choose chooses this one too.",
+  "One device at a time": "One device at a time"
 });

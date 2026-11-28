@@ -2412,5 +2412,6 @@
   "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Pastas mantidas iguais nos dispositivos que você escolher, sem nuvem. Cada um guarda sua própria cópia e funciona offline. Desativado até você ativar, em Compartilhamento de arquivos.",
   "Choose": "Escolher",
   "ReZume with which device?": "ReZume com qual dispositivo?",
-  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "O ReZume continua com um dispositivo por vez. Um computador que você escolher também escolhe este."
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "O ReZume continua com um dispositivo por vez. Um computador que você escolher também escolhe este.",
+  "One device at a time": "Um dispositivo por vez"
 });

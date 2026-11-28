@@ -2412,5 +2412,6 @@
   "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Папки, одинаковые на выбранных вами устройствах, без облака. У каждого своя копия, работает без сети. Выключено, пока вы не включите в «Обмене файлами».",
   "Choose": "Выбрать",
   "ReZume with which device?": "ReZume с каким устройством?",
-  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume работает с одним устройством за раз. Выбранный компьютер тоже выберет этот."
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume работает с одним устройством за раз. Выбранный компьютер тоже выберет этот.",
+  "One device at a time": "Одно устройство за раз"
 });

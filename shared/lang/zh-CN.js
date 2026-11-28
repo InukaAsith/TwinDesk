@@ -2413,5 +2413,6 @@
   "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "在你选择的设备上保持一致的文件夹，无需云端。每台设备保存自己的副本，离线也能用。在“文件共享”中开启之前保持关闭。",
   "Choose": "选择",
   "ReZume with which device?": "ReZume 与哪台设备接续？",
-  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume 一次只与一台设备接续。你选择的电脑也会选择这台。"
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume 一次只与一台设备接续。你选择的电脑也会选择这台。",
+  "One device at a time": "一次一台设备"
 });
