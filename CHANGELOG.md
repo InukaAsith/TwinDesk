@@ -39,6 +39,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Connection troubleshooter** (Overview, every computer and Android, folded until opened): the
   link's transport, round trip and the stream's resolution, frame rate and bitrate, read from what
   the session already measures; it starts no checks (#289 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **NixOS:** the flake builds today's Linux app (TwinDesk Web, the fast input lane, the iPhone
+  signer, runtime tools), and Full KVM is set in the configuration (`programs.twindesk.fullKvm`);
+  the app's Full KVM tab shows it and changes nothing (#281 by
+  [@ShivanshuKantPrasad](https://github.com/ShivanshuKantPrasad); the flake wasn't evaluated here).
 - **Phone screen off while using apps** (Mac, Phone page, off): the phone's own panel stays dark
   while its app windows are open, and a minimized app window stops painting (#284 by [@alexfoxtm](https://github.com/alexfoxtm)).
 
