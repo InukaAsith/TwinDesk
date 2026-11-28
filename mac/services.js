@@ -41,6 +41,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
     enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
     swapKeys: () => server.keySwap(s()), // never between two Macs
   });
+
   const clipboard = new Clipboard(server, helper, s);
   const drop = new Drop({ server, helper, displays, getSettings: s });
   const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });

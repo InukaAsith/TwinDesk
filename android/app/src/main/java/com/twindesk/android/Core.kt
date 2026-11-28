@@ -515,7 +515,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         changed()
     }
 
-    override fun onMessage(m: JSONObject) {
+    override fun onMessage(m: JSONObject, route: Link.TrustedRoute?, source: okhttp3.WebSocket) {
         val t = m.optString("t")
         main.post {
             for (f in features) {

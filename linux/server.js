@@ -182,7 +182,7 @@ class Server extends EventEmitter {
       }
       return;
     }
-    this.emit('message', msg, ctx); // peer.js routes it by type
+    this.emit('message', msg, ctx, ws); // peer.js routes it by type
   }
 
   // Pings and silence checks every PING_MS while any socket is open; with none, nothing wakes the app.

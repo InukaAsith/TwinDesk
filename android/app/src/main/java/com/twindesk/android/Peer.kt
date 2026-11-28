@@ -255,7 +255,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         send(msg("peer.rev", "token" to token, "fp" to myFp, "port" to PeerServer.PEER_PORT))
         started()
     }
-    override fun onMessage(m: JSONObject) = dispatch(m)
+    override fun onMessage(m: JSONObject, route: Link.TrustedRoute?, source: okhttp3.WebSocket) = dispatch(m)
     override fun onClosed(host: Host, code: String?) {
         if (role == "guest") ended()
         // Dropped by accident: try to get it back for a while (as Core does with the computer).

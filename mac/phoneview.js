@@ -281,9 +281,14 @@ class PhoneViews extends EventEmitter {
     return { on: !!v, facing: v ? v.facing : null, error: v ? v.error || '' : '', virtual: !!(this.vcam && this.vcam.ready) };
   }
 
+  _showApp(view) {
+    view.win.show();
+    view.win.focus();
+  }
+
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
-    if (open) return open.win.show(), open.win.focus();
+    if (open) return this._showApp(open);
     const w = 412;
     const h = 860;
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the

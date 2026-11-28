@@ -240,7 +240,7 @@ class Server extends EventEmitter {
       }
       return;
     }
-    this.emit('message', msg, ctx); // peer.js routes it by type
+    this.emit('message', msg, ctx, ws); // session.js routes it by type
   }
 
   // Pings the sockets that have been silent for their interval, closes the ones silent too long.

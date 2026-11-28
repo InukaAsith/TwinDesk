@@ -95,8 +95,9 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
-      if (my.connectionState === 'failed') setOverlay(t('Reconnecting…'));
-      else if (my.connectionState === 'disconnected') setOverlay(t('The video connection was interrupted…'));
+      const connection = my.connectionState;
+      if (connection === 'failed') setOverlay(t('Reconnecting…'));
+      else if (connection === 'disconnected') setOverlay(t('The video connection was interrupted…'));
     };
     try {
       await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });

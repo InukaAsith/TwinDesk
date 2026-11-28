@@ -97,8 +97,10 @@ function setupIpc(ctx) {
   handle('setActivePeer', (id) => typeof id === 'string' && hub.select(id.slice(0, 64)));
   handle('forgetPeer', (id) => {
     if (typeof id !== 'string') return;
-    hub.forgetPeer(id.slice(0, 64));
-    kvm.forgetDevice(id.slice(0, 64));
+    const deviceId = id.slice(0, 64);
+    // Drop the pairing before removing it from the layout.
+    hub.forgetPeer(deviceId);
+    kvm.forgetDevice(deviceId);
   });
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
