@@ -18,16 +18,27 @@ object Lan {
         return b1 == 10 || (b1 == 172 && b2 in 16..31) || (b1 == 192 && b2 == 168)
     }
 
-    fun clean(a: JSONArray?): List<String> {
-        if (a == null) return emptyList()
-        return (0 until a.length()).map { a.optString(it) }.filter { isPrivate(it) }.distinct().take(MAX)
+    // 169.254.1.0 to 169.254.254.255 (RFC 3927): two devices on a network with no DHCP server (from PR #294).
+    fun isLinkLocal(a: String): Boolean {
+        val m = V4.find(a) ?: return false
+        val (b1, b2, b3, b4) = m.destructured
+        return b1.toInt() == 169 && b2.toInt() == 254 && b3.toInt() in 1..254 && b4.toInt() in 0..255
     }
 
-    // This phone's private IPv4 addresses now (its Wi-Fi's).
+    private fun usable(a: String) = isPrivate(a) || isLinkLocal(a)
+
+    fun clean(a: JSONArray?): List<String> {
+        if (a == null) return emptyList()
+        return clean((0 until a.length()).map { a.optString(it) })
+    }
+
+    fun clean(a: List<String>): List<String> = a.filter { usable(it) }.distinct().take(MAX)
+
+    // This phone's private and link-local IPv4 addresses now (its Wi-Fi's).
     fun mine(): List<String> = runCatching {
         java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().filter { it.isUp && !it.isLoopback }
             .flatMap { n -> n.inetAddresses.toList().mapNotNull { it.hostAddress?.substringBefore('%') } }
-            .filter { isPrivate(it) }
+            .filter { usable(it) }
     }.getOrDefault(emptyList())
 
     // The computer's addresses this phone may reach: on its network (the first two parts alike: a /16 or
