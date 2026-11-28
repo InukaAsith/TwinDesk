@@ -715,6 +715,7 @@ app.whenReady().then(() => {
     svc.notifs.applySettings();
     svc.terminal.applySettings();
     svc.sshClient.applySettings();
+    svc.pcApps.applySettings();
     pushState();
   });
   const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
@@ -1070,7 +1071,7 @@ app.whenReady().then(() => {
     const known = (pid) => hub.peers().find((x) => x.id === pid) || mesh.known().find((x) => x.id === pid) || {};
     edges = require('../../shared/mesh-edges.js').meshEdges({
       bus: hub.bus, mesh, selfId: id.macId, consent,
-      features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+      features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal', 'apps'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
       names: (pid) => (pid === id.macId ? id.macName : known(pid).name || ''),
       os: (pid) => (pid === id.macId ? P.OS.MAC : known(pid).os || ''),
       connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },

@@ -87,8 +87,10 @@ class PcApps {
     });
   }
 
+  // "Let {name} open {me}'s apps": for the device it sends to, its own pair in Multi-device (opts.allows,
+  // shared/consent.js), else the setting.
   get allowed() {
-    return this.settings.pcApps.allow;
+    return this.allows ? !!this.allows() : !!this.settings.pcApps.allow;
   }
 
   // An app followed for ReZume (adopt), which this tab's switch doesn't stop.

@@ -19,9 +19,10 @@ const T = P.T;
 const POINTER = new Set([T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL]);
 
 class PcApps extends EventEmitter {
-  constructor({ server, getSettings }) {
+  // allowed(): "Open {name}'s apps here" for this peer's device, its own pair in Multi-device (shared/consent.js)
+  constructor({ server, getSettings, allowed = null }) {
     super();
-    Object.assign(this, { server, getSettings });
+    Object.assign(this, { server, getSettings, allowed });
     this.apps = []; // [{id, name, icon}]
     this.listing = false;
     this.launch = {}; // id -> '' (opening) | 'ok' | why
@@ -34,7 +35,7 @@ class PcApps extends EventEmitter {
       this.apps = [];
       this.launch = {};
       this._policy();
-      if (this.cfg.on) this.list();
+      if (this.takes) this.list();
       const p = this.pendingLink;
       this.pendingLink = null;
       if (p && Date.now() - p.at < 120000) setTimeout(() => this.open(p.id), 500);
@@ -92,6 +93,10 @@ class PcApps extends EventEmitter {
     return this.getSettings().papps;
   }
 
+  get takes() {
+    return this.allowed ? !!this.allowed() : !!this.cfg.on;
+  }
+
   // Windows ReZume took from the other computer come too, with this tab's switch off (rezume.js take).
   acceptReZume(on) {
     if (this.rz === (on === true)) return;
@@ -101,7 +106,7 @@ class PcApps extends EventEmitter {
   }
 
   get accepting() {
-    return !!this.cfg.on || this.rz === true || !!this.getSettings().apps.moveWindows; // Move windows takes the windows moved here too
+    return this.takes || this.rz === true || !!this.getSettings().apps.moveWindows; // Move windows takes the windows moved here too
   }
 
   _policy() {
@@ -116,7 +121,7 @@ class PcApps extends EventEmitter {
   }
 
   open(id) {
-    if (!this.server.current || !this.cfg.on) return;
+    if (!this.server.current || !this.takes) return;
     const name = this._appName(String(id)) || { key: 'the app' };
     this.emit('popup', 'away', { key: 'Opening {app} on {name}…', vars: { app: name, name: this.server.current.name } });
     this.launch[String(id)] = '';
@@ -385,7 +390,7 @@ class PcApps extends EventEmitter {
 
   // macshare://pc-app/<id> (a kept Dock icon, Launchpad, Spotlight): open it now or once connected.
   openFromLink(id) {
-    if (this.server.current && this.cfg.on) return this.open(id);
+    if (this.server.current && this.takes) return this.open(id);
     this.pendingLink = { id, at: Date.now() };
     this.emit('popup', 'driven', { key: 'Opening it when the other computer connects…' });
   }

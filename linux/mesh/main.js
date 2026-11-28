@@ -482,7 +482,12 @@ function start() {
     bus: hub.bus, mesh, settings, save: saveSettings,
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply(); pushState(); }); // a device's pair: its policies (and its keys) again
+  consent.on('change', () => { // a device's pair: its policies (and its keys) again
+    clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply();
+    if (peerApps) peerApps.apply();
+    if (pcApps) pcApps.apply();
+    pushState();
+  });
   wake = new Wake({ link, bus: hub.bus, peer: (pid) => { const x = hub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs } : null; }, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   vdd = new Vdd({ onChange: pushState });
   // Share screen to several devices at once (shared/pcscreen-set.js), as on Windows: a PcScreen per device,
@@ -500,12 +505,12 @@ function start() {
   vdd.check(); // Extend: can this desktop add a virtual monitor? (and one left on by a crash goes)
   // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
   // or windows from the selected device while Monitor 2 showed another were the wrong device's.
-  apps = new Apps({ link: screenLink, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
+  apps = new Apps({ link: screenLink, allowed: () => consent.get(screenLink.id, 'apps', 'in'), getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   // Apps from this PC and Move windows: the selected device's, except while windows are moved out: they stay
   // with the device they went to until they're back (hub.sticky; #313). Their own sender, numbered apart.
   const appsLink = hub.sticky(() => !!(pcApps && pcApps.moved.size), { remember: ['papp.policy'] }); // whether that device takes our windows
-  pcApps = new PcApps({ link: appsLink, helper, sender: Object.assign(new Sender(appsLink), { counter: 2000000 }), settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
+  pcApps = new PcApps({ link: appsLink, allows: () => consent.get(appsLink.id, 'apps', 'out'), helper, sender: Object.assign(new Sender(appsLink), { counter: 2000000 }), settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
   // Another computer's apps here: a PeerApps per device, each on its own link (shared/papps-mesh.js), so
   // windows from several computers stay open and a crossing closes none of them (#313).
   peerApps = require('../../shared/papps-mesh.js').appsSet({
@@ -517,6 +522,7 @@ function start() {
   require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => peerApps.ensure(pid, () => new PeerApps({
     link: l, settings, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
     peerName: () => { const x = hub.sessions.get(pid); return x ? x.displayName() : peerName(); },
+    allowed: () => consent.get(pid, 'apps', 'in'), // its own pair's "Open its apps here"
   })));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
@@ -589,7 +595,7 @@ function start() {
   // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
   edges = require('../../shared/mesh-edges.js').meshEdges({
     bus: hub.bus, mesh, selfId: device.id, consent,
-    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal', 'apps'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
     names: (pid) => (pid === device.id ? device.name : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).name || '')),
     os: (pid) => (pid === device.id ? P.OS.LINUX : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).os || '')),
     connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },

@@ -352,7 +352,7 @@ function start() {
   });
   // On Monitor 2's link (the device it shows), not the facade: its windows are drawn there, so an app list
   // or windows from the selected device while Monitor 2 showed another were the wrong device's.
-  apps = new Apps({ link: screenLink, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
+  apps = new Apps({ link: screenLink, allowed: () => consent.get(screenLink.id, 'apps', 'in'), getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
@@ -448,7 +448,12 @@ function start() {
     bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  consent.on('change', () => { clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply(); pushState(); }); // a device's pair: its policies (and its keys) again
+  consent.on('change', () => { // a device's pair: its policies (and its keys) again
+    clip.applySettings(); notifs.applySettings(); sshd.apply(); terminal.apply();
+    if (peerApps) peerApps.apply();
+    if (pcApps) pcApps.apply();
+    pushState();
+  });
   // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
   // device asks for goes to it through a sender of its own.
   fileClip = new MeshFileClip({
@@ -534,7 +539,7 @@ function start() {
       return pc;
     },
   });
-  pcApps = new PcApps({ link: appsLink, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
+  pcApps = new PcApps({ link: appsLink, allows: () => consent.get(appsLink.id, 'apps', 'out'), helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: () => { appsLink.follow(); pushState(); } });
   // Another computer's apps here: a PeerApps per device, each on its own link (shared/papps-mesh.js), so
   // windows from several computers stay open and a crossing closes none of them (#313).
   peerApps = require('../../shared/papps-mesh.js').appsSet({
@@ -546,6 +551,7 @@ function start() {
   require('../../shared/scoped-link.js').eachDevice(hub, (pid, l) => peerApps.ensure(pid, () => new PeerApps({
     link: l, settings, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
     peerName: () => { const x = hub.sessions.get(pid); return x ? x.displayName() : peerName(); },
+    allowed: () => consent.get(pid, 'apps', 'in'), // its own pair's "Open its apps here"
   })));
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
@@ -617,7 +623,7 @@ function start() {
   // Multi-device tab's matrix. The features whose pair each device's features read (shared/consent.js).
   edges = require('../../shared/mesh-edges.js').meshEdges({
     bus: hub.bus, mesh, selfId: device.id, consent,
-    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
+    features: ['clipboard', 'notifs', 'audio', 'files', 'cursor', 'terminal', 'apps'].map((key) => ({ key, dirs: { out: !!PAIR_FEATURES[key].out, in: !!PAIR_FEATURES[key].in } })),
     names: (pid) => (pid === device.id ? device.name : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).name || '')),
     os: (pid) => (pid === device.id ? P.OS.WIN : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).os || '')),
     connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },

@@ -97,7 +97,8 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     appsAt = Date.now();
     appsServeRoute.refresh();
   });
-  const apps = new Apps({ server: new Peer(appsServeRoute, meshHub.server), helper, displays, stream, getSettings: s });
+  const apps = new Apps({ server: new Peer(appsServeRoute, meshHub.server), helper, displays, stream, getSettings: s,
+    allows: consent ? () => consent.get(appsServeRoute.targetId, 'apps', 'out') : null }); // the pair of the computer it serves
   appsRef = apps;
   apps.on('change', () => setImmediate(() => { if (!appsBusy()) appsServeRoute.refresh(); })); // free again: the selection (never inside a move)
   // Terminal, this Mac to another computer: one per computer (shared/papps-mesh.js), each with its own
@@ -166,7 +167,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   const appsUnit = (pid) => pcApps.ensure(pid, () => {
     const p = new ScopedPhonePeer(meshHub, meshHub.server, null);
-    const u = new PcApps({ server: p, getSettings: s });
+    const u = new PcApps({ server: p, getSettings: s, allowed: consent ? () => consent.get(pid, 'apps', 'in') : null }); // its own pair's switch
     p.bind(pid); // after it listens: its 'client' now
     return u;
   });
@@ -194,7 +195,8 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     appsTo = keep ? appsTo : h.selectedId;
     return appsTo;
   }, { remember: ['papp.policy'] }); // whether that device takes our windows
-  const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s });
+  const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s,
+    allows: consent ? () => consent.get(appsRoute.targetId, 'apps', 'out') : null }); // the pair of the Mac it sends to
   appSendRef = appSend;
   appSend.on('change', () => appsRoute.refresh()); // windows back: it follows the selection again
   const wake = new Wake({ server, getSettings: s, saveSettings: () => store.saveSettings(s()), bus: meshHub.bus, // every device, not only the selected one
