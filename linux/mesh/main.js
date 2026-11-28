@@ -71,6 +71,7 @@ const PcApps = require('../pcapps');
 const PeerApps = require('../peerapps');
 const desktopApps = require('../desktopapps');
 const loopback = require('../loopback');
+loopback.usePids(() => require('electron').app.getAppMetrics().map((m) => m.pid)); // TwinDesk's own streams stay out of what Send sound captures
 const autostart = require('../autostart');
 const { FEATURES: PAIR_FEATURES } = require('../pairsync');
 const { PhoneLink } = require('./phone-link');
@@ -328,7 +329,7 @@ function start() {
     hub.select(from);
     screenLink.moveTo(from); // open, it doesn't follow the selection by itself
   });
-  sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
+  sound = new SoundSet({ Sound, hub, settings, save: saveSettings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   // Terminal, this computer to another: one per computer (shared/papps-mesh.js), each with its own alias,

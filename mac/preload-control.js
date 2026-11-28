@@ -21,6 +21,7 @@ const api = {
   getState: () => ipcRenderer.invoke('getState'),
   phoneAssets: () => ipcRenderer.invoke('phoneAssets'),
   deckApps: () => ipcRenderer.invoke('deckApps'), // the Deck page's app picker
+  soundRoute: (o) => ipcRenderer.invoke('soundRoute', o), soundVolume: (level) => ipcRenderer.invoke('soundVolume', level), // Audio › the mixer
   deckState: (obs) => ipcRenderer.invoke('deckState', obs === true || obs === 'mix' ? obs : false), // its sound, Bluetooth and display pickers (OBS's: obs)
   deckObs: () => ipcRenderer.invoke('deckObs'), // OBS Studio's port, and whether a password is kept
   deckSetObs: (v) => ipcRenderer.invoke('deckSetObs', v), // {port, pass} → OBS's state

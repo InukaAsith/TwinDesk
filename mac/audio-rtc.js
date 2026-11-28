@@ -6,7 +6,8 @@
 
 const P = window.MacShareProtocol;
 const api = window.audioApi;
-const out = document.getElementById('out');
+// The PC's sound: on the speakers its route names, each at its volume (shared/sound-outs.js).
+const outs = window.SoundOuts.create((info) => api.state({ info }));
 let send = null; // {session, pc, actx, player, pendingIce, remoteSet}
 let recv = null; // {session, pc, pendingIce}
 
@@ -59,9 +60,7 @@ async function onRecvOffer({ session, sdp, ice }) {
   const pc = new RTCPeerConnection(ice || { iceServers: [] });
   me.pc = pc;
   pc.ontrack = (e) => {
-    if (e.receiver.jitterBufferTarget !== undefined) e.receiver.jitterBufferTarget = 0;
-    out.srcObject = new MediaStream([e.track]);
-    out.play().catch(() => {});
+    if (recv === me) outs.play(new MediaStream([e.track]), e.receiver, pc); // the jitter buffer: as small as it can, or Keep speakers in sync's
   };
   pc.onicecandidate = (e) => e.candidate && recv === me && api.send({ t: P.T.AUDIO_ICE, dir: 'w2m', session, candidate: e.candidate.toJSON() });
   pc.onconnectionstatechange = () => recv === me && api.state({ dir: 'w2m', session, status: pc.connectionState });
@@ -98,9 +97,10 @@ async function onRemote(m) {
 api.on('send-start', startSend);
 api.on('send-stop', () => { close(send); send = null; });
 api.on('recv', onRecvOffer);
-api.on('recv-stop', () => { close(recv); recv = null; out.srcObject = null; });
+api.on('recv-stop', () => { close(recv); recv = null; outs.stop(); });
 api.on('remote', onRemote);
-api.on('volume', (v) => { out.volume = Math.max(0, Math.min(1, Number(v))); });
+api.on('volume', (v) => outs.volume(v));
+api.on('route', (m) => outs.route(m)); // its speakers and sync (shared/sound-route.js)
 api.on('pcm', (buf) => {
   if (!send || !send.player) return;
   const copy = new Float32Array(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength >> 2));

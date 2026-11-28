@@ -200,6 +200,8 @@
       AUDIO_ANSWER: 'audio.answer', // receiver->sender {dir, session, sdp}
       AUDIO_ICE: 'audio.ice', // either {dir, session, candidate}
       AUDIO_STOP: 'audio.stop', // sender->receiver {dir}
+      AUDIO_ROUTE: 'audio.route', // sender->receiver {outs?: [{id, vol}], sync?: ms}: which of the receiver's speakers, and Keep speakers in sync (shared/sound-route.js)
+      AUDIO_OUTS: 'audio.outs', // receiver->sender {outs: [{id, name}], route: [{id, vol}], lat}: its speakers, the route kept, the delay heard (ms)
       // Audio › Microphone (shared/mic.js): each side's microphone on the other, either way on its own
       MIC_POLICY: 'mic.policy', // either {accept, ask?}: it uses the other's microphone; ask: send yours back (just loaded)
       MIC_OFFER: 'mic.offer', // sender->receiver {session, sdp}

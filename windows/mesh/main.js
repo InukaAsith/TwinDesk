@@ -372,10 +372,11 @@ function start() {
   // or windows from the selected device while Monitor 2 showed another were the wrong device's.
   apps = new Apps({ link: screenLink, allowed: () => consent.get(screenLink.id, 'apps', 'in'), getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName: () => { const x = screenLink.id && hub.sessions.get(screenLink.id); return x ? x.displayName() : peerName(); }, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
+  sound = new SoundSet({ Sound, hub, settings, save: saveSettings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   helper = new Helper();
+  require('../syscapture').useHelper(helper); // Send sound: this PC's sound without TwinDesk's own (no loop both ways)
   require('../../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   clip.useHelper(helper); // its "clipboard" event: something was copied (a picture after a picture too)
@@ -1824,6 +1825,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  require('../syscapture').shutdown(); // a speaker mute it made, given back
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;

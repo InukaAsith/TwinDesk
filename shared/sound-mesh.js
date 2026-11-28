@@ -15,8 +15,8 @@ const { viewOf } = require('./hub-route.js');
 
 class SoundSet {
   // Sound: the platform's class; hub: the mesh hub; settings (shared), onChange().
-  constructor({ Sound, hub, settings, onChange }) {
-    Object.assign(this, { Sound, hub, settings, onChange });
+  constructor({ Sound, hub, settings, onChange, save = () => {} }) {
+    Object.assign(this, { Sound, hub, settings, onChange, save });
     this.byId = new Map(); // device id -> Sound
     // What each edge's Sound reads of the hub: the selection and each device's own pair (hub.consent,
     // shared/consent.js). Nothing holds sound to a device any more (no sticky route).
@@ -39,7 +39,7 @@ class SoundSet {
     let snd = this.byId.get(id);
     if (!snd) {
       const link = this._link(id);
-      snd = new this.Sound({ link, settings: this.settings, onChange: this.onChange, meshHub: this.meshHub });
+      snd = new this.Sound({ link, settings: this.settings, save: this.save, onChange: this.onChange, meshHub: this.meshHub });
       // Send: the graph's edge, not only the switch (its limit; the same switch inside).
       const on = snd._on.bind(snd);
       snd._on = (key) => (key === 'send' ? this._sends(id) : on(key));
@@ -82,10 +82,16 @@ class SoundSet {
       const s = this.hub.sessions.get(id);
       if (!s || !s.connected) continue;
       const v = snd.view();
-      edges.push({ id, name: s.displayName(), sending: !!v.sending, receiving: !!v.receiving, accepts: !!v.macAccepts, error: v.error || '' });
+      edges.push({ id, name: s.displayName(), sending: !!v.sending, receiving: !!v.receiving, accepts: !!v.macAccepts, error: v.error || '', ...mixOf(this.hub, this.settings, id, s.peerOs, v) });
     }
     const error = base.error || (edges.find((e) => e.error) || {}).error || '';
     return { ...base, error, edges };
+  }
+
+  // The mixer: device id's speakers for our sound ('out'), or ours for its ('in').
+  setRoute(id, dir, outs) {
+    const snd = this.byId.get(id);
+    return !!snd && snd.setRoute(dir, outs);
   }
 
   // Every device's Sound (the shadow reads them).
@@ -113,8 +119,22 @@ function sendsTo(hub, settings, id) {
   return !!e && e.stage === 'active';
 }
 
+// What the mixer shows of one edge (shared/ui-sound-mix.js): its OS, both switches (the device's own pair,
+// shared/consent.js), what the receiver told us of our sound there, and its sound here.
+function mixOf(hub, settings, id, os, v) {
+  const a = settings.audio || {};
+  const c = hub.consent;
+  return {
+    os: os || '',
+    sendOn: c ? !!c.get(id, 'audio', 'out') : !!a.send,
+    recvOn: c ? !!c.get(id, 'audio', 'in') : !!a.receive,
+    remote: v.remote || null,
+    local: v.local || null,
+  };
+}
+
 function osOf(platform) {
   return platform === 'darwin' ? 'mac' : platform === 'win32' ? 'win' : 'linux';
 }
 
-module.exports = { SoundSet, sendsTo };
+module.exports = { SoundSet, sendsTo, mixOf };

@@ -175,7 +175,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
   // Sound: an Audio per device, both ways at once (audioset.js); the audio route stays the microphone's.
-  const audio = new AudioSet({ Audio, Peer, hub: meshHub, audioHub: hub, stream, getSettings: s });
+  const audio = new AudioSet({ Audio, Peer, hub: meshHub, audioHub: hub, stream, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   // Monitor 2 (another computer's screen here): its own route, as on Windows and Linux (hub.sticky). While
   // its window is open it stays with the device it shows, so a crossing that changes the selection doesn't
   // end the picture; open and showing nothing, it follows a device that starts sharing (#256); closed, it

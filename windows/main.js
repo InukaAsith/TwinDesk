@@ -345,10 +345,11 @@ function start() {
   screen.fileDrop = fileDrop;
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  sound = new Sound({ link, settings, onChange: pushState });
+  sound = new Sound({ link, settings, save: saveSettings, onChange: pushState }); // save: the mixer's routes (shared/sound-route.js)
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
+  require('./syscapture').useHelper(helper); // Send sound: this PC's sound without TwinDesk's own (no loop both ways)
   require('../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../shared/edition.js').fullKvm()) require('./fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   screen.helper = helper; // Wi-Fi low-latency mode while a screen is shown (Wlan.cs)
@@ -1671,6 +1672,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  require('./syscapture').shutdown(); // a speaker mute it made, given back
   if (localApi) localApi.stop();
   if (web) web.shutdown();
   if (mic) mic.shutdown();

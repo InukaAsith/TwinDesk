@@ -10,13 +10,13 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const { sendsTo } = require('../../shared/sound-mesh.js');
+const { sendsTo, mixOf } = require('../../shared/sound-mesh.js');
 
 class AudioSet extends EventEmitter {
   // Audio: ../audio.js's; Peer: ./peer.js's; hub: the mesh hub; audioHub, stream, getSettings: as Audio takes.
-  constructor({ Audio, Peer, hub, audioHub, stream, getSettings }) {
+  constructor({ Audio, Peer, hub, audioHub, stream, getSettings, saveSettings = () => {} }) {
     super();
-    Object.assign(this, { Audio, Peer, hub, audioHub, stream, getSettings });
+    Object.assign(this, { Audio, Peer, hub, audioHub, stream, getSettings, saveSettings });
     this.byId = new Map(); // device id -> Audio
     // What each Audio reads of the hub: the selection, for whose switches are in settings.audio.
     // Nothing holds sound to a device (no sticky route): every device has its own.
@@ -37,7 +37,7 @@ class AudioSet extends EventEmitter {
     const route = this.hub.route(() => id);
     const a = new this.Audio({
       server: new this.Peer(route, this.hub.server), hub: this.audioHub, stream: this.stream,
-      getSettings: this.getSettings, meshHub: this.meshHub, capName: 'audio:' + id,
+      getSettings: this.getSettings, saveSettings: this.saveSettings, meshHub: this.meshHub, capName: 'audio:' + id,
     });
     const on = a._on.bind(a);
     a._on = (key) => (key === 'send' ? sendsTo(this.hub, this.getSettings(), id) : on(key));
@@ -63,9 +63,15 @@ class AudioSet extends EventEmitter {
       const s = this.hub.sessions.get(id);
       if (!s || !s.connected) continue;
       const v = a.view;
-      edges.push({ id, name: s.displayName(), sending: !!(v.sending && v.sending.status === 'live'), receiving: !!(v.receiving && v.receiving.status === 'live'), accepts: !!v.peerAccepts });
+      edges.push({ id, name: s.displayName(), sending: !!(v.sending && v.sending.status === 'live'), receiving: !!(v.receiving && v.receiving.status === 'live'), accepts: !!v.peerAccepts, ...mixOf(this.hub, this.getSettings(), id, s.peerOs, v) });
     }
     return { ...base, edges };
+  }
+
+  // The mixer: device id's speakers for our sound ('out'), or ours for its ('in').
+  setRoute(id, dir, outs) {
+    const a = this.byId.get(id);
+    return !!a && a.setRoute(dir, outs);
   }
 
   // Every device's Audio (the shadow reads them).

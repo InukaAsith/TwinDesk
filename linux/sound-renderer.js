@@ -6,14 +6,15 @@
 
 const T = window.MacShareProtocol.T;
 const api = window.sound;
-const player = document.getElementById('play');
+// Another computer's sound: on the speakers its route names, each at its volume (shared/sound-outs.js).
+const outs = window.SoundOuts.create(() => report());
 
 let recv = null; // {pc, session, pending}
 let send = null; // {pc, session, stream, pending}
 let error = '';
 
 function report() {
-  api.state({ receiving: !!(recv && recv.playing), sending: !!(send && send.connected), error });
+  api.state({ receiving: !!(recv && recv.playing), sending: !!(send && send.connected), error, info: outs.info() });
 }
 
 // Opus at 128 kbps stereo, in an SDP we set as the remote description (the encoder reads it there).
@@ -27,11 +28,6 @@ function opusStereo(sdp) {
     : sdp.replace(m[0], m[0] + '\r\na=fmtp:' + pt + ' ' + extra);
 }
 
-function lowLatency(receiver) {
-  if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
-  else receiver.playoutDelayHint = 0;
-}
-
 // ---- the other computer → here ----
 
 async function onOffer(m) {
@@ -39,9 +35,7 @@ async function onOffer(m) {
   const pc = new RTCPeerConnection(m.ice || { iceServers: [] });
   const me = (recv = { pc, session: m.session, pending: [], playing: false });
   pc.ontrack = (e) => {
-    lowLatency(e.receiver);
-    player.srcObject = new MediaStream([e.track]);
-    player.play().catch(() => {});
+    outs.play(new MediaStream([e.track]), e.receiver, pc); // the jitter buffer: as small as it can, or Keep speakers in sync's
     me.playing = true;
     report();
   };
@@ -62,7 +56,7 @@ async function onOffer(m) {
 function closeRecv() {
   if (recv) recv.pc.close();
   recv = null;
-  player.srcObject = null;
+  outs.stop(true);
   report();
 }
 
@@ -139,7 +133,8 @@ api.on((m) => {
     case 'start-send': startSend(m.session, m.label, m.ice); break;
     case 'stop-send': stopSend(); break;
     case 'stop-all': closeRecv(); stopSend(); break;
-    case 'volume': player.volume = Math.min(1, Math.max(0, Number(m.volume) || 0)); break;
+    case 'volume': outs.volume(m.volume); break;
+    case 'route': outs.route(m); break; // its speakers and sync (shared/sound-route.js)
   }
 });
 api.ready();

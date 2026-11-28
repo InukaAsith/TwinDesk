@@ -33,8 +33,10 @@ UI.tab({
     const micCard = UI.micCard ? UI.micCard() : null; // Microphone, each way (shared/ui-mic.js)
     const cap = UI.audioCaptureCard ? UI.audioCaptureCard({ mute: false }) : null; // engine and mute (shared/ui-web.js)
     const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music an iPhone plays here (AirPlay)
+    const mix = UI.soundMixer ? UI.soundMixer() : null; // computers: several, their speakers, a volume each (shared/ui-sound-mix.js)
     body.append(
       ...(airplay ? [airplay.el] : []),
+      ...(mix ? [mix.el] : []),
       pair.el,
       ...(cap ? [cap.el] : []),
       ...(micCard ? [micCard.el] : []),
@@ -47,6 +49,10 @@ UI.tab({
       if (micCard) { micCard.update(s); }
       const a = s.audio;
       const connected = s.link.state === 'connected';
+      // A computer: the mixer; a phone: its sound here and ours there, as before.
+      const phonePeer = UI.peer(s).phone;
+      if (mix) { mix.el.hidden = phonePeer; if (!phonePeer) mix.update(s); }
+      pair.el.hidden = !!mix && !phonePeer;
       pair.update(s);
       volume.set(a.volume);
       mute.set(a.muteLocal);

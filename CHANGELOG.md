@@ -12,6 +12,14 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 ## Next (unreleased)
 
 ### New
+- **Audio mixer** (Audio, Mac, Windows and Linux, Multi-device and one-to-one): From this computer, tick
+  the computers that play its sound, and on each one the speakers, several at once, with a volume per
+  speaker; To this computer, the same for each computer's sound here. Each computer shows Playing and
+  the delay heard (ms). The receiver keeps the choice, so it stays when either side changes it. A phone
+  keeps the Audio page as before. Untested between devices.
+- **Keep speakers in sync** (Audio, off by default): every computer playing this computer's sound
+  plays it 0.2 s late, so speakers of several computers in one room play together instead of
+  echoing. This computer's own speakers aren't delayed.
 - iPhone and iPad, Overview › Computers: the mesh manager, as on Android. Every computer of the mesh,
   with Wake, Lock, Unlock, Sleep, Restart and Shut down where it allows them, pairings to answer,
   Remove from the mesh and the layout under Arrange. Strong actions ask for Face ID first.
@@ -281,6 +289,13 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   Mount no longer took it for a phone on the USB cable.
 
 ### Fixed
+- Sound sent both ways no longer loops. Windows and Linux captured
+  everything their speakers played, TwinDesk's own playback of the other computer included, and sent
+  it back. Windows now captures with process loopback, leaving TwinDesk out (Windows 10 build 20348
+  and later, so Windows 11 in practice; older Windows keep the old capture). Linux plays the other
+  apps through a TwinDesk capture output that is passed on to the speakers, and TwinDesk's own sound
+  goes straight to the speakers. Mute while sending now works on Linux too. The Linux part was tested
+  on Ubuntu 24.04 (PipeWire); the Windows part is compiled by CI and untested on a PC.
 
 - Phone app windows open and resize to a phone-like size (a multiple of 16, no shape past 22:9):
   some apps, a phone maker's Camera among them, stopped on odd sizes.

@@ -66,6 +66,7 @@ const PcApps = require('./pcapps');
 const PeerApps = require('./peerapps');
 const desktopApps = require('./desktopapps');
 const loopback = require('./loopback');
+loopback.usePids(() => require('electron').app.getAppMetrics().map((m) => m.pid)); // TwinDesk's own streams stay out of what Send sound captures
 const autostart = require('./autostart');
 const { PairSync } = require('./pairsync');
 const { PhoneLink } = require('./phone-link');
@@ -325,7 +326,7 @@ function start() {
     if (settings.app.localApi) applyLocalApi();
   }
   screen.fileDrop = fileDrop;
-  sound = new Sound({ link, settings, onChange: pushState });
+  sound = new Sound({ link, settings, save: saveSettings, onChange: pushState }); // save: the mixer's routes (shared/sound-route.js)
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   loadTerminal(); // only while it's on

@@ -50,7 +50,7 @@ const electron = {
   session: { defaultSession: { setDisplayMediaRequestHandler() {} } },
   desktopCapturer: { getSources: async () => [] },
 };
-const loopback = { acquire: async () => 'twindesk-test', release() {} };
+const loopback = { acquire: async () => 'twindesk-test', release() {}, setMute() {} };
 const load = Module._load;
 Module._load = function (id, ...args) {
   if (id === 'electron') return electron;

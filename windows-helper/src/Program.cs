@@ -194,6 +194,7 @@ namespace MacShare
             }
             // stdin closed: main is gone. Give the user their input back and exit.
             Net.Shutdown();
+            SoundCapture.Shutdown();
             invoker.BeginInvoke((MethodInvoker)delegate
             {
                 capture.Shutdown();
@@ -592,6 +593,7 @@ namespace MacShare
                         smoother.Flush(injector.Move);
                         Injector.Type(Json.Str(c, "text", ""));
                         break;
+                    case "soundCapture": Async(c, delegate (Dictionary<string, object> r) { SoundCapture.Dispatch(c, r); }); return; // this PC's sound without TwinDesk's own (SoundCapture.cs)
                     case "caps": c["on"] = Native.Caps(Json.Has(c, "set") ? (bool?)Json.Bool(c, "set", false) : null); break; // Caps Lock, as the other computer's (#131)
                     case "info":
                         Native.POINT cur;

@@ -2476,5 +2476,16 @@
   "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Genişlet)",
   "Passing {count} file to {name}": "{count} dosya {name} cihazına aktarılıyor",
   "Passing {count} files to {name}": "{count} dosya {name} cihazına aktarılıyor",
-  "Couldn’t pass files to {name}": "Dosyalar {name} cihazına aktarılamadı"
+  "Couldn’t pass files to {name}": "Dosyalar {name} cihazına aktarılamadı",
+  "From {me}": "{me} cihazından",
+  "To {me}": "{me} cihazına",
+  "Keep speakers in sync": "Hoparlörleri eşitle",
+  "Every computer plays 0.2 s late, so speakers in one room play together.": "Her bilgisayar 0,2 sn geç çalar, böylece aynı odadaki hoparlörler birlikte çalar.",
+  "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.": "Her bilgisayar 0,2 sn geç çalar, böylece aynı odadaki hoparlörler birlikte çalar. {me} cihazının kendi hoparlörleri gecikmesiz çalar.",
+  "Play on {me} too": "{me} cihazında da çal",
+  "{ms} ms": "{ms} ms",
+  "Playing": "Çalıyor",
+  "Play {me}’s sound on": "{me} sesini çal:",
+  "Play on {me}": "{me} cihazında çal",
+  "No computer is connected.": "Bağlı bilgisayar yok."
 });

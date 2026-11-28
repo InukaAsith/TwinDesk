@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('sound', {
   send: (m) => ipcRenderer.send('sound-out', m),
   state: (s) => ipcRenderer.send('sound-state', s),
   ready: () => ipcRenderer.send('sound-ready'),
+  pcm: (fn) => ipcRenderer.on('pcm', (_e, buf) => fn(buf)), // this PC's sound from the helper (syscapture.js)
 });

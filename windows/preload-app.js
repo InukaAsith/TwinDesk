@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setTab: call('setTab'),
   setMulti: call('setMulti'),
   setModules: call('setModules'), // General › Modules
+  soundRoute: call('soundRoute'), soundVolume: call('soundVolume'), // Audio › the mixer
   deckSave: call('deckSave'), deckTry: call('deckTry'), deckApps: call('deckApps'), deckState: call('deckState'), deckObs: call('deckObs'), deckSetObs: call('deckSetObs'), deckRun: call('deckRun'), deckPick: call('deckPick'), // the Deck page
   relaunch: call('relaunch'),
   setEncoder: call('setEncoder'),

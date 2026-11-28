@@ -5,14 +5,15 @@
 
 const T = window.MacShareProtocol.T;
 const api = window.sound;
-const player = document.getElementById('play');
+// Another computer's sound: on the speakers its route names, each at its volume (shared/sound-outs.js).
+const outs = window.SoundOuts.create(() => report());
 
 let recv = null; // {pc, session, pending}
 let send = null; // {pc, session, stream, pending}
 let error = '';
 
 function report() {
-  api.state({ receiving: !!(recv && recv.playing), sending: !!(send && send.connected), error });
+  api.state({ receiving: !!(recv && recv.playing), sending: !!(send && send.connected), error, info: outs.info() });
 }
 
 // Opus at 128 kbps stereo, in an SDP we set as the remote description (the encoder reads it there).
@@ -26,11 +27,6 @@ function opusStereo(sdp) {
     : sdp.replace(m[0], m[0] + '\r\na=fmtp:' + pt + ' ' + extra);
 }
 
-function lowLatency(receiver) {
-  if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
-  else receiver.playoutDelayHint = 0;
-}
-
 // ---- Mac → PC ----
 
 async function onOffer(m) {
@@ -39,9 +35,7 @@ async function onOffer(m) {
   const me = (recv = { pc, session: m.session, pending: [], playing: false });
   pc.ontrack = (e) => {
     if (recv !== me) return;
-    lowLatency(e.receiver);
-    player.srcObject = new MediaStream([e.track]);
-    player.play().catch(() => {});
+    outs.play(new MediaStream([e.track]), e.receiver, pc); // the jitter buffer: as small as it can, or Keep speakers in sync's
     me.playing = true;
     report();
   };
@@ -72,24 +66,45 @@ async function onOffer(m) {
 function closeRecv() {
   if (recv) recv.pc.close();
   recv = null;
-  player.srcObject = null;
+  outs.stop(true);
   report();
 }
 
 // ---- PC → Mac ----
 
-async function startSend(session, ice) {
+// The helper's capture (syscapture.js: TwinDesk's own playback left out): its frames through a small
+// jitter buffer (pcm-worklet.js) into a track. → {stream, track, actx, player}
+async function helperSound() {
+  const actx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+  await actx.audioWorklet.addModule('pcm-worklet.js');
+  const player = new AudioWorkletNode(actx, 'pcm-player', { outputChannelCount: [2] });
+  const dest = actx.createMediaStreamDestination();
+  dest.channelCount = 2;
+  player.connect(dest);
+  await actx.resume();
+  return { stream: dest.stream, track: dest.stream.getAudioTracks()[0], actx, player };
+}
+
+async function startSend(session, ice, pcm) {
   stopSend();
   const me = (send = { session, pending: [], connected: false });
   try {
-    // Electron answers this with the screen + WASAPI loopback; only the sound is kept.
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
-    });
-    stream.getVideoTracks().forEach((t) => t.stop());
-    const track = stream.getAudioTracks()[0];
-    if (send !== me) return stream.getTracks().forEach((t) => t.stop());
+    let stream, track;
+    if (pcm) {
+      const h = await helperSound();
+      if (send !== me) return h.actx.close();
+      Object.assign(me, { actx: h.actx, player: h.player });
+      ({ stream, track } = h);
+    } else {
+      // Electron answers this with the screen + WASAPI loopback; only the sound is kept.
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
+      });
+      stream.getVideoTracks().forEach((t) => t.stop());
+      track = stream.getAudioTracks()[0];
+    }
+    if (send !== me) { if (me.actx) me.actx.close().catch(() => {}); return stream.getTracks().forEach((t) => t.stop()); }
     if (!track) throw new Error('Windows gave no system sound');
     me.stream = stream;
     const pc = (me.pc = new RTCPeerConnection(ice || { iceServers: [] }));
@@ -133,6 +148,7 @@ function stopSend() {
   if (send) {
     if (send.pc) send.pc.close();
     if (send.stream) send.stream.getTracks().forEach((t) => t.stop());
+    if (send.actx) send.actx.close().catch(() => {});
   }
   send = null;
   report();
@@ -151,10 +167,16 @@ api.on((m) => {
     case T.AUDIO_ANSWER: onAnswer(m); break;
     case T.AUDIO_ICE: onIce(m); break;
     case T.AUDIO_STOP: closeRecv(); break;
-    case 'start-send': startSend(m.session, m.ice); break;
+    case 'start-send': startSend(m.session, m.ice, m.pcm); break;
     case 'stop-send': stopSend(); break;
     case 'stop-all': closeRecv(); stopSend(); break;
-    case 'volume': player.volume = Math.min(1, Math.max(0, Number(m.volume) || 0)); break;
+    case 'volume': outs.volume(m.volume); break;
+    case 'route': outs.route(m); break; // its speakers and sync (shared/sound-route.js)
   }
+});
+if (api.pcm) api.pcm((buf) => { // the helper's capture (syscapture.js)
+  if (!send || !send.player) return;
+  const copy = new Float32Array(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength >> 2));
+  send.player.port.postMessage(copy, [copy.buffer]);
 });
 api.ready();

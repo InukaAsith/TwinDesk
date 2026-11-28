@@ -11,15 +11,23 @@ const path = require('path');
 const { BrowserWindow, ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { Routes } = require('../shared/sound-route.js');
 
 const DROP_MS = 30000;
 
 class Audio extends EventEmitter {
   // capName: this one's consumer in the capture hub (audiohub.js); Multi-device has one Audio per device,
   // each its own (mesh/audioset.js).
-  constructor({ server, hub, stream, getSettings, meshHub = null, capName = 'audio' }) {
+  constructor({ server, hub, stream, getSettings, saveSettings = () => {}, meshHub = null, capName = 'audio' }) {
     super();
     Object.assign(this, { server, hub, stream, getSettings, meshHub, capName });
+    // The mixer (shared/sound-route.js): which of our speakers its sound plays on, and its speakers ours.
+    this.routes = new Routes({
+      send: (m) => this.server.current && this.server.sendToClient(m), toWin: (m) => this._toWin('route', m), cfg: () => this.cfg,
+      peerId: () => (this.server.current && this.server.current.deviceId) || '', save: saveSettings,
+      onChange: () => this.emit('change'), receiving: () => !!(this.receiving && this.receiving.status === 'live'),
+    });
+    this.saidSync = null; // Keep speakers in sync, as last said to it while sending
     this.win = null;
     this.peerAccepts = false; // the PC plays our sound
     this.sendSession = 0;
@@ -28,6 +36,8 @@ class Audio extends EventEmitter {
 
     server.on('client', () => {
       this.peerAccepts = false;
+      this.routes.reset();
+      this.saidSync = null;
       this._policy();
       this.evaluate();
       this._syncAudioSticky();
@@ -36,9 +46,13 @@ class Audio extends EventEmitter {
       if (server.current) return;
       this._stopSend(false);
       this._stopRecv();
+      this.routes.reset();
+      this.saidSync = null;
       this._idle();
       this._syncAudioSticky();
     });
+    server.on(`t:${P.T.AUDIO_ROUTE}`, (m) => this.routes.onRoute(m)); // the sender's pick of our speakers, its sync
+    server.on(`t:${P.T.AUDIO_OUTS}`, (m) => this.routes.onOuts(m)); // the receiver's speakers for our sound
     server.on(`t:${P.T.AUDIO_POLICY}`, (m) => {
       this.peerAccepts = m.accept === true;
       this.evaluate();
@@ -54,10 +68,13 @@ class Audio extends EventEmitter {
       if (ours && m.session === ours.session) this.server.sendToClient(m);
     });
     ipcMain.on('audio:state', (e, s) => {
-      if (!this._fromWin(e)) return;
+      if (!this._fromWin(e) || !s) return;
+      if (s.info) return this.routes.onWin(s.info); // its speakers and the delay heard (shared/sound-outs.js)
       const ours = s.dir === 'm2w' ? this.sending : this.receiving;
       if (!ours || s.session !== ours.session) return;
+      const started = s.dir === 'w2m' && s.status === 'connected' && ours.status !== 'live';
       ours.status = s.status === 'connected' ? 'live' : s.status;
+      if (started) this.routes.tell(true); // its sound plays here: our speakers to it
       this._syncAudioSticky();
       this.emit('change');
     });
@@ -98,6 +115,7 @@ class Audio extends EventEmitter {
     this.win.webContents.on('console-message', (e) => e.level === 'error' && console.log(`[audio-window] ${e.message}`));
     await this.win.loadFile(path.join(__dirname, 'audio.html'));
     this._toWin('volume', this.cfg.volume);
+    this.routes.push();
   }
 
   _toWin(channel, msg) {
@@ -126,6 +144,10 @@ class Audio extends EventEmitter {
     } else if (!want && this.sending) {
       this._stopSend(true);
     }
+    // Keep speakers in sync: said to it while we send, again when it changes.
+    const sync = want ? !!this.cfg.sync : null;
+    if (sync !== null && sync !== this.saidSync) this.routes.sayingSync(sync);
+    this.saidSync = sync;
     this._syncAudioSticky();
     this.emit('change');
   }
@@ -178,6 +200,7 @@ class Audio extends EventEmitter {
     this._policy();
     if (!this._on('receive')) this._stopRecv();
     this._toWin('volume', this.cfg.volume);
+    this.routes.push();
     this.hub.applyMute();
     this.evaluate();
     this._idle();
@@ -190,7 +213,13 @@ class Audio extends EventEmitter {
       sending: this.sending,
       receiving: this.receiving,
       error: this.hub.error,
+      ...this.routes.view(),
     };
+  }
+
+  // The mixer: the receiver's speakers for our sound (From this Mac), or ours for its (To).
+  setRoute(dir, outs) {
+    return dir === 'in' ? this.routes.setLocal(outs) : this.routes.setRemote(outs);
   }
 }
 

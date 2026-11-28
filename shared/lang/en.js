@@ -2477,5 +2477,15 @@
   "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Extend)",
   "Passing {count} file to {name}": "Passing {count} file to {name}",
   "Passing {count} files to {name}": "Passing {count} files to {name}",
-  "Couldn’t pass files to {name}": "Couldn’t pass files to {name}"
+  "Couldn’t pass files to {name}": "Couldn’t pass files to {name}",
+  "From {me}": "From {me}",
+  "To {me}": "To {me}",
+  "Keep speakers in sync": "Keep speakers in sync",
+  "Every computer plays 0.2 s late, so speakers in one room play together.": "Every computer plays 0.2 s late, so speakers in one room play together.",
+  "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.": "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.",
+  "Play on {me} too": "Play on {me} too",
+  "Playing": "Playing",
+  "Play {me}’s sound on": "Play {me}’s sound on",
+  "Play on {me}": "Play on {me}",
+  "No computer is connected.": "No computer is connected."
 });

@@ -5,7 +5,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('audioApi', {
-  on: (channel, fn) => ipcRenderer.on(channel, (_e, m) => fn(m)), // 'send-start' | 'send-stop' | 'recv' | 'remote' | 'volume' | 'pcm'
+  on: (channel, fn) => ipcRenderer.on(channel, (_e, m) => fn(m)), // 'send-start' | 'send-stop' | 'recv' | 'remote' | 'volume' | 'route' | 'pcm'
   send: (msg) => ipcRenderer.send('audio:out', msg),
   state: (s) => ipcRenderer.send('audio:state', s),
 });

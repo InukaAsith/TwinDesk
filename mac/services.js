@@ -74,7 +74,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, clipboar
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
   const sshClient = new SshClient(server, s);
-  const audio = new Audio({ server, hub, stream, getSettings: s });
+  const audio = new Audio({ server, hub, stream, getSettings: s, saveSettings: () => store.saveSettings(s()) }); // save: the mixer's routes
   const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ server, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) });

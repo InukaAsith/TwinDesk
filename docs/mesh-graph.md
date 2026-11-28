@@ -111,6 +111,14 @@ Receivers are not in step with each other (each has its own jitter buffer, 40–
 are fine, the same room echoes. A device that plays several others gets one stream each, mixed by
 PipeWire or WASAPI.
 
+Which of a receiver's speakers play an edge, and how loud on each, is that receiver's
+(`settings.audio.routes[sender]`, `shared/sound-route.js`): the sender's mixer edits it with
+`audio.route`, the receiver plays it on one Web Audio context per speaker (`shared/sound-outs.js`) and
+answers with `audio.outs`. Keep speakers in sync (`audio.route {sync: 200}`) holds every receiver's
+network delay plus jitter buffer to 200 ms, so the same room no longer echoes. The capture leaves
+TwinDesk's own playback out on every platform (the Mac's helper, Windows' process loopback, Linux's
+capture sink), so a device that both sends and plays never sends back what it plays.
+
 ## On the wire
 
 Each service's "do you take it" message (`audio.policy`, `mic.policy`, `cam.policy`, …) becomes one:

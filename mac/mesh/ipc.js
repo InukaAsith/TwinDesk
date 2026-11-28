@@ -44,7 +44,7 @@ const SCHEMA = {
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool, lockTogether: bool }, // localApi: General › Local API (Debug's MCP server too)
   mesh: { autoJoin: bool, shareLogs: bool, collectLogs: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
-  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
+  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId, routes: (v) => require('../../shared/sound-route.js').normRoutes(v), sync: bool }, // mic*: shared/mic.js; routes, sync: the mixer (shared/sound-route.js)
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, outboxHours: oneOf([0, 1, 24, 168], 24), clipReceived: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
   notifs: { send: bool, receive: bool, hideText: bool },
@@ -868,6 +868,10 @@ function setupIpc(ctx) {
     return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
   })(o));
   ipcMain.handle('deckRun', (_e, a) => (ctx.deck && a && typeof a === 'object' ? ctx.deck.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false })); // Try
+  // Audio › the mixer (shared/ui-sound-mix.js): a device's speakers for our sound (out) or ours for its (in);
+  // this Mac's own speakers' volume (read with no level).
+  ipcMain.handle('soundRoute', (_e, o) => { if (o && typeof o === 'object' && typeof o.id === 'string' && Array.isArray(o.outs)) ctx.audio.setRoute(o.id, o.dir === 'in' ? 'in' : 'out', o.outs); pushState(); });
+  ipcMain.handle('soundVolume', (_e, level) => require('../../shared/sound-local.js').volume('darwin', ctx.helper, level).catch(() => ({ volume: null })));
   ipcMain.handle('deckState', () => (ctx.deck ? ctx.deck.state().catch(() => ({})) : {})); // its sound, Bluetooth and display pickers
   ipcMain.handle('phoneListCameras', () => (ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [])); // Camera: the phone's cameras
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));

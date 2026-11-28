@@ -8,7 +8,7 @@ const P = require('../../shared/protocol');
 const tick = () => new Promise(r => setImmediate(r));
 const deferred = () => { let resolve, reject; const promise = new Promise((r, j) => { resolve = r; reject = j; }); return { promise, resolve, reject }; };
 function fixture(file, processor = false) {
-  const sent = [], states = [], peers = [], elements = new Map(), readers = [], timers = new Set();
+  const sent = [], states = [], peers = [], elements = new Map(), readers = [], timers = new Set(), played = [];
   let handler;
   class Peer {
     constructor() { peers.push(this); this.remote = deferred(); this.offer = deferred(); this.localDescription = { sdp: '' }; }
@@ -28,13 +28,17 @@ function fixture(file, processor = false) {
     location: { search: '' }, URLSearchParams, addEventListener() {}, console,
     navigator: { mediaDevices: { getDisplayMedia: () => capture.promise, getUserMedia: () => capture.promise, addEventListener() {}, enumerateDevices: async () => [] } },
     RTCPeerConnection: Peer, MediaStream: class { constructor(tracks) { this.tracks = tracks; } },
+    // shared/sound-outs.js: what plays a received sound (an element per stream, a context per speaker)
+    Audio: class { constructor() { played.push(this); } play() { return Promise.resolve(); } },
+    AudioContext: class { constructor() { played.push(this); } createMediaStreamSource() { return { connect: (g) => g }; } createGain() { return { gain: {}, connect: (d) => d }; } resume() { return Promise.resolve(); } close() { return Promise.resolve(); } },
     setInterval: fn => { timers.add(fn); return fn; }, clearInterval: fn => timers.delete(fn),
     ...(processor ? { MediaStreamTrackProcessor: class {
       constructor() { const wait = deferred(); const reader = { read: () => wait.promise, cancel: async () => { reader.cancelled = true; wait.resolve({ done: true }); }, releaseLock: () => { reader.released = true; } }; readers.push(reader); this.readable = { getReader: () => reader }; }
     } } : {}),
   });
+  if (/sound-renderer/.test(file)) { context.window.navigator = context.navigator; vm.runInContext('var navigator = window.navigator;', context); vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../shared/sound-outs.js'), 'utf8'), context); context.window.SoundOuts = context.window.SoundOuts || context.SoundOuts; }
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, file), 'utf8'), context);
-  return { context, sent, states, peers, elements, readers, timers, capture, message: m => handler(m) };
+  return { context, sent, states, peers, elements, readers, timers, capture, played, message: m => handler(m) };
 }
 test('audio stop during offer creation never sends a stale offer', async () => {
   const f = fixture('../sound-renderer.js');
@@ -57,7 +61,7 @@ test('stale audio tracks and negotiation errors do not change the active player'
   f.message({ t: P.T.AUDIO_OFFER, session: 1 }); const old = f.peers[0];
   f.message({ t: P.T.AUDIO_OFFER, session: 2 }); const count = f.states.length;
   old.ontrack({ track: {}, receiver: {} }); old.remote.reject(new Error('old failure')); await tick();
-  assert.equal(f.elements.get('play').srcObject, null); assert.equal(f.states.length, count);
+  await tick(); assert.equal(f.played.length, 0, 'nothing plays the old track'); assert.equal(f.states.length, count);
 });
 test('audio receive negotiation failure closes its peer', async () => {
   const f = fixture('../sound-renderer.js'); f.message({ t: P.T.AUDIO_OFFER, session: 1 });

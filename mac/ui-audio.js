@@ -22,13 +22,16 @@ UI.tab({
     const sendRow = UI.row(I18n.t('Play {me}’s sound on {name}'), '', [sendSw], { literalHint: true });
     const recvRow = UI.row(I18n.t('Play {name}’s sound on {me}'), '', [recvSw], { literalHint: true });
     const phoneCard = UI.phoneAudioCard(); // a phone: its media controls on Overview
+    const mix = UI.soundMixer ? UI.soundMixer() : null; // computers: several, their speakers, a volume each (shared/ui-sound-mix.js)
     const micCard = UI.micCard ? UI.micCard() : null; // Microphone, each way (shared/ui-mic.js)
     const cap = UI.audioCaptureCard ? UI.audioCaptureCard({ mute: false }) : null; // engine and mute (shared/ui-web.js)
+    const pair = UI.pair(
+      UI.dir('m2w', [sendRow, muteRow]),
+      UI.dir('w2m', [recvRow, UI.row(I18n.t('Volume'), '', [vol])]),
+    );
     body.append(
-      UI.pair(
-        UI.dir('m2w', [sendRow, muteRow]),
-        UI.dir('w2m', [recvRow, UI.row(I18n.t('Volume'), '', [vol])]),
-      ),
+      ...(mix ? [mix.el] : []),
+      pair,
       ...(cap ? [cap.el] : []),
       ...(micCard ? [micCard.el] : []),
       phoneCard.el,
@@ -37,6 +40,10 @@ UI.tab({
     return (s) => {
       const a = s.audio;
       if (!a) return;
+      // A computer: the mixer; a phone: its sound here and ours there, as before.
+      const phonePeer = UI.peer(s).phone;
+      if (mix) { mix.el.hidden = phonePeer; if (!phonePeer) mix.update(s); }
+      pair.hidden = !!mix && !phonePeer;
       phoneCard.update(s);
       if (micCard) { micCard.update(s); }
       sendSw.set(a.send);

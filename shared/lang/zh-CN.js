@@ -2477,5 +2477,16 @@
   "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display（扩展）",
   "Passing {count} file to {name}": "正在将 {count} 个文件转给 {name}",
   "Passing {count} files to {name}": "正在将 {count} 个文件转给 {name}",
-  "Couldn’t pass files to {name}": "无法将文件转给 {name}"
+  "Couldn’t pass files to {name}": "无法将文件转给 {name}",
+  "From {me}": "从 {me}",
+  "To {me}": "到 {me}",
+  "Keep speakers in sync": "扬声器同步",
+  "Every computer plays 0.2 s late, so speakers in one room play together.": "每台电脑延迟 0.2 秒播放，让同一房间的扬声器同时发声。",
+  "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.": "每台电脑延迟 0.2 秒播放，让同一房间的扬声器同时发声。{me} 自己的扬声器不延迟。",
+  "Play on {me} too": "也在 {me} 上播放",
+  "{ms} ms": "{ms} 毫秒",
+  "Playing": "正在播放",
+  "Play {me}’s sound on": "{me} 的声音播放到",
+  "Play on {me}": "在 {me} 上播放",
+  "No computer is connected.": "没有已连接的电脑。"
 });

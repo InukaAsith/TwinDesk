@@ -1,0 +1,36 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* Audio › the mixer (shared/ui-sound-mix.js): devices, their speakers, a volume each. */
+.smx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.smx { display: flex; flex-direction: column; }
+.smx-dev { padding: 12px 16px; border-top: 1px solid var(--row-line, rgba(127, 127, 127, 0.12)); display: flex; flex-direction: column; gap: 8px; }
+.smx-dev:first-child { border-top: 0; }
+.smx-self { flex-direction: row; align-items: center; justify-content: space-between; }
+.smx-self.novol .smx-vol { display: none; }
+.smx-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.smx-line { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: default; }
+.smx-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smx-sub { color: var(--muted, #888); white-space: nowrap; }
+.smx-status { color: var(--muted, #888); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.smx-status.good { color: var(--good, #30b94d); }
+.smx-dev.off .smx-name { font-weight: 500; }
+.smx-outs { display: flex; flex-direction: column; gap: 6px; padding-left: 30px; }
+.smx-outs[hidden] { display: none; }
+.smx-out { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.6fr); align-items: center; gap: 12px; min-height: 26px; }
+.smx-out.off .smx-oname { color: var(--muted, #888); }
+.smx-oname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smx-vol { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.smx-self .smx-vol { width: min(46%, 320px); }
+.smx-vol[hidden] { display: none; }
+.smx-pct { width: 40px; text-align: right; color: var(--muted, #888); font-variant-numeric: tabular-nums; font-size: 12px; }
+.smx-check { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--accent, #0a84ff); }
+.smx-range {
+  flex: 1; min-width: 0; height: 4px; margin: 0; appearance: none; -webkit-appearance: none; border-radius: 2px;
+  background: linear-gradient(to right, var(--accent, #0a84ff) var(--fill, 0%), var(--track-off, rgba(127, 127, 127, 0.2)) var(--fill, 0%));
+}
+.smx-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  border: 0.5px solid rgba(0, 0, 0, 0.2); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.smx-range:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft, rgba(10, 132, 255, 0.25)); }
+.smx-empty { padding: 14px 16px; color: var(--muted, #888); }
+.smx-empty[hidden] { display: none; }

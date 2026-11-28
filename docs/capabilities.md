@@ -79,6 +79,8 @@ and start only when the other side answers.
 |---|---|---|
 | `drive.hello {v: 1}` | TwinDesk Drive or Shared folders ([drive.md](drive.md)), both sides switched on | ignores it, so Drive never starts |
 | `drive.folders {list}` (after `drive.hello`) | Shared folders, each with its own devices ([drive.md](drive.md)) | an older app never sends it and is never sent a folder's `f` messages; only the main folder syncs with it |
+| `audio.outs {outs, route, lat}` (receiver to sender, while the sender's sound plays there) | Audio › the mixer: the receiver's speakers, the route it keeps for that sender and the delay heard (`shared/sound-route.js`) | an older receiver never sends it: the sender's mixer shows that computer with no speakers to pick, and its sound plays on its default speaker, as before |
+| `audio.route {outs?, sync?}` (sender to receiver) | Audio › the mixer: the sender's pick of the receiver's speakers, and Keep speakers in sync (ms) | an older receiver ignores it |
 | `mesh.ask` (phone to computer) | Manage the mesh from the phone (`shared/mesh-manage.js`, `MeshMgr.kt`) | an older computer ignores it, so the phone shows no Multi-device card; a computer with it off refuses each action (`mesh.done {why: off}`) |
 | `tether.state {can: true}` (phone to computer, as its session starts) | Internet over USB (`shared/tether.js`, `Tether.kt`) | an older phone never sends it, so the computer shows no Internet over USB card and never sends `tether`; an older computer ignores it |
 

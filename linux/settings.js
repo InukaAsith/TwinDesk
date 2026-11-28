@@ -2,6 +2,7 @@
 // settings.json: defaults and validation. Every value from
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
+const { normRoutes } = require('../shared/sound-route.js');
 const CL = require('../shared/cursorlock.js');
 const Crossing = require('../shared/crossing.js');
 const { savedLanguage } = require('../shared/i18n.js');
@@ -142,6 +143,8 @@ function normalize(s) {
       volume: Math.round(num(audio.volume, 1, 0, 1) * 100) / 100,
       send: bool(audio.send, false), // send this PC's sound to the Mac (dir w2m)
       muteLocal: bool(audio.muteLocal, false), // silence this PC while sending
+      routes: normRoutes(audio.routes), // the mixer: each sender's sound on which of our speakers, how loud (shared/sound-route.js)
+      sync: bool(audio.sync, false), // Keep speakers in sync: our sound held to one delay on every receiver
       // A phone: its media controls on Overview (shared/nowplaying.js), and its sound here over
       // Bluetooth, this computer as its speaker (shared/btaudio.js), off until turned on
       phoneMedia: bool(audio.phoneMedia, false),

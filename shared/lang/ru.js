@@ -2476,5 +2476,16 @@
   "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (расширение)",
   "Passing {count} file to {name}": "Передача {count} файла на {name}",
   "Passing {count} files to {name}": "Передача файлов на {name}: {count}",
-  "Couldn’t pass files to {name}": "Не удалось передать файлы на {name}"
+  "Couldn’t pass files to {name}": "Не удалось передать файлы на {name}",
+  "From {me}": "С {me}",
+  "To {me}": "На {me}",
+  "Keep speakers in sync": "Синхронизировать динамики",
+  "Every computer plays 0.2 s late, so speakers in one room play together.": "Каждый компьютер играет с задержкой 0,2 с, чтобы динамики в одной комнате звучали вместе.",
+  "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.": "Каждый компьютер играет с задержкой 0,2 с, чтобы динамики в одной комнате звучали вместе. Динамики {me} играют без задержки.",
+  "Play on {me} too": "Играть и на {me}",
+  "{ms} ms": "{ms} мс",
+  "Playing": "Играет",
+  "Play {me}’s sound on": "Звук {me} на",
+  "Play on {me}": "Играть на {me}",
+  "No computer is connected.": "Нет подключённых компьютеров."
 });

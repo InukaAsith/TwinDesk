@@ -2476,5 +2476,16 @@
   "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Estender)",
   "Passing {count} file to {name}": "Passando {count} arquivo para {name}",
   "Passing {count} files to {name}": "Passando {count} arquivos para {name}",
-  "Couldn’t pass files to {name}": "Não foi possível passar os arquivos para {name}"
+  "Couldn’t pass files to {name}": "Não foi possível passar os arquivos para {name}",
+  "From {me}": "De {me}",
+  "To {me}": "Para {me}",
+  "Keep speakers in sync": "Manter alto-falantes em sincronia",
+  "Every computer plays 0.2 s late, so speakers in one room play together.": "Cada computador toca 0,2 s depois, para que os alto-falantes no mesmo ambiente toquem juntos.",
+  "Every computer plays 0.2 s late, so speakers in one room play together. {me}’s own speakers play without the delay.": "Cada computador toca 0,2 s depois, para que os alto-falantes no mesmo ambiente toquem juntos. Os alto-falantes de {me} tocam sem o atraso.",
+  "Play on {me} too": "Tocar também em {me}",
+  "{ms} ms": "{ms} ms",
+  "Playing": "Tocando",
+  "Play {me}’s sound on": "Tocar o som de {me} em",
+  "Play on {me}": "Tocar em {me}",
+  "No computer is connected.": "Nenhum computador conectado."
 });

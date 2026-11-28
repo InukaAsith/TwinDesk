@@ -181,6 +181,10 @@ function setupIpc(ctx) {
     if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply();
     if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();
   }));
+  // Audio › the mixer (shared/ui-sound-mix.js): a device's speakers for our sound (out) or ours for its (in);
+  // this computer's own speakers' volume (read with no level).
+  handle('soundRoute', (o) => { if (o && typeof o === 'object' && typeof o.id === 'string' && Array.isArray(o.outs)) sound.setRoute(o.id, o.dir === 'in' ? 'in' : 'out', o.outs); ctx.push(); });
+  handle('soundVolume', (level) => require('../../shared/sound-local.js').volume(process.platform, kvm.helper, level).catch(() => ({ volume: null })));
   handle('phoneMedia', (m) => m && ctx.nowPlaying && ctx.nowPlaying.control(String(m.a || ''), m.pos));
   handle('phoneBtPick', (id) => typeof id === 'string' && id && ctx.btAudio && ctx.btAudio.pick(id));
   handle('setTerminal', (partial) => {

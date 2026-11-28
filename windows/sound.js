@@ -6,6 +6,10 @@
 const { BrowserWindow, ipcMain, session, desktopCapturer } = require('electron');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { Routes } = require('../shared/sound-route.js');
+const syscap = require('./syscapture');
+
+let capNames = 0;
 
 const T = P.T;
 
@@ -20,12 +24,20 @@ class Sound {
     this.sending = null;      // {session, muteLocal} while our sender runs
     this.session = 0;
     this.status = { receiving: false, sending: false, error: '' };
+    this.capName = 'sound:' + ++capNames; // its own consumer of the shared capture (syscapture.js)
 
     const link = this.link;
     this.meshHub = opts.meshHub || null;
+    // The mixer (shared/sound-route.js): which of our speakers its sound plays on, and its speakers ours.
+    this.routes = new Routes({
+      send: (m) => this.link.send(m), toWin: (m) => this._toWin(m), cfg: () => this.cfg,
+      peerId: () => (this.link.current && this.link.current.deviceId) || this.link.id || '',
+      save: opts.save || (() => {}), onChange: () => this.onChange(), receiving: () => this.status.receiving,
+    });
+    this.saidSync = null; // Keep speakers in sync, as last said to it while sending
     this.lastApply = '';      // the last apply() decision logged
     link.on('welcome', () => { this._log('with', this._who()); this.macAccepts = false; this.apply(); this._syncAudioSticky(); });
-    link.on('closed', (v) => { this._log('left', (v && v.name) || this._who()); this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
+    link.on('closed', (v) => { this._log('left', (v && v.name) || this._who()); this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this.routes.reset(); this.saidSync = null; this._syncAudioSticky(); });
     link.on(T.AUDIO_POLICY, (m) => {
       const accept = m.accept === true;
       this._log('policy from', this._who(), 'accept', accept);
@@ -44,6 +56,8 @@ class Sound {
       if (take) this._toWin(m);
     });
     link.on(T.AUDIO_ICE, (m) => this._toWin(m));
+    link.on(T.AUDIO_ROUTE, (m) => this.routes.onRoute(m)); // the sender's pick of our speakers, its sync
+    link.on(T.AUDIO_OUTS, (m) => this.routes.onOuts(m)); // the receiver's speakers for our sound
     link.on(T.AUDIO_STOP, (m) => { this._log('stop from', this._who(), 'dir', m.dir); if (m.dir === 'm2w') this._toWin(m); });
 
     ipcMain.on('sound-out', (e, m) => {
@@ -53,10 +67,13 @@ class Sound {
     ipcMain.on('sound-state', (e, s) => {
       if (!this.win || e.sender !== this.win.webContents || !s) return;
       const next = { receiving: !!s.receiving, sending: !!s.sending, error: String(s.error || '') };
+      const started = next.receiving && !this.status.receiving;
       if (next.receiving !== this.status.receiving || next.sending !== this.status.sending || next.error !== this.status.error) {
         this._log('state with', this._who(), 'receiving', next.receiving, 'sending', next.sending, next.error ? 'error ' + next.error : '');
       }
       Object.assign(this.status, next);
+      if (s.info) this.routes.onWin(s.info);
+      if (started) this.routes.tell(true); // its sound plays here: our speakers to it
       this._syncAudioSticky();
       this.onChange();
     });
@@ -64,6 +81,7 @@ class Sound {
       if (!this.win || e.sender !== this.win.webContents) return;
       this.ready = true;
       this._toWin({ t: 'volume', volume: this.cfg.volume });
+      this.routes.push();
       for (const m of this.queue.splice(0)) this.win.webContents.send('sound', m);
     });
 
@@ -106,14 +124,27 @@ class Sound {
     if (connected) this.link.send({ t: T.AUDIO_POLICY, accept: receive });
     if (!receive) this._toWin({ t: T.AUDIO_STOP, dir: 'm2w' });
     this._toWin({ t: 'volume', volume: this.cfg.volume });
+    this.routes.push();
     const want = connected && this._on('send') && this.macAccepts;
     const line = `with ${this._who()}: connected ${connected}, play ${receive}, send ${this._on('send')}, they accept ${this.macAccepts} -> ${want ? 'sending' : 'not sending'}`;
     if (line !== this.lastApply) this._log((this.lastApply = line));
-    if (want && this.sending && this.sending.muteLocal !== this.cfg.muteLocal) this._stopSend(true); // restart with the new mute
+    syscap.setMute(!!this.cfg.muteLocal); // the helper's capture: the speakers muted while it runs
+    if (want && this.sending && !this.sending.pcm && this.sending.muteLocal !== this.cfg.muteLocal) this._stopSend(true); // Chromium's capture: restart with the new mute
     if (want && !this.sending) {
-      this.sending = { session: ++this.session, muteLocal: this.cfg.muteLocal };
-      this._toWin({ t: 'start-send', session: this.sending.session, ice: this._ice() });
+      // The helper's capture leaves TwinDesk's own playback out (no loop when sound goes both ways);
+      // where Windows can't, Chromium's loopback as before.
+      const me = (this.sending = { session: ++this.session, muteLocal: this.cfg.muteLocal, pcm: false });
+      this._toWin({ t: 'prepare' });
+      syscap.acquire(this.capName, this.win.webContents).then((pcm) => {
+        if (this.sending !== me) { if (pcm) syscap.release(this.capName); return; }
+        me.pcm = pcm;
+        this._toWin({ t: 'start-send', session: me.session, ice: this._ice(), pcm });
+      });
     } else if (!want && this.sending) this._stopSend(true);
+    // Keep speakers in sync: said to it while we send, again when it changes.
+    const sync = want ? !!this.cfg.sync : null;
+    if (sync !== null && sync !== this.saidSync) this.routes.sayingSync(sync);
+    this.saidSync = sync;
     this._syncAudioSticky();
     this.onChange();
   }
@@ -130,7 +161,9 @@ class Sound {
 
   _stopSend(tellMac) {
     if (!this.sending) return;
+    const was = this.sending;
     this.sending = null;
+    if (was.pcm !== undefined) syscap.release(this.capName);
     this._toWin({ t: 'stop-send' });
     if (tellMac) this.link.send({ t: T.AUDIO_STOP, dir: 'w2m' });
     this._syncAudioSticky();
@@ -144,7 +177,7 @@ class Sound {
 
   _toWin(m) {
     if (!this.win || this.win.isDestroyed()) {
-      if (m.t === 'stop-all' || m.t === 'volume' || m.t === T.AUDIO_STOP || m.t === 'stop-send') return; // nothing to stop
+      if (m.t === 'stop-all' || m.t === 'volume' || m.t === 'route' || m.t === T.AUDIO_STOP || m.t === 'stop-send') return; // nothing to stop (a route goes when it's made)
       this._create();
     }
     if (this.ready) this.win.webContents.send('sound', m);
@@ -169,7 +202,12 @@ class Sound {
   }
 
   view() {
-    return { ...this.status, macAccepts: this.macAccepts };
+    return { ...this.status, macAccepts: this.macAccepts, ...this.routes.view() };
+  }
+
+  // The mixer: the receiver's speakers for our sound (From this computer), or ours for its (To).
+  setRoute(dir, outs) {
+    return dir === 'in' ? this.routes.setLocal(outs) : this.routes.setRemote(outs);
   }
 }
 
