@@ -104,6 +104,9 @@ function fakeHelper({ old = false } = {}) {
     assert.ok(a.up, 'device 1 unaffected');
     a.close(); pool.close(); host.close(); guest.close();
     assert.ok(h.sent.some((x) => x.op === 'close' && x.lane === a.laneId));
+    // Closed lanes leave nothing on the helper, which lives on: a device that reconnects gets a new lane each time.
+    assert.strictEqual(h.listenerCount('event'), 0, 'closed lanes: no event listener left on the helper');
+    assert.strictEqual(h.listenerCount('exit'), 0, 'closed lanes: no exit listener left on the helper');
     h.kill();
   }
   // 2. An older helper (its bind answers lane 0's port, no `lane`): the lane stays JS.

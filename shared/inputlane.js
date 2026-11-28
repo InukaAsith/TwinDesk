@@ -332,8 +332,11 @@ class InputLane extends EventEmitter {
     this._binding = Promise.resolve(p.port);
     if (!this._natHooked) {
       this._natHooked = true;
-      p.helper.on('event', (name, ev) => this._onNative(name, ev));
-      p.helper.on('exit', () => { this._natPending = null; this._nativeLost(); });
+      const onEvent = (name, ev) => this._onNative(name, ev);
+      const onExit = () => { this._natPending = null; this._nativeLost(); };
+      p.helper.on('event', onEvent);
+      p.helper.on('exit', onExit);
+      this._natUnhook = () => { p.helper.removeListener('event', onEvent); p.helper.removeListener('exit', onExit); };
     }
     console.log(`[lane] native lane ${p.id} (the helper's), port ${p.port}`);
   }
@@ -373,6 +376,9 @@ class InputLane extends EventEmitter {
 
   // The socket, dual-stack where it can be. Resolves the port (0: no lane on this computer).
   bind() {
+    // Closed before this ran, or again after close() dropped _binding (a link refused, replaced
+    // or forgotten at once). 0 is the same "no lane" a failed bind already resolves to.
+    if (this.closed) return Promise.resolve(0);
     if (this.port) return Promise.resolve(this.port);
     if (this._binding) return this._binding;
     const tryBind = (type) => new Promise((resolve) => {
@@ -387,11 +393,15 @@ class InputLane extends EventEmitter {
     this._binding = (async () => {
       let s = await tryBind('udp6');
       this.family = 'udp6';
-      if (!s) {
+      if (!s && !this.closed) {
         s = await tryBind('udp4');
         this.family = 'udp4';
       }
-      if (!s) return 0;
+      // close() during the bind: the socket is not stored yet, so close() could not drop it.
+      if (!s || this.closed) {
+        if (s) try { s.close(); } catch (_) { /* gone */ }
+        return 0;
+      }
       this.sock = s;
       s.on('error', (e) => console.warn(`[lane] ${e.code || e.message}`));
       s.on('message', (pkt, rinfo) => this._onPacket(pkt, rinfo));
@@ -639,6 +649,8 @@ class InputLane extends EventEmitter {
     }
     this._natPending = null;
     if (this.native && this.natLane) { this.native = false; this.nat = null; this.natLane = 0; }
+    // …and its listeners on the helper, which outlives it (a lane per connection would pile them up).
+    if (this._natUnhook) { this._natUnhook(); this._natUnhook = null; this._natHooked = false; }
     meshLanes.delete(this);
     if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
     this.sock = null;

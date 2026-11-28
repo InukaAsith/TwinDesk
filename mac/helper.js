@@ -18,6 +18,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 class Helper extends EventEmitter {
   constructor() {
     super();
+    this.setMaxListeners(50); // one 'ready'/'event' listener per feature
     this.proc = null;
     this.nextId = 1;
     this.pending = new Map(); // id -> {resolve, reject, timer}
