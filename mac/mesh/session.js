@@ -247,9 +247,8 @@ class Session extends EventEmitter {
 
   // Messages from the server ctx (only the one that is current). ws is the socket that
   // received this message (the primary or its fallback), not whichever send() would use now.
-  // A released or unauthenticated ctx is not delivered (#264): its socket is no longer this session's.
   fromHost(msg, ctx, ws) {
-    if (ctx !== this.ctx || !ctx || ctx.released === true || ctx.authed !== true) return;
+    if (ctx !== this.ctx) return;
     this._deliver(msg, false, ws && typeof ws === 'object' ? ws : null);
   }
 

@@ -1014,9 +1014,12 @@ async function main() {
     const seen = [];
     hub.bus.on(P.T.SCREEN_SPACE, (msg, id, source) => seen.push({ id, source, dir: msg.dir }));
     const authorize = (ctx) => S.meshGate(() => hub.sessions.get(ctx && ctx.id), S.meshSource(hub.sessions.get(ctx && ctx.id), ctx && ctx.source));
+    // A released host ctx's message is still delivered (#344: hub-route marks it as no ingress), but
+    // it never authorizes a desktop change.
     session.fromHost({ t: P.T.SCREEN_SPACE, dir: 'next' }, host, host.ws);
-    assert.strictEqual(seen.length, 0);
-    assert.strictEqual(authorize({ id: 'phone', source: host.ws }), null);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(authorize({ id: 'phone', source: seen[0].source }), null);
+    seen.length = 0;
     host.released = false;
     session.fromHost({ t: P.T.SCREEN_SPACE, dir: 'next' }, host, host.ws);
     assert.strictEqual(seen.length, 1);
