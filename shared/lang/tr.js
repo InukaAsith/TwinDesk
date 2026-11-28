@@ -368,7 +368,7 @@
   "Documents": "Belgeler",
   "Done": "Bitti",
   "Don’t skip": "Atlama",
-  "Connection Doctor": "Bağlantı tanılama",
+  "Connection troubleshooter": "Bağlantı sorun giderici",
   "Transport": "Bağlantı türü",
   "Round-trip time": "Gidiş dönüş süresi",
   "Identity could not be verified": "Bilgisayarın kimliği doğrulanamadı",

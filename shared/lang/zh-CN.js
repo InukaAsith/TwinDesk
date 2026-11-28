@@ -368,7 +368,7 @@
   "Documents": "文档",
   "Done": "完成",
   "Don’t skip": "取消跳过",
-  "Connection Doctor": "连接诊断",
+  "Connection troubleshooter": "连接故障排除",
   "Transport": "连接方式",
   "Round-trip time": "往返延迟",
   "Identity could not be verified": "无法验证电脑身份",

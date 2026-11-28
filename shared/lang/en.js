@@ -368,7 +368,7 @@
   "Documents": "Documents",
   "Done": "Done",
   "Don’t skip": "Don’t skip",
-  "Connection Doctor": "Connection Doctor",
+  "Connection troubleshooter": "Connection troubleshooter",
   "Transport": "Transport",
   "Round-trip time": "Round-trip time",
   "Identity could not be verified": "Identity could not be verified",

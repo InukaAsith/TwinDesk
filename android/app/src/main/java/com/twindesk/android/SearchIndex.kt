@@ -61,7 +61,7 @@ object SearchIndex {
         Entry("Nearby", { tr("Nearby") }, "", "Overview", ""),
         Entry("Scan a QR code", { tr("Scan a QR code") }, "Nearby", "Overview", ""),
         Entry("Looking for computers…", { tr("Looking for computers…") }, "Nearby", "Overview", ""),
-        Entry("Connection Doctor", { tr("Connection Doctor") }, "", "Overview", ""),
+        Entry("Connection troubleshooter", { tr("Connection troubleshooter") }, "", "Overview", ""),
         Entry("Bluetooth", { tr("Bluetooth") }, "", "Overview", ""),
         Entry("Do not disturb", { tr("Do not disturb") }, "", "Overview", ""),
         Entry("Shortcuts", { tr("Shortcuts") }, "", "Overview", ""),

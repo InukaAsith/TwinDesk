@@ -368,7 +368,7 @@
   "Don’t skip": "Não pular",
   "Double-tap the hotkey to take everything back": "Pressione a tecla de atalho duas vezes para trazer tudo de volta",
   "Double-tap to turn cursor sharing on or off": "Pressione duas vezes para ativar ou desativar o compartilhamento do cursor",
-  "Connection Doctor": "Diagnóstico da conexão",
+  "Connection troubleshooter": "Solução de problemas da conexão",
   "Transport": "Tipo de conexão",
   "Round-trip time": "Tempo de ida e volta",
   "Identity could not be verified": "Não foi possível verificar a identidade do computador",

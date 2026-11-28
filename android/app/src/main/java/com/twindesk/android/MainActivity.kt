@@ -721,7 +721,7 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 private fun ConnectionDoctorCard(core: Core, version: Int) {
     var expanded by remember { mutableStateOf(false) }
     MacCard {
-        MacRow(tr("Connection Doctor"), first = true) {
+        MacRow(tr("Connection troubleshooter"), first = true) {
             Secondary(if (expanded) tr("Hide") else tr("Show")) { expanded = !expanded }
         }
         if (expanded) ConnectionDoctorDetails(core, version)

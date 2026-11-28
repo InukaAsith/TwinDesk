@@ -368,7 +368,7 @@
   "Documents": "Документы",
   "Done": "Готово",
   "Don’t skip": "Не пропускать",
-  "Connection Doctor": "Диагностика подключения",
+  "Connection troubleshooter": "Устранение неполадок подключения",
   "Transport": "Тип подключения",
   "Round-trip time": "Время отклика (RTT)",
   "Identity could not be verified": "Не удалось проверить подлинность компьютера",

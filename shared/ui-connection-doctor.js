@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Connection Doctor reads the selected link's existing state. It never starts checks or changes settings.
+// The Connection troubleshooter (PR #289's Connection Doctor) reads the selected link's existing state. It never starts checks or changes settings.
 'use strict';
 
 UI.connectionDoctor = (platform) => {
@@ -24,7 +24,7 @@ UI.connectionDoctor = (platform) => {
   }, 'small');
   toggle.setAttribute('aria-expanded', 'false');
   toggle.setAttribute('aria-controls', 'connection-doctor-rows');
-  const card = UI.card(t('Connection Doctor'), [rows], { actions: [toggle] });
+  const card = UI.card(t('Connection troubleshooter'), [rows], { actions: [toggle] });
   let last = null;
   const permission = (allowed) => allowed === true ? t('Allowed') : allowed === false ? t('Not allowed') : t('Unknown');
 
