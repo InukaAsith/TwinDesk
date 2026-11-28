@@ -4,6 +4,7 @@
 // window, as ../main.js, over the mesh (hub.js) instead of one peer. When a fix in ../main.js applies
 // here too, make it in both.
 const { lanType } = require('../../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
+const FolderMenu = require('../../shared/foldermenu.js'); // the file manager's Share this folder
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification, shell, globalShortcut, systemPreferences } = require('electron');
 const { Updates } = require('../../shared/updates.js');
 const { aboutInfo } = require('../../shared/about.js');
@@ -100,6 +101,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', (_e, argv) => {
     if (openLink(argv)) return;
     if (sendTo && sendTo.handle(argv)) return; // Explorer › Send to
+    if (shareFolderArg(argv)) return; // Explorer › Share this folder
     if (!openMacAppArg(argv) && !openPhoneAppArg(argv)) showMain();
   });
   app.whenReady().then(start);
@@ -127,6 +129,7 @@ function openLink(argv) {
 }
 
 let explorer = null; // Explorer's right-click › TwinDesk (../explorer.js), for the active phone
+let shellMenu = null; // Windows 11's first-level right-click menu (shellmenu.js)
 let mainWin = null;
 let tray = null;
 let trayKey = '';
@@ -477,6 +480,8 @@ function start() {
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
   sendTo = new SendTo({ link, bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : ''; }, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
+  shellMenu = new (require('../shellmenu').ShellMenu)({ t, markFile: path.join(app.getPath('userData'), 'shellmenu.json') });
+  shellMenu.start();
   // Copy/paste and Send files show progress in the popup, like a drag. Receiving: every
   // batch that takes longer than a moment; sending: batches over 5 MB.
   const pct = (n, total) => Math.min(99, Math.floor((n / total) * 100));
@@ -659,7 +664,7 @@ function start() {
   });
   createTray();
   createMainWindow();
-  if (!openLink(process.argv) && !sendTo.handle(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
+  if (!openLink(process.argv) && !sendTo.handle(process.argv) && !shareFolderArg(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
   setTimeout(checkFirewall, 3000);
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
@@ -861,6 +866,21 @@ function setupHub(pl) {
   pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
   pl.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
   pl.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
+}
+
+// Share this folder from the file manager's menu (shared/foldermenu.js): `--td share <folder>`.
+function shareFolderArg(argv) {
+  const dir = FolderMenu.fromArgv(argv);
+  if (dir === null) return false;
+  if (dir && settings) shareFolder(dir);
+  return true;
+}
+
+function shareFolder(dir) {
+  FolderMenu.share(dir, {
+    hub: () => (phoneLink ? loadHub() : null), settings: () => settings, save: saveSettings, goTab,
+    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
+  }).catch((e) => console.warn('[share folder]', e.message));
 }
 
 function loadHub() {
@@ -1202,6 +1222,7 @@ function pushState() {
       if (fileClip) fileClip.syncConnected(kvm.hub.bus.connectedIds().length > 0); // the file shortcuts too
       if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
       if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
+      if (shellMenu) shellMenu.devices(hub.peers().filter((x) => !P.isPhoneOs(x.os)));
       if (pairSync) pairSync.check(); // Tell the other computer what changed here
       if (edges) edges.tick(); // the matrix: ours to every device when it changed
       // A pairing code to compare: bring the window to the front.

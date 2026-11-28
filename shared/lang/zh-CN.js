@@ -2390,4 +2390,8 @@
   "{to} doesn’t take it from {from}": "{to} 不接收来自 {from} 的",
   "Not known: {who} runs an older TwinDesk": "未知：{who} 运行的是较旧的 TwinDesk",
   "On, not connected now": "已开启，当前未连接",
+  "Share with phone": "与手机共享",
+  "Sharing {name} with the phone": "正在与手机共享 {name}",
+  "It’s in the phone’s Files app": "在手机的“文件”应用中可见",
+  "The phone sees it when it connects": "手机连接后即可看到",
 });

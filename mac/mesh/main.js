@@ -39,6 +39,7 @@
 'use strict';
 
 const { lanType } = require('../../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
+const FolderMenu = require('../../shared/foldermenu.js'); // the file manager's Share this folder
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
 
@@ -1238,6 +1239,8 @@ app.whenReady().then(() => {
     state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
+  for (const f of folderQueue.splice(0)) shareFolder(f); // Share this folder from Finder, before this was up
+  if (app.isPackaged) require('../finder').install(); // Finder › Quick Actions › Share with phone
   svc.kvm.on('where', (mode) => {
     // The device the pointer is with (the input peer, docs/mesh-graph.md), not the selected one.
     const ps = svc.kvm.partner ? hub.sessions.get(svc.kvm.partner) : null;
@@ -1477,6 +1480,14 @@ function setupHub() {
 }
 
 let callwin = null;
+// Share this folder from Finder's Quick Action (shared/foldermenu.js, mac/finder.js): macshare://share-folder?h=….
+function shareFolder(dir) {
+  FolderMenu.share(dir, {
+    hub: () => loadHub(), settings: () => settings, save: () => store.saveSettings(settings), goTab,
+    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
+  }).catch((e) => console.warn('[share folder]', e.message));
+}
+
 function loadHub() {
   if (phoneHub) return phoneHub;
   const { PhoneHub } = require('../../shared/phonehub.js');
@@ -1532,6 +1543,16 @@ function goTab(tab) {
 }
 
 app.on('second-instance', showWindow);
+// Finder's Share this folder (mac/finder.js); before the window and the services exist it waits.
+let folderQueue = [];
+app.on('open-url', (e, url) => {
+  const folder = FolderMenu.fromUrl(url);
+  if (folder === null) return;
+  e.preventDefault();
+  if (!folder) return;
+  if (!settings || !hud) folderQueue.push(folder);
+  else shareFolder(folder);
+});
 // TwinDesk Web in Multi-device: the same server, pairings and pages as the one-to-one app (one
 // userData), with this Mac's screen mirrored (Extend stays the mesh's), its sound, input and the rest.
 function setupWeb() {

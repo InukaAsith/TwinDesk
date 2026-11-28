@@ -46,6 +46,7 @@ let adbQr = null; // wireless debugging's pairing QR code while shown (shared/ad
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
 const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+const FolderMenu = require('../shared/foldermenu.js'); // the file manager's Share this folder
 let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
@@ -168,6 +169,8 @@ let linkQueue = [];
 function handleLink(url) {
   if (!svc) return linkQueue.push(url);
   if (/^macshare:\/\/send\b/.test(String(url))) return handleSendLink(String(url));
+  const folder = FolderMenu.fromUrl(url);
+  if (folder !== null) return folder && shareFolder(folder);
   const m = /^macshare:\/\/pc-app\/(.+)$/.exec(String(url));
   if (!m) return;
   const id = decodeURIComponent(m[1]).slice(0, 1024);
@@ -1244,6 +1247,7 @@ app.whenReady().then(() => {
   svc.pcApps.on('popup', (kind, text) => hud.show(kind, text));
   svc.phone.bridge.on('popup', (kind, text) => hud.show(kind, text));
   if (app.isPackaged) app.setAsDefaultProtocolClient('macshare');
+  if (app.isPackaged) require('./finder').install(); // Finder › Quick Actions › Share with phone (macshare://share-folder)
   for (const url of linkQueue.splice(0)) handleLink(url);
   // The hotkey's double-tap: the big card "Cursor sharing on/off" (also when the other side switched it).
   // ble: Over Bluetooth was switched (kvm.setShared through Bluetooth).
@@ -1519,6 +1523,14 @@ function setupHub() {
 }
 
 let callwin = null;
+// Share this folder from Finder's Quick Action (shared/foldermenu.js, mac/finder.js): macshare://share-folder?h=….
+function shareFolder(dir) {
+  FolderMenu.share(dir, {
+    hub: () => loadHub(), settings: () => settings, save: () => store.saveSettings(settings), goTab,
+    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(phoneHub && phoneHub.phone),
+  }).catch((e) => console.warn('[share folder]', e.message));
+}
+
 function loadHub() {
   if (phoneHub) return phoneHub;
   const { PhoneHub } = require('../shared/phonehub.js');

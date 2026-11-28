@@ -2389,4 +2389,8 @@
   "{to} doesn’t take it from {from}": "{to} не принимает это от {from}",
   "Not known: {who} runs an older TwinDesk": "Неизвестно: на {who} старая версия TwinDesk",
   "On, not connected now": "Включено, сейчас не подключено",
+  "Share with phone": "Открыть доступ телефону",
+  "Sharing {name} with the phone": "Папка {name} открыта телефону",
+  "It’s in the phone’s Files app": "Она в приложении «Файлы» на телефоне",
+  "The phone sees it when it connects": "Телефон увидит её после подключения",
 });

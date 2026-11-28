@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+     A sparse package for Windows 11's first-level right-click menu: no files of its own but its logo,
+     an identity where TwinDesk is (the external location, registered by windows/shellmenu.js), with
+     the menu's IExplorerCommand (menu.cpp, a surrogate COM server). One per architecture: pack.ps1
+     puts x64 or arm64 for @ARCH@, as Explorer loads only a DLL of its own architecture.
+     Version: as PKG_VERSION in windows/shellmenu.js (a new one is registered over the old). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop4 desktop5 com rescap">
+  <Identity Name="TwinDesk.Shell" Publisher="CN=TwinDesk" Version="1.0.0.0" ProcessorArchitecture="@ARCH@"/>
+  <Properties>
+    <DisplayName>TwinDesk</DisplayName>
+    <PublisherDisplayName>TwinDesk</PublisherDisplayName>
+    <Logo>logo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+    <rescap:Capability Name="unvirtualizedResources"/>
+  </Capabilities>
+  <Applications>
+    <!-- An application is needed for its extensions; it has no entry in Start and is never started. -->
+    <Application Id="Shell" Executable="windows-helper\bin\macshare-winhelper.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements AppListEntry="none" DisplayName="TwinDesk" Description="TwinDesk in Explorer's menu" BackgroundColor="transparent"
+        Square150x150Logo="logo.png" Square44x44Logo="logo.png"/>
+      <Extensions>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="*">
+              <desktop5:Verb Id="TwinDesk" Clsid="6F3B2A1E-8D4C-4B7A-9E21-5C3D7A1042B1"/>
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory">
+              <desktop5:Verb Id="TwinDesk" Clsid="6F3B2A1E-8D4C-4B7A-9E21-5C3D7A1042B1"/>
+            </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="TwinDesk" Clsid="6F3B2A1E-8D4C-4B7A-9E21-5C3D7A1042B1"/>
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="TwinDesk menu">
+              <com:Class Id="6F3B2A1E-8D4C-4B7A-9E21-5C3D7A1042B1" Path="windows-helper\bin\twindesk-shell-@ARCH@.dll" ThreadingModel="STA"/>
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>

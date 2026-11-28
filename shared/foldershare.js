@@ -410,7 +410,7 @@ class FolderShare extends EventEmitter {
     }
   }
 
-  // ---- from the window: {a: 'mount'|'unmount'|'open'|'choose'|'default', on?} ----
+  // ---- from the window: {a: 'mount'|'unmount'|'open'|'choose'|'default'|'folder', on?, path?} ----
 
   async act(a, r = {}) {
     const s = this.settings;
@@ -428,6 +428,12 @@ class FolderShare extends EventEmitter {
       const f = await this.chooseFolder();
       if (!f) return;
       s.shareFolder = f;
+      this.hub.save();
+      await this.host();
+    } else if (a === 'folder' && typeof r.path === 'string' && r.path) {
+      // Share this folder, from the file manager's menu (shared/foldermenu.js): this folder, shared.
+      s.shareFolder = r.path.slice(0, 1000);
+      s.shareServe = true;
       this.hub.save();
       await this.host();
     } else if (a === 'default') {

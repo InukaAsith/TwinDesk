@@ -2389,4 +2389,8 @@
   "{to} doesn’t take it from {from}": "{to} não recebe isso de {from}",
   "Not known: {who} runs an older TwinDesk": "Desconhecido: {who} usa um TwinDesk mais antigo",
   "On, not connected now": "Ligado, sem conexão agora",
+  "Share with phone": "Compartilhar com o celular",
+  "Sharing {name} with the phone": "Compartilhando {name} com o celular",
+  "It’s in the phone’s Files app": "Está no app Arquivos do celular",
+  "The phone sees it when it connects": "O celular vê quando se conectar",
 });

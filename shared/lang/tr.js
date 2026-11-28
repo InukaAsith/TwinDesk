@@ -2389,4 +2389,8 @@
   "{to} doesn’t take it from {from}": "{to} bunu {from} cihazından almıyor",
   "Not known: {who} runs an older TwinDesk": "Bilinmiyor: {who} eski bir TwinDesk kullanıyor",
   "On, not connected now": "Açık, şu an bağlı değil",
+  "Share with phone": "Telefonla paylaş",
+  "Sharing {name} with the phone": "{name} telefonla paylaşılıyor",
+  "It’s in the phone’s Files app": "Telefonun Dosyalar uygulamasında",
+  "The phone sees it when it connects": "Telefon bağlandığında görür",
 });

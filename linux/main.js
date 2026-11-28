@@ -13,6 +13,7 @@ try {
   if (typeof m.enableCompileCache === 'function') m.enableCompileCache();
 } catch {}
 const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+const FolderMenu = require('../shared/foldermenu.js'); // the file manager's Share this folder
 let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
@@ -111,6 +112,7 @@ if (!app.requestSingleInstanceLock()) {
   // "twindesk --mac-app=<id>": open that app instead; the file managers' Send to, --send-files.
   app.on('second-instance', (_e, argv) => {
     if (sendTo && sendTo.handle(argv)) return;
+    if (shareFolderArg(argv)) return; // the file manager's Share this folder
     if (!openMacAppArg(argv)) showMain();
   });
   app.whenReady().then(start);
@@ -474,7 +476,7 @@ function start() {
 
   createTray();
   if (!startHidden) createMainWindow(); // in the tray: made when it's first opened
-  if (!sendTo.handle(process.argv)) openMacAppArg(process.argv);
+  if (!sendTo.handle(process.argv) && !shareFolderArg(process.argv)) openMacAppArg(process.argv);
   checkFirewall();
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
@@ -851,6 +853,21 @@ function setupHub(pl) {
   pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !hub && loadHub().share && hub.share.onOffer(m));
   pl.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !hub && loadHub().share && hub.share.act('serve', { on: !!m.serve }));
   pl.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !hub && loadHub().tether && hub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
+}
+
+// Share this folder from the file manager's menu (shared/foldermenu.js): `--td share <folder>`.
+function shareFolderArg(argv) {
+  const dir = FolderMenu.fromArgv(argv);
+  if (dir === null) return false;
+  if (dir && settings) shareFolder(dir);
+  return true;
+}
+
+function shareFolder(dir) {
+  FolderMenu.share(dir, {
+    hub: () => (phoneLink ? loadHub() : null), settings: () => settings, save: saveSettings, goTab,
+    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(hub && hub.phone),
+  }).catch((e) => console.warn('[share folder]', e.message));
 }
 
 function loadHub() {

@@ -6,6 +6,7 @@ try {
   if (typeof m.enableCompileCache === 'function') m.enableCompileCache();
 } catch {}
 const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+const FolderMenu = require('../shared/foldermenu.js'); // the file manager's Share this folder
 let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
@@ -111,6 +112,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', (_e, argv) => {
     if (openLink(argv)) return;
     if (sendTo && sendTo.handle(argv)) return; // Explorer › Send to
+    if (shareFolderArg(argv)) return; // Explorer › Share this folder
     if (!openMacAppArg(argv) && !openPhoneAppArg(argv)) showMain();
   });
   app.whenReady().then(start);
@@ -181,6 +183,7 @@ let pairSync = null;
 let fileRecv = null;
 let notifs = null;
 let explorer = null; // Explorer's right-click › TwinDesk (explorer.js)
+let shellMenu = null; // Windows 11's first-level right-click menu (shellmenu.js)
 let iosSign = null; // shared/iossign.js: TwinDesk iPhone
 let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let devctl = null; // Overview's controls of the other device, and this PC's for it (shared/devctl.js)
@@ -384,6 +387,8 @@ function start() {
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
   sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
+  shellMenu = new (require('./shellmenu').ShellMenu)({ t, markFile: path.join(app.getPath('userData'), 'shellmenu.json') });
+  shellMenu.start();
   // Copy/paste and Send files show progress in the popup, like a drag. Receiving: every
   // batch that takes longer than a moment; sending: batches over 5 MB.
   const pct = (n, total) => Math.min(99, Math.floor((n / total) * 100));
@@ -505,7 +510,7 @@ function start() {
   });
   createTray();
   if (!startHidden) createMainWindow(); // in the tray: made when it's first opened
-  if (!openLink(process.argv) && !sendTo.handle(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
+  if (!openLink(process.argv) && !sendTo.handle(process.argv) && !shareFolderArg(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
   setTimeout(checkFirewall, 3000);
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
@@ -872,6 +877,21 @@ function setupHub(pl) {
   pl.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !hub && loadHub().tether && hub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
 }
 
+// Share this folder from the file manager's menu (shared/foldermenu.js): `--td share <folder>`.
+function shareFolderArg(argv) {
+  const dir = FolderMenu.fromArgv(argv);
+  if (dir === null) return false;
+  if (dir && settings) shareFolder(dir);
+  return true;
+}
+
+function shareFolder(dir) {
+  FolderMenu.share(dir, {
+    hub: () => (phoneLink ? loadHub() : null), settings: () => settings, save: saveSettings, goTab,
+    popup: (kind, text, sub) => hud && hud.show(kind, text, sub), phoneOn: () => !!(hub && hub.phone),
+  }).catch((e) => console.warn('[share folder]', e.message));
+}
+
 function loadHub() {
   if (hub || !phoneLink) return hub || { act() {} };
   const { PhoneHub } = require('../shared/phonehub.js');
@@ -1199,6 +1219,7 @@ function pushState() {
     if (fileClip) fileClip.syncConnected(kvm.connected); // the file shortcuts too
     if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
     if (sendTo) sendTo.sync(s.peer && s.peer.name);
+    if (shellMenu) shellMenu.devices(s.peer && s.peer.name);
     if (pairSync) pairSync.check(); // Tell the other computer what changed here // the Send to entry follows the peer's name
     // A pairing code to compare: bring the window to the front.
     const phase = s.pairing ? s.pairing.phase : null;

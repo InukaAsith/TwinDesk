@@ -5,6 +5,9 @@
 // of TwinDesk hands them to this one (second-instance) and they go with the Send files flow
 // (filedrop.js, drop:'send'). The entries follow the paired computer's name and go when nothing is
 // paired; only file managers that are installed get one.
+// Share with phone (TwinDesk), on folders, in the same file managers: `twindesk --td share <folder>`,
+// which makes it the folder this computer shares with the phone (shared/foldermenu.js). Written
+// once a run, paired or not; the entries name the flag so they're recognised as ours.
 // Multi-device: one entry per paired computer, `--send-files --send-to=<id>`, and the files go to that
 // device whichever is selected. One entry for the selected device was renamed and rewritten on every
 // crossing, and sent to whichever device was selected by the time it ran (#313).
@@ -21,6 +24,9 @@ const HOME = os.homedir();
 const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
 const UCA_ID = 'twindesk-send-files';
+const SHARE = '--td share';
+const SHARE_LABEL = 'Share with phone (TwinDesk)';
+const SHARE_UCA = 'twindesk-share-folder';
 
 // Is a program on PATH?
 function installed(cmd) {
@@ -52,6 +58,21 @@ exec ${launcher().map(sh).join(' ')} ${ARG}${id ? ' ' + sh(TO + id) : ''} "$@"
 `;
 }
 
+// Share with phone in Nautilus' and Caja's Scripts menu: the selected folder (or the open one).
+function shareScript() {
+  return `#!/bin/sh
+# TwinDesk: share the selected folder with the phone (made by TwinDesk, ${SHARE})
+sel="\${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-\$CAJA_SCRIPT_SELECTED_FILE_PATHS}"
+f="\${sel%%
+*}"
+[ -n "$f" ] || f="$1"
+[ -n "$f" ] || f="$PWD"
+case "$f" in /*) ;; *) f="$PWD/$f" ;; esac
+[ -d "$f" ] || exit 0
+exec ${launcher().map(sh).join(' ')} ${SHARE} "$f"
+`;
+}
+
 class SendTo {
   // opts: fileDrop, link, peerName() → name | '', popup(kind, text, sub)
   //   bus, nameOf(id): Multi-device (fileDrop is the FileDropSet: unit(id) sends to that device)
@@ -75,6 +96,7 @@ class SendTo {
     const list = (Array.isArray(peers) ? peers : peers ? [{ id: '', name: peers }] : [])
       .map((p) => ({ id: String(p.id || '').replace(/[^A-Za-z0-9._-]/g, ''), name: String(p.name || '').replace(/[/\\\x00-\x1f]/g, '_').replace(/^\.+/, '').slice(0, 80) }))
       .filter((p) => p.name);
+    if (!this.shared) { this.shared = true; this._share(); }
     const key = list.map((p) => p.id + '=' + p.name).join('|');
     if (key === this.key) return;
     this.key = key;
@@ -107,6 +129,46 @@ class SendTo {
     } catch (e) {
       console.warn('[sendto]', e.message);
     }
+  }
+
+  // Share with phone on folders, in each file manager that is installed (and gone from those that aren't).
+  _share() {
+    const exec = launcher().map(desk).join(' ') + ' ' + SHARE + ' %f';
+    try {
+      for (const [dir, cmd] of [[path.join(DATA, 'nautilus', 'scripts'), 'nautilus'], [path.join(CONFIG, 'caja', 'scripts'), 'caja']]) {
+        const f = path.join(dir, SHARE_LABEL);
+        if (installed(cmd)) write(f, shareScript(), 0o755);
+        else this._clearShare(f);
+      }
+      const nemo = path.join(DATA, 'nemo', 'actions', 'twindesk-share.nemo_action');
+      if (installed('nemo')) write(nemo, `[Nemo Action]\nName=${SHARE_LABEL}\nComment=Share this folder with the phone (${SHARE})\nExec=${exec}\nIcon-Name=folder-remote\nSelection=s\nExtensions=dir;\n`, 0o644);
+      else rm(nemo);
+      const service = `[Desktop Entry]\nType=Service\nMimeType=inode/directory;\nActions=twindeskShare;\nX-KDE-Priority=TopLevel\n\n[Desktop Action twindeskShare]\nName=${SHARE_LABEL}\nIcon=folder-remote\nExec=${exec}\n`;
+      for (const dir of [path.join(DATA, 'kio', 'servicemenus'), path.join(DATA, 'kservices5', 'ServiceMenus')]) {
+        const f = path.join(dir, 'twindesk-share.desktop');
+        if (installed('dolphin')) write(f, service, 0o755);
+        else rm(f);
+      }
+      this._thunarShare(installed('thunar') ? exec : '');
+    } catch (e) {
+      console.warn('[sendto] share:', e.message);
+    }
+  }
+
+  _clearShare(file) {
+    try { if (fs.readFileSync(file, 'utf8').includes(SHARE)) fs.rmSync(file, { force: true }); } catch (_) { /* none, or not ours */ }
+  }
+
+  _thunarShare(exec) {
+    const file = path.join(CONFIG, 'Thunar', 'uca.xml');
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch (_) { if (!exec) return; }
+    text = text.replace(new RegExp('\\s*<action>(?:(?!</action>)[\\s\\S])*<unique-id>' + SHARE_UCA + '</unique-id>[\\s\\S]*?</action>', 'g'), '');
+    if (exec) {
+      if (!/<\/actions>/.test(text)) text = '<?xml version="1.0" encoding="UTF-8"?>\n<actions>\n</actions>\n';
+      text = text.replace(/<\/actions>/, `\n<action>\n\t<icon>folder-remote</icon>\n\t<name>${xml(SHARE_LABEL)}</name>\n\t<unique-id>${SHARE_UCA}</unique-id>\n\t<command>${xml(exec)}</command>\n\t<description>Share this folder with the phone</description>\n\t<patterns>*</patterns>\n\t<directories/>\n</action>\n</actions>`);
+    }
+    write(file, text, 0o644);
   }
 
   // Our scripts in a Scripts folder: the ones that run TwinDesk with --send-files.

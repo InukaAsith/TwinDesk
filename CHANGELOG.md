@@ -13,6 +13,16 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **TwinDesk in Windows 11's first right-click menu** (not only under Show more options): Send to
+  each paired device, and Share with phone on a folder. Its own small signed package for this PC's
+  architecture (x64 or ARM64), registered for you when TwinDesk starts and removed by the
+  uninstaller; Windows 10, the Store build and the portable build keep the classic menu. Needs the
+  helper built with Visual Studio's C++ tools. Untested on a PC (built by CI only).
+- **Share this folder from the file manager**: Explorer (classic and Windows 11 menus), Finder
+  (Quick Actions › Share with phone) and Nautilus, Caja, Nemo, Dolphin and Thunar on Linux. The
+  folder becomes the one this computer shares with the phone (the phone's Files app and every app's
+  file picker), and sharing is switched on; Phone Files turns it off as before. Finder's Quick Action
+  checked on a Mac with Automator; the menus on Windows and Linux untested on a desktop.
 - **TwinDesk iPhone › Refresh all**, on the computer's Installed apps and in the iOS app's App refresh:
   every sideloaded app on the device in one run, as AltStore does it. One sign-in, every app's new
   provisioning profiles asked of Apple at once (four at a time) and installed together; only an app

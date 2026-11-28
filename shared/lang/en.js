@@ -2390,4 +2390,8 @@
   "{to} doesn’t take it from {from}": "{to} doesn’t take it from {from}",
   "Not known: {who} runs an older TwinDesk": "Not known: {who} runs an older TwinDesk",
   "On, not connected now": "On, not connected now",
+  "Share with phone": "Share with phone",
+  "Sharing {name} with the phone": "Sharing {name} with the phone",
+  "It’s in the phone’s Files app": "It’s in the phone’s Files app",
+  "The phone sees it when it connects": "The phone sees it when it connects",
 });

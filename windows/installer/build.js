@@ -115,6 +115,16 @@ async function main() {
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
   }
+  // Windows 11's first-level right-click menu (shellmenu.js): the menu's DLL and its signed sparse
+  // package for each architecture, trusted by the calls' certificate above. Not in the Store's MSIX
+  // or the portable build (each a package of its own to register).
+  for (const a of STORE || PORTABLE ? [] : ['x64', 'arm64']) {
+    for (const f of [`twindesk-shell-${a}.dll`, `twindesk-shell-${a}.msix`]) {
+      const from = path.join(ROOT, 'windows-helper', 'bin', f);
+      if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
+      else console.log('note: no windows-helper/bin/' + f + ' — on Windows 11 TwinDesk stays under Show more options there (build the helper with Visual Studio’s C++ tools)');
+    }
+  }
   // Camera › Virtual camera (vcam.js): its media source for each Windows architecture and the .exe
   // that adds and feeds it (built when Visual Studio's C++ tools are there).
   for (const f of ['twindesk-vcam.exe', 'twindesk-vcam-x64.dll', 'twindesk-vcam-arm64.dll']) {

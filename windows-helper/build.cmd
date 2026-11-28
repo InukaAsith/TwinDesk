@@ -60,6 +60,8 @@ rem Real gamepad (windows/gamepad.js: Remote), C++ likewise.
 call "%~dp0pad\build.cmd" || exit /b 1
 rem The shared screen with Windows' own pointer (windows/native-screen.js): C++ likewise.
 call "%~dp0capture\build.cmd" || exit /b 1
+rem Windows 11's first-level right-click menu (windows/shellmenu.js): C++ likewise, and its sparse packages.
+call "%~dp0shellmenu\build.cmd" || exit /b 1
 rem The Full KVM build only (docs/full-kvm.md, TWINDESK_EDITION=full-kvm): the agent the service runs
 rem on every desktop (Agent.cs, FULLKVM) and the service itself (windows\fullkvm\build.cmd).
 if /i not "%TWINDESK_EDITION%"=="full-kvm" exit /b 0

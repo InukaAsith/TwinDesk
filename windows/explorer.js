@@ -5,6 +5,10 @@
 //                        from the phone goes into that folder (received.js redirectTo)
 //   Capture from phone   the same: the phone's camera opens (cam.capture), every photo taken comes
 //                        into that folder until the camera is closed there
+//   Share with phone     a folder, or a folder's background: it becomes the folder this PC shares
+//                        with the phone (shared/foldermenu.js; --td share is main.js's, not this file's)
+// On Windows 11 the first-level menu has the same through TwinDesk's own IExplorerCommand
+// (windows-helper/shellmenu, shellmenu.js); this one stays under Show more options.
 // The keys are the user's own (HKCU\Software\Classes), written at start from one .reg file, and the
 // uninstaller takes them away (installer.nsh). The commands start TwinDesk with --td <what> <path>;
 // a running TwinDesk gets them through second-instance (main.js).
@@ -53,10 +57,11 @@ class Explorer {
     const send = ['1send', 'Send to phone', '--send-files "%1"', 'shell32.dll,-16761'];
     const imp = (v) => ['2import', 'Import from phone', `${ARG} import "${v}"`, 'shell32.dll,-16752'];
     const cap = (v) => ['3capture', 'Capture from phone', `${ARG} capture "${v}"`, 'imageres.dll,-5359'];
+    const share = (v) => ['4share', 'Share with phone', `${ARG} share "${v}"`, 'imageres.dll,-1023'];
     const reg = ['Windows Registry Editor Version 5.00', '',
       ...menu('*', [send]),
-      ...menu('Directory', [send, imp('%1'), cap('%1')]),
-      ...menu('Directory\\Background', [imp('%V'), cap('%V')]),
+      ...menu('Directory', [send, imp('%1'), cap('%1'), share('%1')]),
+      ...menu('Directory\\Background', [imp('%V'), cap('%V'), share('%V')]),
     ].join('\r\n');
     const file = path.join(os.tmpdir(), 'twindesk-explorer.reg');
     try {
@@ -75,6 +80,7 @@ class Explorer {
     const i = (argv || []).indexOf(ARG);
     if (i < 0) return false;
     const what = String(argv[i + 1] || '');
+    if (what === 'share') return false; // Share with phone: main.js (shared/foldermenu.js)
     const dir = String(argv[i + 2] || '').replace(/"$/, '');
     if (!path.isAbsolute(dir)) return true;
     if (what === 'import') this.import(dir);

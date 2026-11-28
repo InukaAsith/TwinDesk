@@ -39,6 +39,9 @@
   nsExec::Exec 'taskkill /f /im macshare-winhelper.exe'
   nsExec::Exec 'taskkill /f /im macshare-winhelper-multi.exe'
   nsExec::Exec 'taskkill /f /im macshare-calls.exe'
+  ; Windows 11's first-level menu (shellmenu.js): Explorer's COM surrogate holds its DLL; removing
+  ; the package lets it go (the app registers it again when it starts).
+  nsExec::Exec 'powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name TwinDesk.Shell | Remove-AppxPackage"'
   !insertmacro RecoverCursor
   Sleep 500
   RMDir /r "$INSTDIR\resources\app"
@@ -84,6 +87,9 @@
   ${endIf}
   ; Calls on this PC: its package (this user's) and its certificate.
   nsExec::Exec 'powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name TwinDesk.Calls | Remove-AppxPackage"'
+  ; Windows 11's first-level menu (shellmenu.js): its package and what the app wrote for it.
+  nsExec::Exec 'powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name TwinDesk.Shell | Remove-AppxPackage"'
+  DeleteRegKey HKCU "Software\TwinDesk\ShellMenu"
   nsExec::Exec 'certutil -delstore TrustedPeople TwinDesk'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk" program="$INSTDIR\TwinDesk.exe"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (TCP 47800)"'
