@@ -1350,6 +1350,16 @@ private fun RezumePage(core: Core, v: Int) {
     PageHead("ReZume", tr("Continue the web page, document or app you were using, on this phone or on {name}.", "name" to name), r.on) { r.set("on", it) }
     if (!r.on) return Note(tr("Off. When on, the page or app you’re using is offered to {name}, and what you’re using on {name} is offered here.", "name" to name))
     if (core.host == null) return NotConnected(core, v)
+    // Multi-device (shared/rezume-solo.js): the computer goes on with one device; picking here picks this phone there.
+    val wh = r.withHere
+    if (wh != null) MacCard(tr("ReZume with")) {
+        if (wh) MacRow(tr("This phone"), tr("{name} goes on with this phone. Picking another device there, or here, moves it.", "name" to name), first = true) { Secondary(tr("Let go")) { r.letGo() } }
+        else MacRow(if (r.other.isNotEmpty()) tr("{name} goes on with {other}", "name" to name, "other" to r.other) else tr("{name} isn’t going on with this phone", "name" to name),
+            tr("Use it here: {name} picks this phone and lets the other device go", "name" to name), first = true) { Primary(tr("Use with this phone")) { r.useHere() } }
+        for (h in core.hosts().filter { it.id != core.host?.id && core.isNear(it.id) }) {
+            MacRow(h.name, tr("Connect to it and go on with it; {name} lets go", "name" to name)) { Secondary(tr("Use")) { r.useWith(h) } }
+        }
+    }
     val o = r.incoming
     if (o != null) MacCard(tr("Continue from {name}", "name" to name)) {
         MacRow(o.title, if (o.kind == "web") (android.net.Uri.parse(o.url).host ?: o.url) else o.name, first = true) {

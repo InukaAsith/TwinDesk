@@ -13,8 +13,12 @@
 // partner: { get() -> { id, at } | null, set(v) } (settings.rezume.with). The pick is mutual between
 // computers: A picks C, so C is told (rz.partner {on: true, at}) and is with A; whoever either of them
 // was with before is told it's over (rz.partner {on: false}). Picked while apart, the newer pick wins
-// when they meet again (said again with again: true). A phone takes no part in that: picking it is this computer's alone. With no
-// partner picked, a phone that is the only device connected is the one, as before.
+// when they meet again (said again with again: true). A phone takes part the same way: picking this
+// computer on the phone's ReZume page (rz.partner {on: true, at}) picks the phone here, and the device
+// this computer was with lets go. Every connected phone is told how things stand, on its welcome and on
+// every change (rz.partner {on: it's the one, other: the name of the device ReZume is with instead}),
+// so its page can offer "Use with this phone". An older phone ignores it. With no partner picked, a
+// phone that is the only device connected is the one, as before.
 //
 // phoneAdb(bridge): the phone through wireless debugging for ReZume (its app in front, a page
 // opened there), or null.
@@ -55,6 +59,18 @@ function soloLink({ bus, sessions, partner = null }) {
   };
   // again: said once more as the two meet (not picked just now), so the newer pick wins on the other side.
   const tell = (to, on, at, again = false) => { if (isOn(to) && !isPhone(to)) bus.send(to, on ? { t: T.RZ_PARTNER, on: true, at, ...(again ? { again: true } : {}) } : { t: T.RZ_PARTNER, on: false }); };
+  // The phones: how it stands (only what changed for each, and always on its welcome).
+  const toldPhone = new Map(); // phone id -> what it was last told
+  const tellPhone = (ph, force = false) => {
+    if (!partner || !isOn(ph) || !isPhone(ph)) return;
+    const cur = picked();
+    const msg = { t: T.RZ_PARTNER, on: !!cur && cur.id === ph, ...(cur && cur.id === ph ? { at: cur.at } : {}), other: cur && cur.id !== ph ? (nameOf(cur.id) || '') : '' };
+    const k = JSON.stringify(msg);
+    if (!force && toldPhone.get(ph) === k) return;
+    toldPhone.set(ph, k);
+    bus.send(ph, msg);
+  };
+  const tellPhones = () => { for (const ph of connected()) tellPhone(ph); };
 
   function choose(to) {
     if (!partner) return;
@@ -66,22 +82,29 @@ function soloLink({ bus, sessions, partner = null }) {
     partner.set(to ? { id: to, at } : null);
     if (to) tell(to, true, at);
     recheck();
+    tellPhones();
   }
 
   if (partner) {
     bus.on(T.RZ_PARTNER, (m, from) => {
-      if (!from || isPhone(from)) return;
+      if (!from) return;
       const cur = picked();
       if (m && m.on === true) {
         const at = Number.isFinite(m.at) ? m.at : 0;
-        if (m.again === true && cur && cur.id !== from && cur.at >= at) return tell(from, false); // met again, but picked something newer here (a tie keeps it)
+        if (m.again === true && cur && cur.id !== from && cur.at >= at) { tell(from, false); tellPhone(from, true); return; } // met again, but picked something newer here (a tie keeps it)
         if (cur && cur.id !== from) tell(cur.id, false);
         if (!cur || cur.id !== from || cur.at !== at) partner.set({ id: from, at });
       } else if (cur && cur.id === from) partner.set(null);
       recheck();
+      tellPhones();
     });
-    // The two meet again: say it once more (the newer pick wins on the other side).
-    bus.onPeer('welcome', (from) => { const cur = picked(); if (cur && cur.id === from) tell(from, true, cur.at, true); });
+    // The two meet again: say it once more (the newer pick wins on the other side). A phone: how it stands.
+    bus.onPeer('welcome', (from) => {
+      const cur = picked();
+      if (cur && cur.id === from) tell(from, true, cur.at, true);
+      tellPhone(from, true);
+    });
+    bus.onPeer('closed', (from) => { toldPhone.delete(from); tellPhones(); });
   }
   bus.onPeer('welcome', recheck);
   bus.onPeer('closed', recheck);

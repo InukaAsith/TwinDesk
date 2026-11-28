@@ -126,6 +126,7 @@ object Proto {
         const val RZ_CLEAR = "rz.clear"
         const val RZ_TAKE = "rz.take"
         const val RZ_DONE = "rz.done"
+        const val RZ_PARTNER = "rz.partner" // Multi-device: which device the computer goes on with (shared/rezume-solo.js)
         const val PHONE_SEND = "phone.send"
         const val PHONE_ACTIVE_APP = "phone.activeApp"
         const val ADB_STATE = "adb.state"

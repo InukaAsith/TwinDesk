@@ -39,6 +39,13 @@ class Rezume(core: Core) : Feature(core) {
     @Volatile var incoming: Offer? = null; private set // the computer's
     @Volatile var offered: String = ""; private set // what we offer, for the page
     @Volatile var message: String = ""; private set
+    // Multi-device (shared/rezume-solo.js): the computer goes on with one device. withHere: this phone is
+    // the one (null: the computer doesn't say, one to one or an older TwinDesk); other: the device it's
+    // with instead. The phone's own pick is kept (rezume.with = "hostId|at") and said again on every
+    // session with that computer, so the newer pick wins, as between computers.
+    @Volatile var withHere: Boolean? = null; private set
+    @Volatile var other: String = ""; private set
+    private var freshPick = "" // a computer just picked here: connecting to it, said as a new pick
     private var outId = ""
     private var outKey = ""
     private var outAt = 0L
@@ -79,7 +86,41 @@ class Rezume(core: Core) : Feature(core) {
         )
     }
 
+    private fun picked(): Pair<String, Long>? {
+        val v = core.store.prefsString("rezume.with", "")
+        val id = v.substringBefore('|')
+        return if (id.isEmpty()) null else id to (v.substringAfter('|', "0").toLongOrNull() ?: 0L)
+    }
+    private fun keep(id: String, at: Long) = core.store.setPrefsString("rezume.with", if (id.isEmpty()) "" else "$id|$at")
+
+    // Go on with the computer this phone is connected to; it lets go of the device it was with.
+    fun useHere() {
+        val h = core.host ?: return
+        val at = System.currentTimeMillis()
+        keep(h.id, at)
+        core.send(msg(Proto.T.RZ_PARTNER, "on" to true, "at" to at))
+    }
+
+    // Go on with another paired computer: this one lets go, the phone connects there and picks it.
+    fun useWith(h: Host) {
+        if (h.id == core.host?.id) return useHere()
+        if (core.link.connected) core.send(msg(Proto.T.RZ_PARTNER, "on" to false))
+        keep(h.id, System.currentTimeMillis())
+        freshPick = h.id
+        core.switchTo(h)
+    }
+
+    fun letGo() {
+        keep("", 0)
+        core.send(msg(Proto.T.RZ_PARTNER, "on" to false))
+    }
+
     override fun onWelcome(host: Host) {
+        withHere = null; other = ""
+        picked()?.let { (id, at) ->
+            if (id == host.id) core.send(msg(Proto.T.RZ_PARTNER, "on" to true, "at" to at).also { if (freshPick != id) it.put("again", true) })
+        }
+        freshPick = ""
         incoming = null
         outId = ""; outKey = ""; seenKey = ""
         detectSaid = null
@@ -87,6 +128,7 @@ class Rezume(core: Core) : Feature(core) {
     }
 
     override fun onClosed() {
+        withHere = null
         peer = null
         incoming = null
         outId = ""; outKey = ""
@@ -243,6 +285,17 @@ class Rezume(core: Core) : Feature(core) {
                 if (!m.optBoolean("on")) clearOut()
                 else if (!was) again(m)
                 timers()
+                core.changed()
+            }
+            Proto.T.RZ_PARTNER -> {
+                val on = m.optBoolean("on")
+                withHere = on
+                other = m.str("other", 64)
+                val h = core.host
+                if (h != null) {
+                    if (on) keep(h.id, m.optLong("at", System.currentTimeMillis()))
+                    else if (picked()?.first == h.id) keep("", 0)
+                }
                 core.changed()
             }
             Proto.T.RZ_OFFER -> offer(m)
