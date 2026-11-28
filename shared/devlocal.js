@@ -228,6 +228,34 @@ $o | ConvertTo-Json -Compress`, 15000);
     this._ring(false);
   }
 
+  // The mesh manager's power actions (shared/mesh-manage.js), apart from Overview's dev.do: restart, shut
+  // down, and unlock (Full KVM on Linux only: logind's Unlock, which GNOME's and KDE's lock screens obey;
+  // Windows waits for the Full KVM credential provider). Each platform's own command, no shell:
+  //   Windows shutdown.exe; Mac System Events (asks for Automation once); Linux systemctl / loginctl.
+  powerCan({ fullKvm = false } = {}) {
+    if (this.os === 'win32') return { restart: true, shutdown: true, unlock: false };
+    if (this.os === 'darwin') return { restart: true, shutdown: true, unlock: false };
+    return { restart: which('systemctl'), shutdown: which('systemctl'), unlock: !!fullKvm && which('loginctl') };
+  }
+
+  async power(act) {
+    this._ring(false);
+    if (this.os === 'win32') {
+      if (act === 'restart') return run('shutdown.exe', ['/r', '/t', '5', '/d', 'p:0:0', '/c', 'TwinDesk: restart asked from a phone']);
+      if (act === 'shutdown') return run('shutdown.exe', ['/s', '/t', '5', '/d', 'p:0:0', '/c', 'TwinDesk: shut down asked from a phone']);
+      return null;
+    }
+    if (this.os === 'darwin') {
+      if (act === 'restart') return run('osascript', ['-e', 'tell application "System Events" to restart']);
+      if (act === 'shutdown') return run('osascript', ['-e', 'tell application "System Events" to shut down']);
+      return null;
+    }
+    if (act === 'restart') return run('systemctl', ['reboot']);
+    if (act === 'shutdown') return run('systemctl', ['poweroff']);
+    if (act === 'unlock') return run('loginctl', ['unlock-session']);
+    return null;
+  }
+
   // While it rings: a notification that stays, Stop on it (or a click), so it can be stopped here
   // too, not only from the device that rang. ringFrom: that device's name (DevCtl sets it).
   _pop(on) {

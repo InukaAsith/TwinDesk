@@ -688,6 +688,13 @@ function setupIpc(ctx) {
       c.set(id, feature, dir, on);
       pushState();
     },
+    // Multi-device › Phones (shared/mesh-manage.js): phones may manage this Mac; one phone revoked.
+    setManage(o) {
+      const m = ctx.manage && ctx.manage();
+      if (!m || !o || typeof o !== 'object') return;
+      if (typeof o.on === 'boolean') m.setOn(o.on);
+      if (typeof o.id === 'string' && typeof o.revoked === 'boolean') m.setRevoked(o.id, o.revoked);
+    },
     setMesh(partial) {
       setGroup('mesh', partial);
       if (settings.mesh.autoJoin !== false && ctx.autoJoin) ctx.autoJoin.schedule();

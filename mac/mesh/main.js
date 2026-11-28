@@ -112,6 +112,7 @@ function applyLocalApi() {
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let consent = null; // each device's own two-way switches (shared/consent.js)
 let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
+let manage = null; // the phones' mesh manager (shared/mesh-manage.js)
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 
@@ -252,6 +253,7 @@ function publishState() {
     state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.mesh = settings.mesh;
     state.matrix = edges ? edges.view() : null; // the Multi-device tab's matrix (shared/mesh-edges.js)
+    state.manage = manage ? manage.pageView() : null; // Multi-device › Phones (shared/mesh-manage.js)
     state.debug = dbg ? dbg.view() : null; // Debug tab (shared/debug-start.js)
     state.localApi = localApi ? localApi.view() : null; // General › Local API
     state.app = settings.app;
@@ -309,6 +311,7 @@ function publishState() {
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
     if (edges) edges.tick(); // the matrix: ours to every device when it changed
+    if (manage) manage.tick(); // the mesh manager: what this Mac can do, to every device
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
     updateTray();
@@ -1216,6 +1219,12 @@ app.whenReady().then(() => {
       os: (pid) => (pid === id.macId ? P.OS.MAC : known(pid).os || ''),
       connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
     });
+    // The phones' mesh manager (shared/mesh-manage.js): a phone on any computer of the mesh wakes, locks,
+    // restarts… this Mac, answers its pairings and arranges the layout; Multi-device › Phones may refuse.
+    manage = require('../../shared/mesh-manage.js').onHub({
+      hub, mesh, selfId: id.macId, name: () => id.macName, os: P.OS.MAC, settings: () => settings, save: () => store.saveSettings(settings),
+      devLocal: devctl.local, wake: () => svc && svc.wake, layout: () => layoutSync, onChange: pushState,
+    });
   }
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
@@ -1234,7 +1243,7 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent,
+  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, consent: () => consent, manage: () => manage,
     syncAction: (f, dir, on) => SYNC_ACTIONS[f] && SYNC_ACTIONS[f](dir, on), // the matrix: the selected device's cell is the settings
     state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it

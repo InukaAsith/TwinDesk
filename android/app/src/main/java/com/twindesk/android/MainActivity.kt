@@ -657,6 +657,9 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
     // The computer's own controls (dev.state, DevCtl.kt): ring, lock, sleep, Bluetooth, Do not disturb, volume.
     if (!connection && host != null) ComputerCard(core, host.name)
 
+    // Every computer of its mesh (MeshMgr.kt): wake, lock, restart… any of them, pairings, the layout.
+    if (!connection && host != null) MeshCard(core, v)
+
     // Shortcuts (Tiles.kt): its screen, voice typing, the touchpad, files… as tiles, edited here.
     if (!connection && host != null) TilesCard(core)
 

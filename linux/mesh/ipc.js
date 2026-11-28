@@ -416,6 +416,14 @@ function setupIpc(ctx) {
     if (ctx.pcScreen.mode !== 'off') ctx.pcScreen.setMode('off'); // Bluetooth can't carry the screen
   });
 
+  // Multi-device › Phones (shared/mesh-manage.js): phones may manage this computer; one phone revoked.
+  handle('setManage', (o) => {
+    const m = ctx.manage && ctx.manage();
+    if (!m || !o || typeof o !== 'object') return;
+    if (typeof o.on === 'boolean') m.setOn(o.on);
+    if (typeof o.id === 'string' && typeof o.revoked === 'boolean') m.setRevoked(o.id, o.revoked);
+  });
+
   // The matrix (shared/ui-matrix.js): one of this computer's own cells, its pair with a device one way. The
   // selected device's pair is the settings (the pages show it: pairsync-mesh.js tells it), any other's its
   // saved pair (shared/consent.js tells it).

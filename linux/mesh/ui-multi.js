@@ -58,6 +58,8 @@ UI.tab({
 
     // ---- the matrix: who shares what, the whole mesh (shared/ui-matrix.js, docs/mesh-graph.md step 6) ----
     const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on) });
+    // ---- Phones: the mesh manager on phones may reach this computer (shared/ui-manage.js) ----
+    const phones = MeshPhones.create({ setOn: (on) => api.setManage({ on }), setRevoked: (id, revoked) => api.setManage({ id, revoked }) });
 
     const joinSw = UI.switch((v) => api.setMesh({ autoJoin: v }), { label: I18n.t('Join every device automatically') });
     const joinRow = UI.row(I18n.t('Join every device automatically'), '', [joinSw]);
@@ -77,6 +79,7 @@ UI.tab({
       ]),
       UI.card(I18n.t('Layout'), [map.el, actions, reachNote, layoutHint, skipRow], { cls: 'keep-on' }),
       UI.card(I18n.t('Who shares what'), [matrix.el]),
+      UI.card(I18n.t('Phones'), [phones.el]),
       UI.card(I18n.t('Joining'), [joinRow]),
       UI.card(I18n.t('Logs'), logRows),
     );
@@ -85,6 +88,7 @@ UI.tab({
       last = s;
       drawLayout(s);
       matrix.render(s.matrix);
+      phones.render(s.manage);
       const jn = (s.mesh || {}).autoJoin === true;
       joinSw.set(jn);
       shareLogSw.set(!s.mesh || s.mesh.shareLogs !== false);

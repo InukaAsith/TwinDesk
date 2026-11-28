@@ -155,6 +155,7 @@ let updateNote = null; // the update notification, kept so it isn't collected be
 let pairSync = null;
 let consent = null; // each device's own two-way switches (shared/consent.js)
 let edges = null; // the whole mesh's (shared/mesh-edges.js): the matrix
+let manage = null; // the phones' mesh manager (shared/mesh-manage.js)
 let terminal = null;
 let sshd = null;
 let apps = null;
@@ -595,7 +596,7 @@ function start() {
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
   const ipc = setupIpc({ dbg: () => dbg, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
-    devctl: () => devctl, chats: () => chats, consent: () => consent, viewers: () => viewers, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
+    devctl: () => devctl, chats: () => chats, consent: () => consent, manage: () => manage, viewers: () => viewers, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
@@ -623,6 +624,12 @@ function start() {
     names: (pid) => (pid === device.id ? device.name : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).name || '')),
     os: (pid) => (pid === device.id ? P.OS.LINUX : ((hub.peers({ indirect: true }).find((x) => x.id === pid) || {}).os || '')),
     connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+  });
+  // The phones' mesh manager (shared/mesh-manage.js): a phone on any computer of the mesh wakes, locks,
+  // restarts… this one, answers its pairings and arranges the layout; Multi-device › Phones may refuse.
+  manage = require('../../shared/mesh-manage.js').onHub({
+    hub, mesh, selfId: device.id, name: () => device.name, os: P.OS.LINUX, settings: () => settings, save: saveSettings,
+    devLocal: devctl.local, wake: () => wake, layout: () => layoutSync, onChange: pushState,
   });
   nativeTheme.on('updated', pushState);
   link.start();
@@ -1236,6 +1243,7 @@ function pushState() {
       if (sendTo) sendTo.sync(hub.peers().filter((x) => !P.isPhoneOs(x.os))); // one Send to entry per paired computer
       if (pairSync) pairSync.check(); // tell the other computer what changed here
       if (edges) edges.tick(); // the matrix: ours to every device when it changed
+      if (manage) manage.tick(); // the mesh manager: what this computer can do, to every device
       const phase = s.pairing ? s.pairing.phase : null;
       if (phase === 'code' && lastPairPhase !== 'code') showMain(); // a code to compare: to the front
       lastPairPhase = phase;
@@ -1385,6 +1393,7 @@ function buildState() {
     // Every paired device (connected or not), and the mesh's selection and live links.
     peers: hub.peers({ indirect: true }),
     matrix: edges ? edges.view() : null, // the Multi-device tab's matrix (shared/mesh-edges.js)
+    manage: manage ? manage.pageView() : null, // Multi-device › Phones (shared/mesh-manage.js)
     mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin === true, pcBle: false, shareLogs: settings.mesh.shareLogs !== false, collectLogs: settings.mesh.collectLogs !== false },
     debug: dbg ? dbg.view() : null, // Debug tab (shared/debug-start.js)
     localApi: localApi ? localApi.view() : null, // General › Local API

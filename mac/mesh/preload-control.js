@@ -34,6 +34,7 @@ for (const name of ACTIONS) api[name] = (arg) => ipcRenderer.send(name, arg);
 api.phoneCamera = (open, opts) => ipcRenderer.send('phoneCamera', { open, opts }); // Camera › Start and Window: {facing, show}, sent as one
 api.setReZume = api.setRezume; // the shared ReZume page (shared/ui-rezume.js) says it the PC's way
 api.setConsent = (id, feature, dir, on) => ipcRenderer.send('setConsent', { id, feature, dir, on }); // the matrix: one of this Mac's own cells
+api.setManage = (o) => ipcRenderer.send('setManage', o); // Multi-device › Phones (shared/mesh-manage.js)
 api.deckApps = () => ipcRenderer.invoke('deckApps'); // the Deck page's app picker
 api.deckState = () => ipcRenderer.invoke('deckState'); // its sound, Bluetooth and display pickers
 api.deckPick = (o) => ipcRenderer.invoke('deckPick', o); // a file, folder or script for a tile
