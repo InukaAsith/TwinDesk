@@ -272,3 +272,15 @@ Editing the layout from the phone, the phone as an extra monitor, binary file ch
 
 - **Listing.** The phone keeps the `members` of every `mesh.roster` it gets (`MeshMembers`, Mesh.kt, the port of `Mesh.known()`) and sends its own (`members` next to `peers`). The Overview page lists every connected computer (Use attaches the one-to-one features to it) and every device that only a computer reports (`via <name>`, not connectable by tap).
 - **Joining everyone.** The phone is always a guest (Intro.kt, the port of `validGrant`). A `mesh.intro.grant` from a connected mesh computer is stored like a finished pairing and dialled, unless the device is known, the registry is full (`MAX_DEVICES`) or the setting *Join every device automatically* (`meshAutoJoin`, default on) is off. A phone cannot listen, so it answers `mesh.intro.ask` with `ok: false`.
+
+## A phone's files for another computer
+
+A phone is connected to one computer. Its share sheet (Send to TwinDesk) lists that computer first and
+then the mesh's other connected computers, from the mesh manager's `mesh.view`. Picking another one
+adds `to: <device id>` to each `file.offer` of the batch. The connected computer
+(`shared/files-relay.js`) takes the batch into a temporary folder of its own instead of Received files,
+sends it on with its own Send files to that device, and removes the folder an hour later. Only a
+phone's Send files batch is relayed, and only to a connected device that is neither the phone nor this
+computer; anything else is received as before. An older computer ignores `to` and keeps the files.
+
+The mesh manager itself (Overview › Computers) is on Android and, from 2026-11-28, iPhone and iPad.
