@@ -2410,5 +2410,8 @@
   "Share {name} with {device}? Its files stay the same on both.": "Share {name} with {device}? Its files stay the same on both.",
   "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.": "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.",
   "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects": "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects",
-  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing."
+  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.",
+  "Choose": "Choose",
+  "ReZume with which device?": "ReZume with which device?",
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume goes on with one device at a time. A computer you choose chooses this one too."
 });

@@ -2409,5 +2409,8 @@
   "Share {name} with {device}? Its files stay the same on both.": "{name} klasörü {device} ile paylaşılsın mı? Dosyaları ikisinde de aynı kalır.",
   "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.": "Bunu açan her cihazda aynı olan bir klasör ve paylaştığınız her klasör. Her biri kendi kopyasını tutar, böylece çevrimdışı da çalışır.",
   "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects": "{count} dosya, {size} · TwinDesk Paylaşılan klasörler açık bir cihaz bağlandığında eşitlenir",
-  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Seçtiğiniz cihazlarda aynı tutulan klasörler, bulut olmadan. Her biri kendi kopyasını tutar ve çevrimdışı çalışır. Dosya Paylaşımı'nda açana kadar kapalıdır."
+  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Seçtiğiniz cihazlarda aynı tutulan klasörler, bulut olmadan. Her biri kendi kopyasını tutar ve çevrimdışı çalışır. Dosya Paylaşımı'nda açana kadar kapalıdır.",
+  "Choose": "Seç",
+  "ReZume with which device?": "ReZume hangi cihazla?",
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume aynı anda tek bir cihazla devam eder. Seçtiğiniz bilgisayar da bunu seçer."
 });

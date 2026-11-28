@@ -2409,5 +2409,8 @@
   "Share {name} with {device}? Its files stay the same on both.": "Поделиться «{name}» с {device}? Файлы будут одинаковыми на обоих.",
   "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.": "Одна папка, одинаковая на каждом устройстве, где это включено, и любые папки, которыми вы делитесь. У каждого своя копия, поэтому всё работает без сети.",
   "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects": "Файлов: {count}, {size} · синхронизация, когда подключится устройство с включёнными общими папками TwinDesk",
-  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Папки, одинаковые на выбранных вами устройствах, без облака. У каждого своя копия, работает без сети. Выключено, пока вы не включите в «Обмене файлами»."
+  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Папки, одинаковые на выбранных вами устройствах, без облака. У каждого своя копия, работает без сети. Выключено, пока вы не включите в «Обмене файлами».",
+  "Choose": "Выбрать",
+  "ReZume with which device?": "ReZume с каким устройством?",
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume работает с одним устройством за раз. Выбранный компьютер тоже выберет этот."
 });

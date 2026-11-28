@@ -2410,5 +2410,8 @@
   "Share {name} with {device}? Its files stay the same on both.": "将 {name} 共享给 {device}？两边的文件将保持一致。",
   "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.": "一个在每台开启此功能的设备上都相同的文件夹，以及你共享的任何文件夹。每台设备都保存自己的副本，因此离线也能用。",
   "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects": "{count} 个文件，{size} · 当开启了 TwinDesk 共享文件夹的设备连接时同步",
-  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "在你选择的设备上保持一致的文件夹，无需云端。每台设备保存自己的副本，离线也能用。在“文件共享”中开启之前保持关闭。"
+  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "在你选择的设备上保持一致的文件夹，无需云端。每台设备保存自己的副本，离线也能用。在“文件共享”中开启之前保持关闭。",
+  "Choose": "选择",
+  "ReZume with which device?": "ReZume 与哪台设备接续？",
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "ReZume 一次只与一台设备接续。你选择的电脑也会选择这台。"
 });

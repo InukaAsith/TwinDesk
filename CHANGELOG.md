@@ -21,6 +21,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   picker), beside this computer's own while that's on. A folder for phones only doesn't load the sync
   engine; one with a computer switches Shared folders on. One-to-one and Multi-device alike, on the
   Mac, Windows and Linux. Tested here with the engine and the phone server; not yet between devices.
+- **ReZume asks which device** in Multi-device: turned on with none picked, a sheet lists the
+  connected devices (one alone is picked without asking); a computer chosen chooses this one too.
+  Cancel leaves ReZume off. The ReZume with picker on its page still changes it later.
 - **Manage the mesh from the phone** (Android, Overview › Multi-device, on unless a computer turns it
   off): wake, lock, sleep, restart or shut down any computer of the mesh, unlock it (Full KVM),
   approve or remove devices and move them in the layout. Unlock, restart, shut down, approve and

@@ -40,6 +40,45 @@
     for (const el of root.querySelectorAll('[data-peer]')) if (el.childNodes.length <= 1) el.textContent = put(el.dataset.peer);
   }
 
+  // Multi-device, turned on with no device picked: which one (ReZume is with one device at a time).
+  // One connected: that one, without asking. Several: a sheet; Cancel leaves ReZume off. True when
+  // it took over turning ReZume on.
+  function askWith(on) {
+    const mw = on && UI.state && UI.state.rezume && UI.state.rezume.meshWith;
+    if (!mw || mw.with) return false;
+    const devs = mw.devices || [];
+    if (!devs.length) return false;
+    const go = (id) => { UI.api.rezumeDo({ a: 'with', id }); UI.api.setReZume({ on: true }); };
+    if (devs.length === 1) { go(devs[0].id); return true; }
+    const { el } = UI;
+    if (!document.getElementById('rz-ask-style')) {
+      const st = document.createElement('style');
+      st.id = 'rz-ask-style';
+      st.textContent = '.rz-shade{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:24px}'
+        + '.rz-sheet{width:min(420px,100%);max-height:100%;overflow:auto;border-radius:14px;background:#fff;color:var(--text);box-shadow:0 24px 64px rgba(0,0,0,.35),0 0 0 1px var(--line);padding:18px 18px 14px}'
+        + '@media (prefers-color-scheme: dark){.rz-sheet{background:#252527}}'
+        + '.rz-sheet h2{margin:0 0 4px;font-size:16px;font-weight:600}.rz-sheet p{margin:0 0 12px;color:var(--muted);font-size:12px}'
+        + '.rz-foot{display:flex;justify-content:flex-end;margin-top:12px}';
+      document.head.append(st);
+    }
+    let shade = null;
+    const close = (id) => {
+      shade.remove();
+      if (id) go(id);
+      else UI.api.setReZume({ on: false }); // the switch goes back off
+    };
+    const rows = devs.map((d) => UI.row(d.name, '', [UI.osIcon(d.os), UI.button(tr('Choose'), () => close(d.id), 'small primary')], { literal: true }));
+    shade = el('div', { class: 'rz-shade' }, [el('div', { class: 'rz-sheet', attrs: { role: 'dialog', 'aria-modal': 'true' } }, [
+      el('h2', { text: tr('ReZume with which device?') }),
+      el('p', { text: tr('ReZume goes on with one device at a time. A computer you choose chooses this one too.') }),
+      ...rows,
+      el('div', { class: 'rz-foot' }, [UI.button(tr('Cancel'), () => close(''))]),
+    ])]);
+    shade.addEventListener('click', (e) => { if (e.target === shade) close(''); });
+    document.body.append(shade);
+    return true;
+  }
+
   // The other device's offer: its icon, what it is, Open and Dismiss. update(s, always): shown while
   // there is one (always: on the ReZume tab; elsewhere only with "On the Apps and Phone pages").
   UI.rezumeCard = function () {
@@ -83,7 +122,7 @@
     badge: (s) => (s.rezume && s.rezume.on ? 'on' : ''),
     master: {
       get: (s) => !!(s.rezume && s.rezume.on),
-      set: (v) => UI.api.setReZume({ on: v }),
+      set: (v) => askWith(v) || UI.api.setReZume({ on: v }),
       disabled: (s) => !s.rezume,
     },
     build(body) {

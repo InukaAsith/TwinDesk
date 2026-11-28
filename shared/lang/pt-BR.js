@@ -2409,5 +2409,8 @@
   "Share {name} with {device}? Its files stay the same on both.": "Compartilhar {name} com {device}? Os arquivos ficam iguais nos dois.",
   "One folder, the same on every device that turns this on, and any folder you share. Each keeps its own copy, so it works offline.": "Uma pasta igual em todos os dispositivos que ativarem isto, e qualquer pasta que você compartilhar. Cada um guarda sua própria cópia, então funciona offline.",
   "{count} files, {size} · syncs when a device with TwinDesk Shared folders on connects": "{count} arquivos, {size} · sincroniza quando um dispositivo com Pastas compartilhadas do TwinDesk ativado se conectar",
-  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Pastas mantidas iguais nos dispositivos que você escolher, sem nuvem. Cada um guarda sua própria cópia e funciona offline. Desativado até você ativar, em Compartilhamento de arquivos."
+  "Folders kept the same on the devices you choose, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.": "Pastas mantidas iguais nos dispositivos que você escolher, sem nuvem. Cada um guarda sua própria cópia e funciona offline. Desativado até você ativar, em Compartilhamento de arquivos.",
+  "Choose": "Escolher",
+  "ReZume with which device?": "ReZume com qual dispositivo?",
+  "ReZume goes on with one device at a time. A computer you choose chooses this one too.": "O ReZume continua com um dispositivo por vez. Um computador que você escolher também escolhe este."
 });
