@@ -70,11 +70,11 @@ namespace MacShare
         }
         [DllImport("ole32.dll")] static extern int PropVariantClear(ref PROPVARIANT v);
 
-        const int GWL_STYLE = -16, GWL_EXSTYLE = -20, WS_EX_TOOLWINDOW = 0x80, WS_CHILD = 0x40000000;
+        const int GWL_STYLE = -16, GWL_EXSTYLE = -20, WS_EX_TOOLWINDOW = 0x80, WS_CHILD = 0x40000000, WS_MAXIMIZEBOX = 0x10000;
         const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14;
-        const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000, WM_CLOSE = 0x10, TH32CS_SNAPPROCESS = 2;
+        const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000, WM_CLOSE = 0x10, WM_SYSCOMMAND = 0x112, TH32CS_SNAPPROCESS = 2;
         const uint SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10;
-        const int SW_RESTORE = 9;
+        const int SW_RESTORE = 9, SC_MAXIMIZE = 0xF030;
         const byte VK_MENU = 0x12;
         static readonly HashSet<string> SkipClass = new HashSet<string> { "tooltips_class32", "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd" };
         static readonly HashSet<string> MenuClass = new HashSet<string> { "#32768", "ComboLBox" }; // menus, combo-box drop-downs
@@ -350,6 +350,50 @@ namespace MacShare
             SetForegroundWindow(h);
             GrabMove(x, y);
             return true;
+        }
+
+        // Own remote titlebar drags cannot enter the app's native move loop: main also delivers input.
+        public static bool BeginCaptionDrag(IntPtr h, int x, int y, out Point offset)
+        {
+            offset = Point.Empty;
+            RECT before;
+            if (!IsWindow(h) || !GetWindowRect(h, out before)) return false;
+            bool zoomed = IsZoomed(h);
+            RECT r = before;
+            if (zoomed)
+            {
+                ShowWindow(h, SW_RESTORE);
+                if (!GetWindowRect(h, out r)) return false;
+            }
+            double across = (double)(x - before.left) / Math.Max(1, before.right - before.left);
+            offset = new Point(zoomed ? (int)(across * (r.right - r.left)) : x - r.left, y - before.top);
+            SetForegroundWindow(h);
+            return true;
+        }
+
+        public static bool MoveCaptionDrag(IntPtr h, int x, int y, Point offset)
+        {
+            // shortcut: left/right snap layouts are not emulated; extend before claiming full native snap parity.
+            return IsWindow(h) && SetWindowPos(h, IntPtr.Zero, x - offset.X, y - offset.Y, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+        }
+
+        public static void EndCaptionDrag(IntPtr h, int x, int y, Point offset)
+        {
+            if (!IsWindow(h) || (GetWindowLong(h, GWL_STYLE) & WS_MAXIMIZEBOX) == 0) return;
+            var screen = System.Windows.Forms.Screen.FromPoint(new Point(x, y));
+            int topThreshold = Math.Max(1, System.Windows.Forms.SystemInformation.DragSize.Height / 2);
+            if (!screen.Bounds.Contains(x, y) || y > screen.WorkingArea.Top + topThreshold) return;
+            RECT r;
+            if (!GetWindowRect(h, out r)) return;
+            Rectangle work = screen.WorkingArea;
+            int width = Math.Min(r.right - r.left, work.Width), height = Math.Min(r.bottom - r.top, work.Height);
+            if (width <= 0 || height <= 0) return;
+            int left = Math.Max(work.Left, Math.Min(x - offset.X, work.Right - width));
+            // Windows chooses the monitor by window overlap, so fit restore bounds on the release monitor first.
+            if (SetWindowPos(h, IntPtr.Zero, left, work.Top, width, height,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS))
+                PostMessage(h, WM_SYSCOMMAND, new IntPtr(SC_MAXIMIZE), IntPtr.Zero);
         }
 
         // The pointer moved to x, y: the grabbed window follows (asynchronously: the hook never waits on the app).
