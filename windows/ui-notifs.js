@@ -40,7 +40,7 @@ UI.tab({
       takeAll: (on) => api.setNotifs({ takeAll: on }),
     }) : null;
     if (across) across.el.hidden = true;
-    body.append(note, ...(across ? [across.el] : []), pair.el, ...(showing ? [showing.el] : []), histCard, hist.el, UI.card(I18n.t('Apps'), [apps]));
+    body.append(note, pair.el, ...(across ? [across.el] : []), ...(showing ? [showing.el] : []), histCard, hist.el, UI.card(I18n.t('Apps'), [apps]));
 
     let key = '';
     let histKey = '';

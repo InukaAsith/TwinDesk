@@ -40,8 +40,8 @@ UI.tab({
     }) : null;
     if (across) across.el.hidden = true;
     body.append(
-      ...(across ? [across.el] : []),
       UI.pair(UI.dir('m2w', [sendRow, fdaRow, hideRow]), UI.dir('w2m', [recvRow])),
+      ...(across ? [across.el] : []),
       ...(showing ? [showing.el] : []),
       UI.card(I18n.t('Apps'), [apps]),
       hist.el,
