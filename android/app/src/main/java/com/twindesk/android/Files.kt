@@ -695,7 +695,8 @@ class Files(core: Core) : Feature(core) {
 
     // Offer every file now (kind 'send' = Send to computer, 'paste' = the computer pasted what we copied).
     // Not connected, for Send files: kept for the computer last connected (Waiting, above), when that's on.
-    fun send(items: List<Item>, kind: String, batch: String = UUID.randomUUID().toString(), cont: String = ""): Boolean {
+    // to: another computer of the mesh (the share picker); the one connected takes it and passes it on (shared/files-relay.js).
+    fun send(items: List<Item>, kind: String, batch: String = UUID.randomUUID().toString(), cont: String = "", to: String = ""): Boolean {
         if (items.isEmpty()) return false
         if (!core.link.connected) {
             val h = lastHost()
@@ -714,7 +715,7 @@ class Files(core: Core) : Feature(core) {
             outItems[batch] = unique
             if (cont.isNotEmpty()) outCont[batch] = cont
         }
-        val more: Array<Pair<String, Any?>> = if (cont.isNotEmpty()) arrayOf("cont" to cont) else emptyArray()
+        val more: Array<Pair<String, Any?>> = listOfNotNull(if (cont.isNotEmpty()) "cont" to cont else null, if (to.isNotEmpty() && kind == "send") "to" to to else null).toTypedArray()
         unique.forEachIndexed { index, it ->
             val id = UUID.randomUUID().toString()
             val rel = it.rel.ifEmpty { it.name }

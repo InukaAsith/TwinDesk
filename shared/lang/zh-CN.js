@@ -2474,5 +2474,8 @@
   "1 phone": "1 部手机",
   "Show {me}’s screens on your other devices.": "在你的其他设备上显示 {me} 的屏幕。",
   "TwinDesk Virtual Display": "TwinDesk Virtual Display",
-  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display（扩展）"
+  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display（扩展）",
+  "Passing {count} file to {name}": "正在将 {count} 个文件转给 {name}",
+  "Passing {count} files to {name}": "正在将 {count} 个文件转给 {name}",
+  "Couldn’t pass files to {name}": "无法将文件转给 {name}"
 });

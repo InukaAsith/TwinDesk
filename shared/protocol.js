@@ -158,7 +158,7 @@
       SSH_KEY: 'ssh.key', // W->M {pub}
       SSH_INFO: 'ssh.info', // M->W {enabled, user, port, hostKeys, why?}
       SSH_FORGET: 'ssh.forget', // W->M
-      FILE_OFFER: 'file.offer', // W->M {id, name, size, x?, y?, index, count, cont?} (cont: the first batch's id, the rest of a paused or cut-off Send files batch, shared/outbox.js)
+      FILE_OFFER: 'file.offer', // W->M {id, name, size, x?, y?, index, count, cont?, to?} (to: a phone's batch for another device of the mesh, passed on, shared/files-relay.js) (cont: the first batch's id, the rest of a paused or cut-off Send files batch, shared/outbox.js)
       FILE_ACCEPT: 'file.accept', // M->W {id}
       FILE_REFUSE: 'file.refuse', // M->W {id, why}
       FILE_CHUNK: 'file.chunk', // W->M {id, seq, data (base64)}

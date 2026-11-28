@@ -87,9 +87,10 @@ function finderWindows() {
 
 class Drop extends EventEmitter {
   // accepts(): Receive files from this device, its pair's switch (shared/consent.js); else the settings'
-  constructor({ server, helper, displays, getSettings, accepts = null }) {
+  // relayDir(to, batch): Multi-device, a phone's batch for another device (shared/files-relay.js), else none.
+  constructor({ server, helper, displays, getSettings, accepts = null, relayDir = null }) {
     super();
-    Object.assign(this, { server, helper, displays, getSettings, accepts });
+    Object.assign(this, { server, helper, displays, getSettings, accepts, relayDir });
     this.active = new Map(); // id -> transfer
     this.recent = []; // newest first: {name, size, path, at, ok, error}
     this.drag = null; // { dest: null|dir, waiting: [transfer] } while files are dragged in (drop:'release')
@@ -220,7 +221,9 @@ class Drop extends EventEmitter {
       const asked = m.drop === 'send' && this.asked.allow(ctx, m, ws);
       if (m.drop === 'send' && !this._accepts() && !asked) return refuse('not_allowed');
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one
-      b = { kind: m.drop, dir: was ? was.dir : (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS, app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [],
+      // A phone's batch for another device of the mesh (shared/files-relay.js): into a folder of its own, passed on.
+      const relay = m.drop === 'send' && !was && typeof m.to === 'string' && m.to && this.relayDir ? this.relayDir(m.to.slice(0, 64), m.batch) : '';
+      b = { kind: m.drop, to: relay ? m.to.slice(0, 64) : '', dir: relay || (was ? was.dir : (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS), app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [],
         bytes: Number(m.bytes) > 0 ? Number(m.bytes) : 0, doneBytes: 0, at: Date.now(), cont: was ? m.cont : '',
         askedGrant: !this._accepts() && asked ? this.asked.open : null }; // bytes: the batch's total, when the sender says
       this.batches.set(m.batch, b);
@@ -274,10 +277,10 @@ class Drop extends EventEmitter {
     this.server.sendToClient({ t: P.T.FILES_DONE, batch, ok: b.ok === b.count, where, files: b.ok });
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : `${b.placed.length} items`;
     this._remember({ name, size: 0, path: b.placed[0] || null, ok: b.ok > 0, ...(b.ok === b.count ? {} : { error: `${b.count - b.ok} of ${b.count} failed` }) });
-    if (b.ok && !b.app && (this.cfg.reveal || b.kind === 'paste')) shell.showItemInFolder(b.placed[0]);
+    if (b.ok && !b.app && !b.to && (this.cfg.reveal || b.kind === 'paste')) shell.showItemInFolder(b.placed[0]);
     // Files › Put received files on the clipboard: Send files and shares, ready for ⌘V.
-    if (b.ok && b.kind === 'send' && this.cfg.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
-    this.emit('batch', { kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
+    if (b.ok && !b.to && b.kind === 'send' && this.cfg.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
+    this.emit('batch', { kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed, to: b.to });
   }
 
   // A file of a native drag (dragin.js): streamed into the drag's temp tree.

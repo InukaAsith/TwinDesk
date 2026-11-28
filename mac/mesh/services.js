@@ -64,12 +64,21 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     knownPair: (id, pair) => pair === guestPair(id) || pair === hostPair(id),
   });
   // Files from every device, each on its own peer: the computer driving this Mac isn't selected here (dropset.js).
+  // A phone's Send to another computer of the mesh: taken here and passed on (shared/files-relay.js).
+  let fileSend = null;
+  const filesRelay = require('../../shared/files-relay.js').filesRelay({
+    selfId: () => meshHub.device.id,
+    isPhone: (pid) => { const x = meshHub.sessions.get(pid); return !!x && P.isPhoneOs(x.peerOs); },
+    connected: (pid) => { const x = meshHub.sessions.get(pid); return !!x && x.connected; },
+    sendTo: (pid, paths) => { const u = fileSend && fileSend.unit(pid); if (!u) return false; u.send(paths); return true; },
+    nameOf: (pid) => { const x = meshHub.sessions.get(pid); return x ? x.displayName() : pid; },
+  });
   const drop = new DropSet({
-    hub: meshHub, server, make: (peer, id) => new Drop({ server: peer, helper, displays, getSettings: s, accepts: consent ? () => consent.get(id, 'files', 'in') : null }),
+    hub: meshHub, server, make: (peer, id) => new Drop({ server: peer, helper, displays, getSettings: s, accepts: consent ? () => consent.get(id, 'files', 'in') : null, relayDir: (to, batch) => filesRelay.dir(id, to, batch) }),
     partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
   });
   // Sending: a FileSend per device (sendset.js), so a crossing mid-send doesn't stop it.
-  const fileSend = new SendSet({
+  fileSend = new SendSet({
     hub: meshHub, server, FileSend, getSettings: s, outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json'),
     partner: () => (kvm && kvm.mode === 'driving' ? kvm.partner : null),
   });
@@ -282,7 +291,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   helper.start();
 
   return {
-    helper, displays, stream, input, spaces, spaceLook, desktopRefresh, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, audioPeer, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
+    helper, displays, stream, input, spaces, spaceLook, desktopRefresh, clipboard, kvm, terminal, drop, filesRelay, smb, apps, sshClient, audio, audioPeer, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
     shutdown() {
       pcView.shutdown();
       pcApps.shutdown();

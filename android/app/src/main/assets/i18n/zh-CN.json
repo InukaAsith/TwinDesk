@@ -1347,5 +1347,7 @@
   "{name} wants to pair with {computer}. Code {code}: check it’s the one on {name}.": "{name} 想要与 {computer} 配对。代码 {code}：请确认与 {name} 上显示的一致。",
   "{what}: done": "{what}：已完成",
   "{what}: {why}": "{what}：{why}",
-  "{what}…": "{what}…"
+  "{what}…": "{what}…",
+  "{name} (connected)": "{name}（已连接）",
+  "Send to": "发送到"
 }

@@ -359,10 +359,19 @@ function start() {
   hud = new Hud(() => settings);
   // Files from every device, each on its own link: the computer driving this one isn't selected here
   // (shared/files-mesh.js). fileRecv and dragRecv are the set's single-receiver API.
+  // A phone's Send to another computer of the mesh: taken here and passed on (shared/files-relay.js).
+  const filesRelay = require('../../shared/files-relay.js').filesRelay({
+    selfId: device.id,
+    isPhone: (pid) => { const x = hub.sessions.get(pid); return !!x && P.isPhoneOs(x.peerOs); },
+    connected: (pid) => { const x = hub.sessions.get(pid); return !!x && x.connected; },
+    sendTo: (pid, paths) => { const u = fileDrop && fileDrop.unit(pid); if (!u) return false; u.send(paths); return true; },
+    nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : pid; },
+    notify: (key, vars) => hud.show('driven', { key: key.replace('file(s)', vars.count === 1 ? 'file' : 'files'), vars }),
+  });
   const files = new FilesSet({
     hub, partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
     make: (scoped) => ({
-      fileRecv: new FileRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), onChange: pushState }),
+      fileRecv: new FileRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), onChange: pushState, relayDir: (to, batch) => filesRelay.dir(scoped.id, to, batch) }),
       dragRecv: new DragRecv({ link: scoped, helper, settings, accepts: () => consent.get(scoped.id, 'files', 'in'), isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState }),
     }),
   });
@@ -480,6 +489,7 @@ function start() {
     for (const tag of ['recv', 'send']) if (!liveFor[tag] || liveFor[tag] === id) live.done(tag, t('Files stopped'), t('{name} disconnected', { name }));
   });
   fileRecv.onBatch = (b) => {
+    if (filesRelay.done(b)) return; // a phone's batch for another device: passed on
     live.done('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), t('From {name}', { name: fromName(b) }));
     if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);

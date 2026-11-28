@@ -2474,5 +2474,8 @@
   "1 phone": "1 phone",
   "Show {me}’s screens on your other devices.": "Show {me}’s screens on your other devices.",
   "TwinDesk Virtual Display": "TwinDesk Virtual Display",
-  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Extend)"
+  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Extend)",
+  "Passing {count} file to {name}": "Passing {count} file to {name}",
+  "Passing {count} files to {name}": "Passing {count} files to {name}",
+  "Couldn’t pass files to {name}": "Couldn’t pass files to {name}"
 });

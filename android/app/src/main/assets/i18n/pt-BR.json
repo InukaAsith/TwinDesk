@@ -1347,5 +1347,7 @@
   "{name} wants to pair with {computer}. Code {code}: check it’s the one on {name}.": "{name} quer parear com {computer}. Código {code}: confira se é o mesmo em {name}.",
   "{what}: done": "{what}: feito",
   "{what}: {why}": "{what}: {why}",
-  "{what}…": "{what}…"
+  "{what}…": "{what}…",
+  "{name} (connected)": "{name} (conectado)",
+  "Send to": "Enviar para"
 }

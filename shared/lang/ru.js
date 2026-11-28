@@ -2473,5 +2473,8 @@
   "1 phone": "1 телефон",
   "Show {me}’s screens on your other devices.": "Показывайте экраны {me} на других устройствах.",
   "TwinDesk Virtual Display": "TwinDesk Virtual Display",
-  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (расширение)"
+  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (расширение)",
+  "Passing {count} file to {name}": "Передача {count} файла на {name}",
+  "Passing {count} files to {name}": "Передача файлов на {name}: {count}",
+  "Couldn’t pass files to {name}": "Не удалось передать файлы на {name}"
 });

@@ -1347,5 +1347,7 @@
   "{name} wants to pair with {computer}. Code {code}: check it’s the one on {name}.": "{name} хочет подключиться к {computer}. Код {code}: проверьте, что он такой же на {name}.",
   "{what}: done": "{what}: готово",
   "{what}: {why}": "{what}: {why}",
-  "{what}…": "{what}…"
+  "{what}…": "{what}…",
+  "{name} (connected)": "{name} (подключено)",
+  "Send to": "Отправить на"
 }

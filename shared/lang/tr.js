@@ -2473,5 +2473,8 @@
   "1 phone": "1 telefon",
   "Show {me}’s screens on your other devices.": "{me} ekranlarını diğer cihazlarınızda gösterin.",
   "TwinDesk Virtual Display": "TwinDesk Virtual Display",
-  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Genişlet)"
+  "TwinDesk Virtual Display (Extend)": "TwinDesk Virtual Display (Genişlet)",
+  "Passing {count} file to {name}": "{count} dosya {name} cihazına aktarılıyor",
+  "Passing {count} files to {name}": "{count} dosya {name} cihazına aktarılıyor",
+  "Couldn’t pass files to {name}": "Dosyalar {name} cihazına aktarılamadı"
 });

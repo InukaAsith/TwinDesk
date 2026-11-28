@@ -1347,5 +1347,7 @@
   "{name} wants to pair with {computer}. Code {code}: check it’s the one on {name}.": "{name}, {computer} ile eşleşmek istiyor. Kod {code}: {name} üzerindekiyle aynı olduğunu kontrol edin.",
   "{what}: done": "{what}: tamam",
   "{what}: {why}": "{what}: {why}",
-  "{what}…": "{what}…"
+  "{what}…": "{what}…",
+  "{name} (connected)": "{name} (bağlı)",
+  "Send to": "Gönder"
 }

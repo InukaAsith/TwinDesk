@@ -12,6 +12,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 ## Next (unreleased)
 
 ### New
+- Multi-device, phone share sheet: Send to TwinDesk asks which computer, the connected one first. The
+  connected computer takes the files and passes them on to the one picked (Android; Mac, Windows, Linux
+  pass them on). With no other computer in the mesh it sends straight away, as before.
 
 - **Shared folders** (File Sharing › Shared folders, separate from TwinDesk Drive): up to 10 folders,
   each shared with the devices you choose (or All, which includes devices added later), changeable at

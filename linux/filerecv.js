@@ -203,7 +203,9 @@ class FileRecv {
       // total: the whole batch's bytes (file.offer `bytes`, or what fclip.offer said); 0 = unknown.
       const total = Number(m.bytes) > 0 ? Number(m.bytes) : pasted ? pasted.bytes : 0;
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one
-      b = { kind: m.drop, dir: was ? was.dir : pasted ? pasted.dir : receivedDir(this.settings, app.getPath('downloads')), reveal: pasted ? pasted.reveal : true, count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [], cont: was ? m.cont : '', total, got: 0, at: Date.now() };
+      // A phone's batch for another device of the mesh (shared/files-relay.js): into a folder of its own, passed on.
+      const relay = m.drop === 'send' && !was && typeof m.to === 'string' && m.to && this.relayDir ? this.relayDir(m.to.slice(0, 64), m.batch) : '';
+      b = { kind: m.drop, to: relay ? m.to.slice(0, 64) : '', dir: relay || (was ? was.dir : pasted ? pasted.dir : receivedDir(this.settings, app.getPath('downloads'))), reveal: pasted ? pasted.reveal : true, count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [], cont: was ? m.cont : '', total, got: 0, at: Date.now() };
       this.batches.set(m.batch, b);
       this.expected.delete(m.batch);
     }
@@ -293,10 +295,10 @@ class FileRecv {
     this.link.send({ t: T.FILES_DONE, batch, ok: b.ok === b.count, where: b.dir, files: b.ok });
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items';
     this.last = { name, ok: b.ok > 0, text: b.ok === b.count ? 'Saved to ' + b.dir : (b.count - b.ok) + ' of ' + b.count + ' failed', at: Date.now() };
-    if (b.ok && b.reveal) fm.showItems(b.placed);
+    if (b.ok && b.reveal && !b.to) fm.showItems(b.placed);
     // Files › Put received files on the clipboard: Send files and shares, ready for Ctrl+V.
-    if (b.ok && b.kind === 'send' && this.settings.files.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
-    if (this.onBatch) this.onBatch({ kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
+    if (b.ok && !b.to && b.kind === 'send' && this.settings.files.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
+    if (this.onBatch) this.onBatch({ kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed, to: b.to });
     this.onChange();
   }
 

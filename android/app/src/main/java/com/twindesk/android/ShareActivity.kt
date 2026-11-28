@@ -77,16 +77,45 @@ class ShareActivity : Activity() {
         // The share's read grant ends with this activity; the files are read later, when the
         // computer accepts them. Keep a grant of our own until the process ends.
         for (u in uris) runCatching { grantUriPermission(packageName, u, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        if (copy) return sendTo(core, uris, true, "", host.name)
+        pickComputer(core, host.name) { id, name -> sendTo(core, uris, false, id, name) }
+    }
+
+    // Multi-device: which computer, the connected one first (it passes the files on to another one,
+    // shared/files-relay.js). Asks the mesh for its computers (MeshMgr, as Overview does) for a moment;
+    // with no other computer, straight to the connected one.
+    private fun pickComputer(core: Core, hostName: String, go: (String, String) -> Unit) {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        core.mesh.look(true)
+        val started = System.currentTimeMillis()
+        val check = object : Runnable {
+            override fun run() {
+                val others = core.mesh.devices().filter { !it.self && it.online && it.os !in setOf("android", "ios", "ipados") }
+                if (core.mesh.view == null && System.currentTimeMillis() - started < 1200) { main.postDelayed(this, 100); return }
+                core.mesh.look(false)
+                if (others.isEmpty() || isFinishing) return go("", hostName)
+                val names = listOf(tr("{name} (connected)", "name" to hostName)) + others.map { it.name }
+                android.app.AlertDialog.Builder(this@ShareActivity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(tr("Send to"))
+                    .setItems(names.toTypedArray()) { _, i -> if (i == 0) go("", hostName) else go(others[i - 1].id, others[i - 1].name) }
+                    .setOnCancelListener { finish() }
+                    .show()
+            }
+        }
+        main.post(check)
+    }
+
+    private fun sendTo(core: Core, uris: List<Uri>, copy: Boolean, to: String, name: String) {
         // Reading names and sizes may take a moment for big shares; the URIs stay readable for us.
         core.bg.execute {
             val items = core.files.describe(uris)
-            val ok = if (copy) core.fclip.copy(items) else core.files.send(items, "send")
+            val ok = if (copy) core.fclip.copy(items) else core.files.send(items, "send", to = to)
             runOnUiThread {
                 toast(
                     when {
-                        !ok -> tr("Couldn’t send to {name}", "name" to host.name)
-                        copy -> tr("Copied for {name}. Paste on it with ⌃⌥V", "name" to host.name)
-                        else -> tr("Sending {items} to {name}", "items" to trCount(items.size, "item"), "name" to host.name)
+                        !ok -> tr("Couldn’t send to {name}", "name" to name)
+                        copy -> tr("Copied for {name}. Paste on it with ⌃⌥V", "name" to name)
+                        else -> tr("Sending {items} to {name}", "items" to trCount(items.size, "item"), "name" to name)
                     },
                 )
             }

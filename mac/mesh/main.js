@@ -1292,7 +1292,9 @@ app.whenReady().then(() => {
         : { key: 'Double-tap {key} to turn it on', vars: { key } };
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : 'Cursor sharing off' }, sub);
   });
+  svc.filesRelay.notify = (key, vars) => hud.show('driven', { key: key.replace('file(s)', vars.count === 1 ? 'file' : 'files'), vars });
   svc.drop.on('batch', (b) => {
+    if (svc.filesRelay.done(b)) return; // a phone's batch for another device: passed on (shared/files-relay.js)
     if (svc.rz && svc.rz.received(b)) return; // a document taken here with ReZume: it opens
     // The device it came from (dropset.js: b.from), not the selected one.
     const from = b.from ? hub.sessions.get(b.from) : null;
