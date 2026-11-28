@@ -114,6 +114,7 @@ let tray = null;
 let lockKey = null; // the cursor lock key at home (shared/cursorlock.js)
 let hud = null;
 let quitting = false;
+app.on('before-quit', () => { quitting = true; });
 let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
@@ -451,6 +452,7 @@ function applyLook() {
 }
 
 function createWindow() {
+  if (quitting) return;
   win = new BrowserWindow({
     width: 1060,
     height: 720,
@@ -495,6 +497,7 @@ function dockIcon() {
 }
 
 function showWindow() {
+  if (quitting) return;
   if (!win || win.isDestroyed()) createWindow();
   else {
     win.show();
