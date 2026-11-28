@@ -203,13 +203,39 @@ class Notifs extends EventEmitter {
   }
 
   // A notification from another device: relayed by the pool, shown here once when fresh.
+  // The apps seen from each device (newest last, a few dozen each), kept for this run.
+  _seen(origin, m) {
+    const app = str(m.app, 200);
+    if (!origin || !app) return;
+    if (!this.seenFrom) this.seenFrom = new Map();
+    let one = this.seenFrom.get(origin);
+    if (!one) { one = new Map(); this.seenFrom.set(origin, one); if (this.seenFrom.size > 32) this.seenFrom.delete(this.seenFrom.keys().next().value); }
+    one.delete(app);
+    one.set(app, str(m.appName, 100) || app);
+    if (one.size > 60) one.delete(one.keys().next().value);
+  }
+
+  // Per device: [{app, name, hidden}], the apps seen from it and the ones hidden from it (Who shares what).
+  appsFrom() {
+    const out = {};
+    const hiddenFrom = (this.cfg && this.cfg.fromApps) || {};
+    const ids = new Set([...(this.seenFrom ? this.seenFrom.keys() : []), ...Object.keys(hiddenFrom)]);
+    for (const id of ids) {
+      const list = new Map(this.seenFrom && this.seenFrom.get(id));
+      for (const [app, name] of Object.entries(hiddenFrom[id] || {})) if (!list.has(app)) list.set(app, name);
+      out[id] = [...list].map(([app, name]) => ({ app, name, hidden: !!(hiddenFrom[id] && hiddenFrom[id][app] !== undefined) })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return out;
+  }
+
   _show(m, from) {
     if (!this._takes(from)) return;
     const r = this.pool.receive(from, m);
     if (r.fresh && r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose notifications we don't take
     if (!r.fresh || !this.Notification.isSupported()) return;
     if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
-    if (hidden(this, m)) return; // an app set to Hide (Notifications): not kept either
+    this._seen(r.msg.o || from, m); // the apps each device sends, for Who shares what › Notifications
+    if (hidden(this, m, r.msg.o || from)) return; // an app set to Hide (Notifications, or from that device): not kept either
     const origin = this._nameOf(r.msg.o, m.on, from);
     const appName = str(m.appName, 100);
     // The recent ones, for Overview and Messages' chat apps; buttons and Reply go back to the device.
@@ -255,6 +281,7 @@ class Notifs extends EventEmitter {
       sent: this.sent,
       shown: this.shown,
       apps: [...this.apps.values()].sort((a, b) => b.at - a.at).slice(0, 40),
+      appsFrom: this.appsFrom(), // per device: its apps and which are hidden here (Who shares what › Notifications)
       ...this.historyView(),
     };
   }

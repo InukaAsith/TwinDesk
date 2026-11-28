@@ -120,12 +120,13 @@ function withMeshPhoneActions(Cls) {
 // on the clipboard by itself when that's on. A progress bar's updates fill TwinDesk's window in
 // place; with the system's, only its first one and its end show.
 const rules = () => require('./notifrules.js');
-function hidden(n, m) {
-  return rules().modeOf(n.cfg, m) === 'hide';
+// origin: the device it started on (Multi-device: an app hidden from that device, notifrules fromApps).
+function hidden(n, m, origin) {
+  return rules().modeOf(n.cfg, m, undefined, origin) === 'hide';
 }
 function present(n, item, m, { from, code, icon } = {}) {
   const r = rules();
-  const mode = r.modeOf(n.cfg, m);
+  const mode = r.modeOf(n.cfg, m, undefined, item && item.origin);
   if (code && n.cfg.otpCopy && mode !== 'hide') { try { require('./otp.js').quietCopy(code); } catch (_) { /* no clipboard (tests) */ } }
   if (mode !== 'show') return 'none';
   const pop = require('./notifpop.js');

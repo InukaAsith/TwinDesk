@@ -2437,5 +2437,9 @@
   "Saved to Downloads on the other device": "Saved to Downloads on the other device",
   "Network folders": "Network folders",
   "Transfers": "Transfers",
-  "Copy received files to clipboard": "Copy received files to clipboard"
+  "Copy received files to clipboard": "Copy received files to clipboard",
+  "{count} of {total} apps hidden": "{count} of {total} apps hidden",
+  "All apps shown": "All apps shown",
+  "Apps by device": "Apps by device",
+  "Rows send to columns. This computer’s row and column can be changed here.": "Rows send to columns. This computer’s row and column can be changed here."
 });

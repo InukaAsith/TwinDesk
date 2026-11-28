@@ -19,3 +19,7 @@ button.mx-cell:focus-visible { outline: 2px solid var(--accent, #0a84ff); outlin
 .mx-cell.on .mx-dot { background: var(--muted, #888); }
 .mx-cell.live .mx-dot { background: var(--green, #30d158); border-color: var(--green, #30d158); box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.2); }
 .mx-cell.unknown .mx-dot { border-style: dashed; }
+
+/* Notifications: each sending device's apps (shared/ui-matrix.js drawApps) */
+.mx-apps { margin-top: 14px; }
+.mx-app { padding-left: 24px; }

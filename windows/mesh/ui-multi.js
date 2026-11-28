@@ -57,7 +57,7 @@ UI.tab({
     }
 
     // ---- the matrix: who shares what, the whole mesh (shared/ui-matrix.js, docs/mesh-graph.md step 6) ----
-    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on) });
+    const matrix = MeshMatrix.create({ toggle: (id, feature, dir, on) => api.setConsent(id, feature, dir, on), setApp: (from, app, name, show) => api.setNotifs({ fromApp: { from, app, name, hide: !show } }) });
     // ---- Phones: the mesh manager on phones may reach this computer (shared/ui-manage.js) ----
     const phones = MeshPhones.create({ setOn: (on) => api.setManage({ on }), setRevoked: (id, revoked) => api.setManage({ id, revoked }) });
 
@@ -86,7 +86,7 @@ UI.tab({
     return (s) => {
       last = s;
       drawLayout(s);
-      matrix.render(s.matrix);
+      matrix.render(s.matrix, s.notifs && s.notifs.appsFrom);
       phones.render(s.manage);
       const jn = (s.mesh || {}).autoJoin === true;
       joinSw.set(jn);

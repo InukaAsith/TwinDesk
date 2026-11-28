@@ -2437,5 +2437,9 @@
   "Saved to Downloads on the other device": "保存到另一台设备的“下载”",
   "Network folders": "网络文件夹",
   "Transfers": "传输",
-  "Copy received files to clipboard": "将收到的文件复制到剪贴板"
+  "Copy received files to clipboard": "将收到的文件复制到剪贴板",
+  "{count} of {total} apps hidden": "已隐藏 {count}/{total} 个应用",
+  "All apps shown": "显示所有应用",
+  "Apps by device": "按设备的应用",
+  "Rows send to columns. This computer’s row and column can be changed here.": "行发送到列。可在此更改这台电脑的行和列。"
 });

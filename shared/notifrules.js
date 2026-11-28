@@ -7,6 +7,9 @@
 //               (across midnight too)
 //   phoneApps   {app: {mode: 'quiet' | 'hide', name}} per phone app: no pop-ups (kept in the list), or
 //               not at all; an app not in it is shown
+//   fromApps    {senderId: {app: name}} Multi-device › Who shares what › Notifications: apps of one device
+//               hidden here (the cell of that device's row in this computer's column); every other app
+//               from it shows as above
 // Quiet = still in Recent and Messages, only the pop-up is left out.
 'use strict';
 
@@ -37,6 +40,18 @@ function clean(partial, cur) {
     for (const k of keys.slice(0, Math.max(0, keys.length - MAX_APPS))) delete apps[k];
     out.phoneApps = apps;
   }
+  // One cell's app: {from, app, name, hide}.
+  const f = p.fromApp;
+  if (f && typeof f === 'object' && str(f.from, 64) && str(f.app, 200)) {
+    const all = { ...(cur && cur.fromApps) || {} };
+    const from = str(f.from, 64);
+    const one = { ...(all[from] || {}) };
+    if (f.hide === true) one[str(f.app, 200)] = str(f.name, 100) || str(f.app, 200);
+    else delete one[str(f.app, 200)];
+    if (Object.keys(one).length) all[from] = Object.fromEntries(Object.entries(one).slice(-MAX_APPS));
+    else delete all[from];
+    out.fromApps = Object.fromEntries(Object.entries(all).slice(-32));
+  }
   return out;
 }
 
@@ -53,9 +68,11 @@ function inQuiet(q, date = new Date()) {
 
 // What a phone's notification gets here: 'show' (a pop-up and the list), 'quiet' (the list only) or
 // 'hide' (nothing). m: the notif as it came.
-function modeOf(cfg, m, date) {
+// origin: the device it started on (Multi-device), for fromApps.
+function modeOf(cfg, m, date, origin) {
   const c = cfg || {};
   const app = str(m && m.app, 200);
+  if (app && origin && c.fromApps && c.fromApps[origin] && c.fromApps[origin][app] !== undefined) return 'hide';
   const own = app && c.phoneApps && c.phoneApps[app];
   if (own && own.mode === 'hide') return 'hide';
   if (own && own.mode === 'quiet') return 'quiet';
@@ -72,7 +89,15 @@ function saved(nf) {
   for (const [app, v] of Object.entries(src).slice(-MAX_APPS)) {
     if (v && (v.mode === 'quiet' || v.mode === 'hide') && str(app, 200)) apps[str(app, 200)] = { mode: v.mode, name: str(v.name, 100) || app };
   }
-  return { style: c.style || '', otpCopy: !!c.otpCopy, quiet: c.quiet || { on: false, from: '22:00', to: '07:00' }, phoneApps: apps };
+  const fromApps = {};
+  const fsrc = nf && nf.fromApps && typeof nf.fromApps === 'object' ? nf.fromApps : {};
+  for (const [from, list] of Object.entries(fsrc).slice(-32)) {
+    if (!str(from, 64) || !list || typeof list !== 'object') continue;
+    const one = {};
+    for (const [app, name] of Object.entries(list).slice(-MAX_APPS)) if (str(app, 200)) one[str(app, 200)] = str(name, 100) || app;
+    if (Object.keys(one).length) fromApps[str(from, 64)] = one;
+  }
+  return { style: c.style || '', otpCopy: !!c.otpCopy, quiet: c.quiet || { on: false, from: '22:00', to: '07:00' }, phoneApps: apps, fromApps };
 }
 
 module.exports = { clean, saved, inQuiet, modeOf, HHMM };

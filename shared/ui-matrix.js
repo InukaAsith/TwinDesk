@@ -4,8 +4,10 @@
 // receivers in columns; a cell is on when the row's device sends it and the column's takes it, lit when
 // they're connected now; the reason on hover. This computer's row (what it sends) and column (what it
 // takes) are switches; every other device's cells are theirs, shown as they told.
-//   const mx = MeshMatrix.create({ toggle(id, feature, dir, on) })
-//   body.append(mx.el); mx.render(state.matrix)
+//   const mx = MeshMatrix.create({ toggle(id, feature, dir, on), setApp(from, app, name, show) })
+//   body.append(mx.el); mx.render(state.matrix, state.notifs && state.notifs.appsFrom)
+// Notifications also list, below the grid, each sending device's apps with a switch each: shown here
+// or not (this computer's column; shared/notifrules.js fromApps).
 'use strict';
 
 (function () {
@@ -21,11 +23,43 @@
       feature = v;
       seg.set(v);
       draw();
+      drawApps();
     });
     seg.set(feature);
     const grid = UI.el('div', { class: 'mx-grid', attrs: { role: 'grid' } });
-    const hint = UI.note('info', t('Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.'));
-    el.append(seg.el, grid, hint);
+    const hint = UI.note('info', t('Rows send to columns. This computer’s row and column can be changed here.'));
+    const appsBox = UI.el('div', { class: 'mx-apps' });
+    el.append(seg.el, grid, hint, appsBox);
+    let appsFrom = {};
+    const openApps = new Set();
+
+    function drawApps() {
+      appsBox.textContent = '';
+      const m = last;
+      if (feature !== 'notifs' || !m || !m.devices) return;
+      const senders = m.devices.filter((d) => !d.self && (appsFrom[d.id] || []).length);
+      if (!senders.length) return;
+      const rows = [];
+      for (const d of senders) {
+        const list = appsFrom[d.id];
+        const off = list.filter((a) => a.hidden).length;
+        const shown = openApps.has(d.id);
+        rows.push(UI.row(d.name, off ? t('{count} of {total} apps hidden', { count: off, total: list.length }) : t('All apps shown'), [
+          UI.osIcon(d.os),
+          UI.button(shown ? t('Done') : t('Apps'), () => { shown ? openApps.delete(d.id) : openApps.add(d.id); drawApps(); }, 'small'),
+        ], { literal: true }));
+        if (shown) {
+          for (const a of list) {
+            const sw = UI.switch((v) => opts.setApp && opts.setApp(d.id, a.app, a.name, v), { label: a.name });
+            sw.set(!a.hidden);
+            const r = UI.row(a.name, '', [sw], { literal: true });
+            r.classList.add('mx-app');
+            rows.push(r);
+          }
+        }
+      }
+      appsBox.append(UI.card(t('Apps by device'), rows));
+    }
 
     const head = (d) => {
       const h = UI.el('div', { class: 'mx-head' + (d.self ? ' self' : ''), attrs: { 'data-literal': '' } }, [UI.osIcon(d.os), UI.el('span', { text: d.name })]);
@@ -67,13 +101,15 @@
 
     return {
       el,
-      render(m) {
-        const key = JSON.stringify(m || null);
+      render(m, apps) {
+        const key = JSON.stringify([m || null, apps || null]);
         if (key === el.dataset.key) return;
         el.dataset.key = key;
         last = m;
+        appsFrom = apps && typeof apps === 'object' ? apps : {};
         el.hidden = !m || !m.devices || m.devices.length < 2;
         draw();
+        drawApps();
       },
     };
   }

@@ -2436,5 +2436,9 @@
   "Saved to Downloads on the other device": "Diğer cihazda İndirilenler’e kaydedilir",
   "Network folders": "Ağ klasörleri",
   "Transfers": "Aktarımlar",
-  "Copy received files to clipboard": "Alınan dosyaları panoya kopyala"
+  "Copy received files to clipboard": "Alınan dosyaları panoya kopyala",
+  "{count} of {total} apps hidden": "{total} uygulamadan {count} tanesi gizli",
+  "All apps shown": "Tüm uygulamalar gösteriliyor",
+  "Apps by device": "Cihaza göre uygulamalar",
+  "Rows send to columns. This computer’s row and column can be changed here.": "Satırlar sütunlara gönderir. Bu bilgisayarın satırı ve sütunu burada değiştirilebilir."
 });

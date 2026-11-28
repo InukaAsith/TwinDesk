@@ -2436,5 +2436,9 @@
   "Saved to Downloads on the other device": "Salvo em Downloads no outro dispositivo",
   "Network folders": "Pastas de rede",
   "Transfers": "Transferências",
-  "Copy received files to clipboard": "Copiar arquivos recebidos para a área de transferência"
+  "Copy received files to clipboard": "Copiar arquivos recebidos para a área de transferência",
+  "{count} of {total} apps hidden": "{count} de {total} apps ocultos",
+  "All apps shown": "Todos os apps exibidos",
+  "Apps by device": "Apps por dispositivo",
+  "Rows send to columns. This computer’s row and column can be changed here.": "Linhas enviam para colunas. A linha e a coluna deste computador podem ser alteradas aqui."
 });
