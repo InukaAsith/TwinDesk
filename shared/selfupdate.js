@@ -33,6 +33,7 @@ const run = (cmd, args, opts = {}) => new Promise((resolve) => {
   });
 });
 const STARTED_MS = 90 * 1000; // a new Mac app that hasn't said it started by then is taken back (#204)
+const FORCE_QUIT_MS = 15000; // asked to quit and still running this long: it exits (_quit)
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
 const writable = (p) => { try { fs.accessSync(p, fs.constants.W_OK); return true; } catch { return false; } };
 
@@ -46,6 +47,18 @@ class SelfUpdate {
     this.log = log || ((...a) => console.log('[update]', ...a));
     this.quitMs = 300; // from install() to quitting; an update through the mesh (debuglocal.js) gives its answer time to leave
     this.kind = this._kind();
+  }
+
+  // Quit for the new version. Something can hold the app open (a window that cancels its close, a
+  // system dialog in front): the Mac's swap went ahead after two minutes, the new version couldn't start
+  // beside this one, and was put back. So, if it's still running a while after being asked, it exits.
+  _quit() {
+    setTimeout(() => this.app.quit(), this.quitMs);
+    const t = setTimeout(() => {
+      this.log(`still running ${(this.quitMs + FORCE_QUIT_MS) / 1000} s after quitting for the update: exiting`);
+      this.app.exit(0);
+    }, this.quitMs + FORCE_QUIT_MS);
+    if (t.unref) t.unref();
   }
 
   // How this copy can be updated in place: 'mac' | 'win' | 'appimage' | 'deb' | '' (it can't).
@@ -212,7 +225,7 @@ class SelfUpdate {
     const p = spawn('/bin/sh', ['-c', script, 'twindesk-update', String(process.pid), app, staged, marker, note, String(version || '')], { detached: true, stdio: 'ignore' });
     p.unref();
     this.log(`swapping in ${version} at ${app} after quitting`);
-    setTimeout(() => this.app.quit(), this.quitMs);
+    this._quit();
   }
 
   // The new app must be signed by the same certificate as this one (its designated requirement),
@@ -262,7 +275,7 @@ class SelfUpdate {
     fs.renameSync(tmp, target); // the running image keeps its own inode
     this.log(`replaced ${target}`);
     this.app.relaunch({ execPath: target, args: [] });
-    setTimeout(() => this.app.quit(), this.quitMs);
+    this._quit();
   }
 
   async _deb(file) {
@@ -273,7 +286,7 @@ class SelfUpdate {
     if (r.code !== 0) throw new Error(`The package didn’t install: ${(r.err || r.out).trim().split('\n').pop() || r.code}`);
     this.log('installed the .deb');
     this.app.relaunch();
-    setTimeout(() => this.app.quit(), this.quitMs);
+    this._quit();
   }
 }
 

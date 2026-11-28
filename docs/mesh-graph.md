@@ -379,3 +379,18 @@ what its peers say of their pairs with it.
 each device's own pair: another computer's apps here (PeerApps, the Mac's PcApps: `allowed`), this computer's
 windows there (PcApps on Move windows' link, the Mac's Apps and AppSend: `allows`), the Mac apps shown in
 Monitor 2 (its link's device). So Apps is in the matrix too.
+
+### After step 6: Monitor 2 per device, Move windows to several devices
+
+- **Monitor 2 per device (#256)** (`shared/screen-viewers.js`, Windows and Linux): Open for a device the
+  first Monitor 2 isn't showing, while it shows another, opens one of that device's own on its own link,
+  so two computers' screens are watched at once (each its own picture, input, sound, screen.ctl; files
+  dropped on it go to its device). The Receive page shows and steers its device's own Monitor 2. A sharer
+  that sends nothing says why in the log, once per change (`[pcscreen] … not sending, …`), and when the
+  virtual monitor isn't among the displays. The issue's test: `screen-viewers` (with B selected and shown,
+  C's Monitor 2 gets C's state).
+- **Move windows to several devices** (`shared/papps-mesh.js` `pcAppsSet`, Windows and Linux; an AppSend
+  per device on the Mac): a PcApps per device, each on its own link and sender, so windows go to two
+  devices at once (the sticky link held one device until its windows were back), and each device lists and
+  opens this computer's apps itself. The apps senders' session numbers start at 500 000 000, apart from the
+  screen targets' (the old 2 000 000 was the second screen sender's too).

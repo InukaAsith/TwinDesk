@@ -31,7 +31,7 @@ class AppsSet extends EventEmitter {
     const viewOf = (u) => (viewAs === 'getter' ? u.view : u.view());
     const view = () => {
       const u = this.selected;
-      return this.merge(u ? viewOf(u) : { ...this.empty }, this.units.map(viewOf));
+      return this.merge(u ? viewOf(u) : typeof this.empty === 'function' ? this.empty() : { ...this.empty }, this.units.map(viewOf));
     };
     if (viewAs === 'getter') Object.defineProperty(this, 'view', { get: view });
     else this.view = view;
@@ -54,4 +54,24 @@ class AppsSet extends EventEmitter {
   }
 }
 
-module.exports = { AppsSet, appsSet: (opts) => new AppsSet(opts) };
+// This computer's apps and windows on the other devices (Windows, Linux: PcApps), one per device, each on its
+// own link and sender: Move windows sends windows to several devices at once (one device's windows had to
+// come back before another could take any: one PcApps on a sticky link), and each device lists and opens
+// this computer's apps by itself. The single API besides AppsSet's: moved (every device's), bringBack() (all
+// home), input.release(), unit(id) (the device a window goes to).
+function pcAppsSet({ hub, make, empty }) {
+  const { eachDevice } = require('./scoped-link.js');
+  const set = new AppsSet({
+    selectedId: () => hub.selectedId, empty,
+    merge: (v, all) => ({ ...v, moved: all.reduce((n, x) => n + (x.moved || 0), 0), streaming: all.reduce((n, x) => n + (x.streaming || 0), 0) }),
+    all: ['apply', 'shutdown'],
+  });
+  Object.defineProperty(set, 'moved', { get: () => ({ size: set.units.reduce((n, u) => n + u.moved.size, 0) }) });
+  set.bringBack = () => { for (const u of set.units) u.bringBack(); };
+  set.input = { release: () => { for (const u of set.units) u.input.release(); } };
+  set.unit = (id) => (id && set.byId.get(id)) || null;
+  eachDevice(hub, (id, link) => set.ensure(id, () => make(link, id)));
+  return set;
+}
+
+module.exports = { AppsSet, appsSet: (opts) => new AppsSet(opts), pcAppsSet };

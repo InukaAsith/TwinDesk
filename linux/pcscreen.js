@@ -246,8 +246,12 @@ class PcScreen {
     // Bluetooth can't carry the picture: it starts once the session is on Wi-Fi (netlink.js).
     const transport = (this.link.current && this.link.current.transport) || 'ip';
     const want = connected && this.mode !== 'off' && !this.busy && this.mac.accept && transport !== 'ble';
+    // Why nothing is sent, once per change (#256: "the virtual screen is there, the other side shows nothing").
+    this._why(!want && this.mode !== 'off' ? (!connected ? 'its device isn’t connected' : this.busy ? 'the screen is starting'
+      : !this.mac.accept ? 'nobody watches there (its viewer’s screen.policy)' : 'the session is on Bluetooth') : '');
     if (!want) return this._stopSend(connected);
     const d = await this._target();
+    if (!d) this._why(this.mode === 'extend' ? 'the virtual monitor isn’t among the displays (its position as the helper sees it didn’t match any)' : 'no display to share');
     if (!d) return this._stopSend(true);
     const rect = screenRect(d);
     const [width, height] = this._streamSize(rect);
@@ -283,6 +287,14 @@ class PcScreen {
     this.sending = { session, displayId: d.id, rect, key, loop: !!audio };
     this.stats = null;
     Object.assign(this.status, { status: 'starting', error: '', name: d.label || src.name, width: rect.width, height: rect.height });
+  }
+
+  // Logged once per change: why this target sends nothing ('' = it may send).
+  _why(reason) {
+    if (reason === (this.whyNot || '')) return;
+    this.whyNot = reason;
+    const who = (this.link.current && this.link.current.name) || this.link.id || '';
+    if (reason) console.log(`[pcscreen] ${this.mode} for ${who}: not sending, ${reason}`);
   }
 
   // What we offer the viewer: Extend only where this desktop can add a virtual monitor.

@@ -2,8 +2,9 @@
 // A feature per device in Multi-device (step 5 of docs/mesh-graph.md), Windows and Linux: hub.scoped(id)
 // with what the one-to-one features read besides, and the hub's devices as they come.
 //
-//   scopedLink(hub, id)  hub.scoped(id) plus current ({deviceId, name, os, role, transport, address}) and welcome(): a feature made
-//                        after its device's 'welcome' (the hub's 'peerAdded' comes after it) gets that one
+//   scopedLink(hub, id)  hub.scoped(id) plus current ({deviceId, name, os, role, transport, address}),
+//                        snapshot() and welcome(): a feature made after its device's 'welcome' (the hub's
+//                        'peerAdded' comes after it) gets that one
 //   eachDevice(hub, up(id, link))  up for every connected device and each one that connects, once a
 //                        device: up makes the feature on link, then link.welcome() runs
 'use strict';
@@ -28,6 +29,12 @@ function scopedLink(hub, id) {
   Object.defineProperty(link, 'current', {
     get: () => { const x = hub.sessions.get(id); return x && x.connected ? { deviceId: id, name: x.displayName(), os: x.peerOs, role: x.role, transport: x.transport, address: addressOf(x) } : null; },
   });
+  // The facade's snapshot() shape, of its device (a Monitor 2 window's title reads link.macName).
+  link.snapshot = () => {
+    const c = link.current;
+    if (!c) return { link: { state: link.status.state, rtt: null, message: '', macName: '', address: '' }, session: null };
+    return { link: { state: 'connected', rtt: link.status.rtt, message: '', macName: c.name, address: c.address }, session: { id, name: c.name, os: c.os } };
+  };
   return link;
 }
 

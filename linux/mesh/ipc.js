@@ -101,8 +101,10 @@ function setupIpc(ctx) {
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
   handle('checkWake', () => wake.check());
-  handle('openMonitor', () => screen.open(false));
-  handle('remoteScreen', (arg) => arg && typeof arg === 'object' && screen.control({ share: arg.share, mode: arg.mode })); // screen.ctl
+  // The page's device's Monitor 2 (#256): the first one, else one of its own while the first shows another.
+  const viewerOf = () => (ctx.viewers && ctx.viewers() && ctx.viewers().of(hub.selectedId)) || screen;
+  handle('openMonitor', () => (ctx.viewers && ctx.viewers() ? ctx.viewers().open(hub.selectedId) : screen.open(false)));
+  handle('remoteScreen', (arg) => arg && typeof arg === 'object' && viewerOf().control({ share: arg.share, mode: arg.mode })); // screen.ctl, to the page's device
 
   handle('setKvm', (partial) => {
     if (partial && typeof partial.linked === 'boolean') kvm.setLinked(partial.linked); // home first, tells the other side
@@ -154,7 +156,7 @@ function setupIpc(ctx) {
   handle('checkUpdates', () => ctx.updates.check(true));
   handle('openUpdate', () => ctx.updates.open());
   handle('openLink', (key) => (key === 'logs' ? require('../../shared/applog.js').open() : Object.hasOwn(LINKS, key) && shell.openExternal(LINKS[key]))); // About page: only its own links, and the log folder
-  handle('setMonitor', (partial) => change('monitor', partial, () => { screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
+  handle('setMonitor', (partial) => change('monitor', partial, () => { if (ctx.viewers && ctx.viewers()) ctx.viewers().each((v) => v.applyAudio()); else screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
   handle('setClipboard', (partial) => change('clipboard', partial, () => clip.applySettings()));
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
   handle('openClip', (index) => { // Recent's Open / Email / Call (shared/clipact.js): from the app's own copy
@@ -430,7 +432,7 @@ function setupIpc(ctx) {
   // pairsync.js applies a value the other computer changed, with the same side effects.
   const AFTER = {
     clipboard: () => clip.applySettings(),
-    monitor: () => { screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
+    monitor: () => { if (ctx.viewers && ctx.viewers()) ctx.viewers().each((v) => v.applyAudio()); else screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
     notifs: () => notifs.applySettings(),
     audio: () => sound.apply(),
     kvm: () => kvm.applyConfig(),

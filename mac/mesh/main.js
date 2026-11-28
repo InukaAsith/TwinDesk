@@ -774,10 +774,10 @@ app.whenReady().then(() => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;
     if (!settings.apps.moveWindows) return;
-    const at = svc.appSend.server.route && svc.appSend.server.route.targetId;
-    if (svc.appSend.moved.size && to && at && to !== at) return console.log('[apps] window not moved: windows are on another device now (bring them back first)'); // one device at a time
-    if (!meshMoves.ready(to, (v) => { svc.appSend.accepts = v; })) return;
-    svc.appSend.moveOut(wid, Number(m.movingPid));
+    const unit = svc.appSend.unit(to); // the device the pointer went to: its own AppSend (windows may be on others too)
+    if (!unit) return;
+    if (!meshMoves.ready(to, (v) => { unit.accepts = v; })) return;
+    unit.moveOut(wid, Number(m.movingPid));
   };
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 

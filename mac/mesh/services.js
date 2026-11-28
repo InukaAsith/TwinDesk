@@ -184,21 +184,24 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
-  // This Mac's apps on another Mac, and Move windows: the selected device's, except while windows are moved
-  // out: they stay with the device they went to until they're back, or it goes (#313: a pointer visit to a
-  // third device took them home, and their copies there froze).
-  let appSendRef = null;
-  let appsTo = null;
-  const appsRoute = meshHub.route((h) => {
-    const s = appsTo ? h.sessions.get(appsTo) : null;
-    const keep = !!(appSendRef && appSendRef.moved && appSendRef.moved.size && s && s.connected);
-    appsTo = keep ? appsTo : h.selectedId;
-    return appsTo;
-  }, { remember: ['papp.policy'] }); // whether that device takes our windows
-  const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s,
-    allows: consent ? () => consent.get(appsRoute.targetId, 'apps', 'out') : null }); // the pair of the Mac it sends to
-  appSendRef = appSend;
-  appSend.on('change', () => appsRoute.refresh()); // windows back: it follows the selection again
+  // This Mac's apps on another Mac, and Move windows: an AppSend per device, each on its own peer
+  // (shared/papps-mesh.js), so windows go to several devices at once (one device's windows had to come back
+  // before another could take any). moveOut goes to the unit of the device the pointer went to (unit(id)).
+  const appSend = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => meshHub.selectedId, viewAs: 'getter', empty: { moved: 0 },
+    merge: (v, all) => ({ ...v, moved: all.reduce((n, x) => n + (x.moved || 0), 0) }),
+    all: ['applySettings', 'shutdown'],
+  });
+  Object.defineProperty(appSend, 'moved', { get: () => ({ size: appSend.units.reduce((n, u) => n + u.moved.size, 0) }) });
+  appSend.unit = (pid) => (pid && appSend.byId.get(pid)) || null;
+  const sendUnit = (pid) => appSend.ensure(pid, () => {
+    const p = new ScopedPhonePeer(meshHub, meshHub.server, null);
+    const u = new AppSend({ server: p, helper, getSettings: s, allows: consent ? () => consent.get(pid, 'apps', 'out') : null }); // its pair's switch
+    p.bind(pid); // after it listens: its 'client' now
+    return u;
+  });
+  meshHub.bus.onPeer('welcome', sendUnit);
+  for (const x of meshHub.sessions.list()) if (x.connected) sendUnit(x.id);
   const wake = new Wake({ server, getSettings: s, saveSettings: () => store.saveSettings(s()), bus: meshHub.bus, // every device, not only the selected one
     peer: (pid) => { const x = meshHub.sessions.get(pid); return x ? { name: x.displayName(), os: x.peerOs, address: x.ctx ? x.ctx.address : '' } : null; } });
   kvm.blockEdge = () => pcView.focused || pcApps.focused; // moving inside the PC window never crosses to the PC
