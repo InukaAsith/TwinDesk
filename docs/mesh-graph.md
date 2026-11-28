@@ -359,3 +359,18 @@ devices keep what they need themselves (`shared/link-memory.js`):
   `share: true`) is switched off there once when the link leaves it.
 
 The links that don't move (one per device, bound once when the device connects) need neither.
+
+### Step 6 as built: the matrix
+
+**Multi-device › Who shares what** (`shared/ui-matrix.js`, all three platforms): for one feature at a time
+(Clipboard, Notifications, Sound, Files, Mouse and keyboard, Terminal), every device of the mesh in rows
+(it sends) and columns (it takes). A cell is on when the row's device sends the feature and the column's
+takes it, lit when they're connected now; the reason is on hover ("Ryzen9 doesn't send it to the
+MacBook", "Not known: … runs an older TwinDesk"). This computer's row and column are switches
+(`setConsent`: the selected device's through the settings, as its pages, any other's straight to its
+pair, `shared/consent.js`); the other devices' cells are theirs, shown as they told.
+
+**Gossip** (`shared/mesh-edges.js`): every device publishes its pairs and whom it's connected to in a
+pool (`mesh.edges`, relayed as the layout's displays are) when they change and every minute. Both ends of a
+pair agree (pair.sync), so one side is enough: an older TwinDesk, which publishes nothing, shows through
+what its peers say of their pairs with it. Apps isn't in the matrix: its switch isn't read per device yet.

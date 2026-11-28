@@ -1,0 +1,21 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The Multi-device tab's matrix (shared/ui-matrix.js): rows send, columns take. */
+.mx { display: grid; gap: 10px; padding: 10px 12px; }
+.mx .seg { flex-wrap: wrap; }
+.mx-grid { display: grid; gap: 4px; align-items: center; overflow-x: auto; font-size: 12px; }
+.mx-corner { color: var(--muted, #888); font-size: 11px; }
+.mx-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mx-head span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-head.self { font-weight: 600; }
+.mx-cell {
+  height: 28px; border-radius: 6px; display: grid; place-items: center;
+  background: var(--field, rgba(127, 127, 127, 0.12)); border: 1px solid transparent; padding: 0; font: inherit; color: inherit;
+}
+button.mx-cell { cursor: pointer; border-color: var(--border, rgba(127, 127, 127, 0.35)); }
+button.mx-cell:hover { border-color: var(--accent, #0a84ff); }
+button.mx-cell:focus-visible { outline: 2px solid var(--accent, #0a84ff); outline-offset: 1px; }
+.mx-cell.mx-self { background: none; }
+.mx-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--muted, #888); }
+.mx-cell.on .mx-dot { background: var(--muted, #888); }
+.mx-cell.live .mx-dot { background: var(--green, #30d158); border-color: var(--green, #30d158); box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.2); }
+.mx-cell.unknown .mx-dot { border-style: dashed; }

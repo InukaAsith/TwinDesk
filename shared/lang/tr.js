@@ -2372,4 +2372,11 @@
   "Open {device}’s shared folder": "{device} cihazının paylaşılan klasörünü aç",
   "Lock together": "Birlikte kilitle",
   "This computer locks when another connected computer locks, and the other way round. On each computer": "Bağlı başka bir bilgisayar kilitlendiğinde bu bilgisayar da kilitlenir, tersi de geçerli. Her bilgisayarda açın",
+  "Who shares what": "Kim neyi paylaşıyor",
+  "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.": "Her satır her sütuna gönderir. Bu bilgisayarın satırını (gönderdiklerini) ya da sütununu (aldıklarını) değiştirin; diğer cihazların hücreleri kendilerinindir.",
+  "From ↓ · to →": "Kimden ↓ · kime →",
+  "{from} doesn’t send it to {to}": "{from} bunu {to} cihazına göndermiyor",
+  "{to} doesn’t take it from {from}": "{to} bunu {from} cihazından almıyor",
+  "Not known: {who} runs an older TwinDesk": "Bilinmiyor: {who} eski bir TwinDesk kullanıyor",
+  "On, not connected now": "Açık, şu an bağlı değil",
 });

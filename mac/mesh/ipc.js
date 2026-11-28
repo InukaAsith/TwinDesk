@@ -668,6 +668,18 @@ function setupIpc(ctx) {
       ctx.stream.restart('screen sound');
     },
     // "Join every device automatically" (autojoin.js): off = no introductions asked, granted or accepted.
+    // The matrix (shared/ui-matrix.js): one of this Mac's own cells, its pair with a device one way. The
+    // selected device's pair is the settings (pairsync-mesh.js tells it), any other's its saved pair
+    // (shared/consent.js tells it).
+    setConsent(o) {
+      const c = ctx.consent && ctx.consent();
+      const F = require('../pairsync').FEATURES;
+      const { id, feature, dir, on } = o || {};
+      if (!c || typeof id !== 'string' || !F[feature] || !F[feature][dir] || typeof on !== 'boolean') return;
+      if (ctx.hub && id === ctx.hub.selectedId) return ctx.syncAction && ctx.syncAction(feature, dir, on);
+      c.set(id, feature, dir, on);
+      pushState();
+    },
     setMesh(partial) {
       setGroup('mesh', partial);
       if (settings.mesh.autoJoin !== false && ctx.autoJoin) ctx.autoJoin.schedule();

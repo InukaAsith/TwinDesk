@@ -2373,4 +2373,11 @@
   "Open {device}’s shared folder": "打开 {device} 的共享文件夹",
   "Lock together": "一起锁定",
   "This computer locks when another connected computer locks, and the other way round. On each computer": "另一台已连接的电脑锁定时，这台电脑也会锁定，反之亦然。需在每台电脑上开启",
+  "Who shares what": "谁共享什么",
+  "Each row sends to each column. Switch this computer’s row (what it sends) or its column (what it takes); the other devices’ cells are theirs.": "每一行发送给每一列。切换这台电脑的行（它发送的）或列（它接收的）；其他设备的格子由它们自己决定。",
+  "From ↓ · to →": "从 ↓ · 到 →",
+  "{from} doesn’t send it to {to}": "{from} 不向 {to} 发送",
+  "{to} doesn’t take it from {from}": "{to} 不接收来自 {from} 的",
+  "Not known: {who} runs an older TwinDesk": "未知：{who} 运行的是较旧的 TwinDesk",
+  "On, not connected now": "已开启，当前未连接",
 });
