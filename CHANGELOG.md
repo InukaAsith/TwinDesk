@@ -13,6 +13,35 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **Multi-device, every feature per device** (#313, #256, #344 by [@icariantk](https://github.com/icariantk)): sound both ways with each
+  device at once, the microphone and camera, clipboard, notifications and files by each pair's own
+  choices, Wake, the Terminal's keys, Apps, Send to (an entry per computer), network folders and
+  Chats from every phone, no longer only the selected device's. **Monitor 2 per device**: two
+  computers' screens in two windows at once, and only the computer that asked opens it by itself.
+  **Multi-device › Who shares what**: one grid of every device and feature across the mesh.
+- **Lock together** (General, one-to-one and Multi-device, off): one computer locks, the others do
+  too (#322, #344 by [@icariantk](https://github.com/icariantk)).
+- **Cursor › Scrolling speed** (Mac): another computer's wheel here from 0.25× to 4× (#315, #344).
+- **Phone › Mouse hover** can be switched off (#330); **Shift-click, Ctrl/⌘+A and All** select in
+  the phone's Files and Photos (#319); a laptop's **touchscreen in a phone window** is multi-touch
+  (#316); a **gamepad plugged into the phone** works on the Remote page (#324); all from #344 by [@icariantk](https://github.com/icariantk).
+- **Bluetooth to Wi-Fi without discovery** (#287): a phone that came through Bluetooth on a network
+  that drops broadcasts dials the computer's own LAN addresses from the session (#344 by [@icariantk](https://github.com/icariantk)),
+  link-local ones too on a network with no DHCP server (#294 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Displays & desktops** (Android viewer of a Mac): a sheet with this Mac's displays and its
+  desktops, a still of each (macOS 14 and Screen Recording; only while the sheet is open, and never
+  while the Mac is locked), previous/next desktop on the bar, and a tap switches the desktop on the
+  screen being shown. In Multi-device each phone sees the display it is shown (#264 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Pinch to zoom sharpens** a Mac's, Windows' or Linux's shared screen on Android: the computer
+  sends the zoomed part at a higher resolution (#286 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Touchpad feedback** on Android: a ring shows where the pointer goes on a desktop share, only
+  while the computer takes input (#288 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Connection troubleshooter** (Overview, every computer and Android, folded until opened): the
+  link's transport, round trip and the stream's resolution, frame rate and bitrate, read from what
+  the session already measures; it starts no checks (#289 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Phone screen off while using apps** (Mac, Phone page, off): the phone's own panel stays dark
+  while its app windows are open, and a minimized app window stops painting (#284 by [@alexfoxtm](https://github.com/alexfoxtm)).
+
 - **Debug** (a new tab in Multi-device, on Windows, Linux and the Mac; off until a device lets another
   in): from any computer, every device of the mesh, connected directly or through another one. Its
   live status (each link: how long since anything was heard, its round trip, queued bytes, quiet
@@ -105,6 +134,26 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### Fixes
 
+- **Windows:** a click or drag on TwinDesk's own window from another computer no longer freezes the
+  session (#312, #334 by [@vullnetlimani](https://github.com/vullnetlimani), #344); back from a UAC
+  prompt, the local mouse isn't needed to reconnect (#210, #344).
+- **Full KVM:** no native input lane before the service is up, so on Linux the pointer comes back
+  (#311, #338 by [@VISHVAJITH-REDDY](https://github.com/VISHVAJITH-REDDY), #344).
+- **Multi-device:** a phone clicked to connect is selected once it's up (#317, #341 by [@VISHVAJITH-REDDY](https://github.com/VISHVAJITH-REDDY));
+  the Android clipboard reaches the Mac without its page open (#257); several phones show the right
+  screen (#263); every device uses the native input lane (#273); all from #344.
+- **Messenger:** Enter sends (#331, #342 by [@VISHVAJITH-REDDY](https://github.com/VISHVAJITH-REDDY)).
+- **Mac:** going to sleep ends the session cleanly and waking invites the guests back (#301 by [@alexfoxtm](https://github.com/alexfoxtm));
+  a clipboard read still in flight is dropped when a newer copy arrives, and While away copies stay
+  with their pair (#280 by [@alexfoxtm](https://github.com/alexfoxtm)); no freeze at the first session after an update; Quit isn't undone
+  by opening TwinDesk during it (#307 by [@alexfoxtm](https://github.com/alexfoxtm)); the release DMG is notarized and stapled when the
+  credentials are set (#75, #343 by [@VISHVAJITH-REDDY](https://github.com/VISHVAJITH-REDDY)).
+- **Linux:** on COSMIC the Full KVM pointer reaches every monitor (#244); Identify's labels no longer
+  overlap on KDE Wayland (#182); both from #344.
+- **Terminal:** the keys TwinDesk installs can't forward ports (#318 by
+  [@OAK06](https://github.com/OAK06)).
+- **AirPlay:** no second advertiser when port 7000 is taken (#299 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Logs:** why a session socket closed, on every computer (#327, #337, #340 by [@VISHVAJITH-REDDY](https://github.com/VISHVAJITH-REDDY)).
 - **Typing into a phone** from a French (AZERTY) or other non-US keyboard: letters, AltGr's @ and
   €, accents and Ctrl+A land as typed, and the numpad works (#260).
 - **Several Android phones** (Windows, Linux, Mac): a second phone no longer shows the first one's

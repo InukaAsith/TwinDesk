@@ -80,6 +80,18 @@ and start only when the other side answers.
 | `drive.hello {v: 1}` | TwinDesk Drive ([drive.md](drive.md)), both sides switched on | ignores it, so Drive never starts |
 | `tether.state {can: true}` (phone to computer, as its session starts) | Internet over USB (`shared/tether.js`, `Tether.kt`) | an older phone never sends it, so the computer shows no Internet over USB card and never sends `tether`; an older computer ignores it |
 
+## Screen sharing to a phone (offer and screen.state fields)
+
+Each is switched on by a field the computer sends; the messages themselves are described in
+`shared/protocol.js`.
+
+| Field | Sent in | Meaning | An app without it |
+|---|---|---|---|
+| `detail {baseline, fps, sizes}` | `rtc2.offer` (Mac, Windows, Linux) | The sizes this screen share can be sent at. The phone pinches to zoom and asks for one with `rtc.detail {session, height}`, which counts only from the socket the share was offered on (#286) | no `detail`: the phone keeps one size and has no pinch or three-finger pan; an older phone never sends `rtc.detail` |
+| `input: true\|false` | `screen.state` | Whether this computer applies the share's input now; the phone shows its touchpad ring only while true (#288) | no ring |
+| `spaces`, `desktops`, `spaceHold` | `screen.state` (Mac only) | Previous/next desktop on the display being shown, the catalog of its displays and desktops, and why remote control is paused (Mission Control open, accessibility unreadable). In Multi-device each device's message is for the display it is shown (#264) | no Displays & desktops sheet; the bar keeps Mirror, Extend and the display list |
+| `screen.preview.want` answered by `screen.preview` | Mac only | A still of each desktop while the phone's sheet is open, one device at a time; `unavailable` on macOS 13 or without Screen Recording | no stills (the sheet says Not previewed yet) |
+
 ## Phone capabilities
 
 | Message | Field | Values | Used for |
